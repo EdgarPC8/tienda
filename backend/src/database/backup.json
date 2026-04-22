@@ -1,0 +1,459 @@
+{
+  "Roles": [
+    {
+      "id": 1,
+      "name": "Programador"
+    },
+    {
+      "id": 2,
+      "name": "Administrador"
+    },
+    {
+      "id": 3,
+      "name": "Empleado"
+    }
+  ],
+  "Users": [
+    {
+      "id": 1,
+      "ci": "0000000001",
+      "documentType": "Cedula",
+      "firstName": "Admin",
+      "secondName": "",
+      "firstLastName": "Tienda",
+      "secondLastName": "",
+      "birthday": "2000-01-01",
+      "gender": "M",
+      "photo": null
+    }
+  ],
+  "UserData": [],
+  "Account": [
+    {
+      "id": 1,
+      "username": "administrador",
+      "password": "$2b$10$cQWP88LnQCA9M1DBv7msCOrgirHtDfq6Vfabj5LrnMPUy4MylUNzS",
+      "userId": 1
+    }
+  ],
+  "AccountRoles": [
+    {
+      "accountId": 1,
+      "roleId": 1
+    },
+    {
+      "accountId": 1,
+      "roleId": 2
+    },
+    {
+      "accountId": 1,
+      "roleId": 3
+    }
+  ],
+  "Notifications": [],
+  "Logs": [],
+
+
+  "TiendaSuppliers": [
+    {
+      "id": 1,
+      "name": "El de los atunes",
+      "document": null,
+      "phone": "",
+      "address": "",
+      "note": null,
+      "isActive": 1,
+      "createdAt": "2026-04-22T14:06:57.000Z",
+      "updatedAt": "2026-04-22T14:06:57.000Z"
+    }
+  ],
+  "TiendaMeasureUnits": [
+    {
+      "id": 1,
+      "name": "Libra",
+      "abbreviation": "lb",
+      "groupName": "peso",
+      "factorToBase": 1,
+      "isBase": 1
+    },
+    {
+      "id": 2,
+      "name": "Arroba",
+      "abbreviation": "arroba",
+      "groupName": "peso",
+      "factorToBase": 25,
+      "isBase": 0
+    },
+    {
+      "id": 3,
+      "name": "Quintal",
+      "abbreviation": "qq",
+      "groupName": "peso",
+      "factorToBase": 100,
+      "isBase": 0
+    },
+    {
+      "id": 4,
+      "name": "Gramo",
+      "abbreviation": "g",
+      "groupName": "masa_g",
+      "factorToBase": 1,
+      "isBase": 1
+    },
+    {
+      "id": 5,
+      "name": "Hectogramo",
+      "abbreviation": "hg",
+      "groupName": "masa_g",
+      "factorToBase": 100,
+      "isBase": 0
+    },
+    {
+      "id": 6,
+      "name": "Kilogramo",
+      "abbreviation": "kg",
+      "groupName": "masa_g",
+      "factorToBase": 1000,
+      "isBase": 0
+    },
+    {
+      "id": 7,
+      "name": "Mililitro",
+      "abbreviation": "ml",
+      "groupName": "volumen",
+      "factorToBase": 1,
+      "isBase": 1
+    },
+    {
+      "id": 8,
+      "name": "Litro",
+      "abbreviation": "L",
+      "groupName": "volumen",
+      "factorToBase": 1000,
+      "isBase": 0
+    },
+    {
+      "id": 9,
+      "name": "Unidad",
+      "abbreviation": "u",
+      "groupName": "unit",
+      "factorToBase": 1,
+      "isBase": 1
+    }
+  ],
+  "TiendaProductCategories": [
+    {
+      "id": 1,
+      "name": "Abarrotes",
+      "slug": "abarrotes",
+      "parentId": null,
+      "description": "Granos y básicos de despensa. Los productos (cada marca/peso) se registran aparte.",
+      "isActive": 1,
+      "sortOrder": 1,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 2,
+      "name": "Arroz",
+      "slug": "arroz",
+      "parentId": 1,
+      "description": null,
+      "isActive": 1,
+      "sortOrder": 1,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 3,
+      "name": "Bebidas",
+      "slug": "bebidas",
+      "parentId": null,
+      "description": "Bebidas para mostrador. Aguas, jugos, gaseosas, etc. como subcategoría.",
+      "isActive": 1,
+      "sortOrder": 2,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 4,
+      "name": "Aguas",
+      "slug": "aguas",
+      "parentId": 3,
+      "description": null,
+      "isActive": 1,
+      "sortOrder": 1,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 5,
+      "name": "Jugos",
+      "slug": "jugos",
+      "parentId": 3,
+      "description": null,
+      "isActive": 1,
+      "sortOrder": 2,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 6,
+      "name": "Gaseosas y refrescos",
+      "slug": "gaseosas-y-refrescos",
+      "parentId": 3,
+      "description": null,
+      "isActive": 1,
+      "sortOrder": 3,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 7,
+      "name": "Lácteos",
+      "slug": "lacteos",
+      "parentId": null,
+      "description": "Leches, yogures y similares.",
+      "isActive": 1,
+      "sortOrder": 3,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 8,
+      "name": "Leches",
+      "slug": "leches",
+      "parentId": 7,
+      "description": null,
+      "isActive": 1,
+      "sortOrder": 1,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 9,
+      "name": "Yogures",
+      "slug": "yogures",
+      "parentId": 7,
+      "description": null,
+      "isActive": 1,
+      "sortOrder": 2,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 10,
+      "name": "Plásticos y desechables",
+      "slug": "plasticos-y-desechables",
+      "parentId": null,
+      "description": "Servilletas, platos, vasos, cubiertos desechables, etc.",
+      "isActive": 1,
+      "sortOrder": 4,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 11,
+      "name": "Servilletas",
+      "slug": "servilletas",
+      "parentId": 10,
+      "description": null,
+      "isActive": 1,
+      "sortOrder": 1,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 12,
+      "name": "Platos y vasos desechables",
+      "slug": "platos-y-vasos-desechables",
+      "parentId": 10,
+      "description": null,
+      "isActive": 1,
+      "sortOrder": 2,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 13,
+      "name": "Cubiertos desechables",
+      "slug": "cubiertos-desechables",
+      "parentId": 10,
+      "description": "Cucharas, tenedores, cuchillos.",
+      "isActive": 1,
+      "sortOrder": 3,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 14,
+      "name": "Snacks",
+      "slug": "snacks",
+      "parentId": null,
+      "description": "Galletas, papitas y picos.",
+      "isActive": 1,
+      "sortOrder": 5,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 15,
+      "name": "Galletas",
+      "slug": "galletas",
+      "parentId": 14,
+      "description": null,
+      "isActive": 1,
+      "sortOrder": 1,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 16,
+      "name": "Papitas y snacks salados",
+      "slug": "papitas-y-snacks-salados",
+      "parentId": 14,
+      "description": null,
+      "isActive": 1,
+      "sortOrder": 2,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    }
+  ],
+  "TiendaBrands": [
+    {
+      "id": 1,
+      "name": "Real",
+      "isActive": 1
+    },
+    {
+      "id": 2,
+      "name": "Nirsa",
+      "isActive": 1
+    },
+    {
+      "id": 3,
+      "name": "Isabel",
+      "isActive": 1
+    },
+    {
+      "id": 4,
+      "name": "Facundo",
+      "isActive": 1
+    },
+    {
+      "id": 5,
+      "name": "La Favorita",
+      "isActive": 1
+    },
+    {
+      "id": 6,
+      "name": "Oriental",
+      "isActive": 1
+    }
+  ],
+  "TiendaProducts": [
+    {
+      "id": 1,
+      "name": "Real Atún Lomitos En Aceite De Girasol 160 G",
+      "sku": null,
+      "barcode": "7862100603221",
+      "categoryId": null,
+      "brandId": null,
+      "baseUnitId": 9,
+      "sizeLabel": "95G",
+      "stockBase": 0,
+      "minStockBase": 0,
+      "avgCostBase": "0.0000",
+      "salePrice": "1.00",
+      "primaryImageUrl": "products/real-atun-lomitos-en-aceite-de-girasol-160-g-2ixb0.jpg",
+      "wholesaleMinQty": 0,
+      "wholesalePrice": "0.00",
+      "isActive": 1,
+      "createdAt": "2026-04-22T12:48:45.000Z",
+      "updatedAt": "2026-04-22T12:59:02.000Z"
+    },
+    {
+      "id": 2,
+      "name": "Real © Atún En Aceite De Girasol 240 G",
+      "sku": null,
+      "barcode": "\t090388001416",
+      "categoryId": null,
+      "brandId": null,
+      "baseUnitId": 9,
+      "sizeLabel": "240 G (3 X 80 G)",
+      "stockBase": 0,
+      "minStockBase": 0,
+      "avgCostBase": "0.0000",
+      "salePrice": "2.90",
+      "primaryImageUrl": "products/real-atun-en-aceite-de-girasol-240-g-nntyg.jpg",
+      "wholesaleMinQty": 0,
+      "wholesalePrice": "0.00",
+      "isActive": 1,
+      "createdAt": "2026-04-22T13:01:43.000Z",
+      "updatedAt": "2026-04-22T13:01:43.000Z"
+    },
+    {
+      "id": 3,
+      "name": "Atun Real Atún En Aceite De Girasol 180 Gr",
+      "sku": null,
+      "barcode": "090388000792",
+      "categoryId": null,
+      "brandId": null,
+      "baseUnitId": 9,
+      "sizeLabel": "180G",
+      "stockBase": 0,
+      "minStockBase": 0,
+      "avgCostBase": "0.0000",
+      "salePrice": "1.50",
+      "primaryImageUrl": "products/atun-real-atun-en-aceite-de-girasol-180-gr-kx9eb.jpg",
+      "wholesaleMinQty": 0,
+      "wholesalePrice": "0.00",
+      "isActive": 1,
+      "createdAt": "2026-04-22T13:04:08.000Z",
+      "updatedAt": "2026-04-22T13:04:41.000Z"
+    },
+    {
+      "id": 4,
+      "name": "Caja de Atunes 95Gr-24Unidades",
+      "sku": null,
+      "barcode": null,
+      "categoryId": null,
+      "brandId": null,
+      "baseUnitId": 9,
+      "sizeLabel": null,
+      "stockBase": 0,
+      "minStockBase": 0,
+      "avgCostBase": "0.0000",
+      "salePrice": "0.00",
+      "primaryImageUrl": "products/caja-de-atunes-95gr-24unidades-k8oe4.jpg",
+      "wholesaleMinQty": 0,
+      "wholesalePrice": "0.00",
+      "isActive": 1,
+      "createdAt": "2026-04-22T14:08:24.000Z",
+      "updatedAt": "2026-04-22T14:22:44.000Z"
+    }
+  ],
+  "TiendaPurchases": [],
+  "TiendaPurchaseItems": [],
+  "TiendaStockMovements": [],
+  "TiendaFinanceEntries": [],
+  "TiendaCustomers": [
+    {
+      "id": 1,
+      "name": "Edgar Torres",
+      "ci": "1104661598",
+      "nickname": "Pato",
+      "email": "edgartorrrespc8@gmail.com",
+      "phone": null,
+      "secondaryPhone": null,
+      "address": "C. Centenario, Cariamanga, Ecuador",
+      "city": "CARIAMANGA",
+      "reference": null,
+      "notes": null,
+      "createdAt": "2026-04-22T14:07:31.000Z",
+      "updatedAt": "2026-04-22T14:07:31.000Z"
+    }
+  ],
+  "TiendaOrders": [],
+  "TiendaOrderItems": []
+}

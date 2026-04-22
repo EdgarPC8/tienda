@@ -1,0 +1,4155 @@
+{
+  "Roles": [
+    {
+      "id": 1,
+      "name": "Programador"
+    },
+    {
+      "id": 2,
+      "name": "Administrador"
+    },
+    {
+      "id": 3,
+      "name": "Empleado"
+    }
+  ],
+  "Users": [
+    {
+      "id": 1,
+      "ci": "0000000001",
+      "documentType": "Cedula",
+      "firstName": "Admin",
+      "secondName": "",
+      "firstLastName": "Tienda",
+      "secondLastName": "",
+      "birthday": "2000-01-01",
+      "gender": "M",
+      "photo": null
+    }
+  ],
+  "UserData": [],
+  "Account": [
+    {
+      "id": 1,
+      "username": "administrador",
+      "password": "$2b$10$cQWP88LnQCA9M1DBv7msCOrgirHtDfq6Vfabj5LrnMPUy4MylUNzS",
+      "userId": 1
+    }
+  ],
+  "AccountRoles": [
+    {
+      "accountId": 1,
+      "roleId": 1
+    },
+    {
+      "accountId": 1,
+      "roleId": 2
+    },
+    {
+      "accountId": 1,
+      "roleId": 3
+    }
+  ],
+  "Notifications": [],
+  "Logs": [
+    {
+      "id": 1,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:09.000Z"
+    },
+    {
+      "id": 2,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:09.000Z"
+    },
+    {
+      "id": 3,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:13.000Z"
+    },
+    {
+      "id": 4,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:13.000Z"
+    },
+    {
+      "id": 5,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/getSession",
+      "description": "OPTIONS /tiendaapi/getSession",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 6,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/getSession",
+      "description": "GET /tiendaapi/getSession",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 7,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 8,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/getSession",
+      "description": "GET /tiendaapi/getSession",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 9,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/getSession",
+      "description": "OPTIONS /tiendaapi/getSession",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 10,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/getSession",
+      "description": "GET /tiendaapi/getSession",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 11,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/getSession",
+      "description": "OPTIONS /tiendaapi/getSession",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 12,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/getSession",
+      "description": "GET /tiendaapi/getSession",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 13,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 14,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/account/1/1",
+      "description": "OPTIONS /tiendaapi/account/1/1",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 15,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/account/1/1",
+      "description": "GET /tiendaapi/account/1/1",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 16,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/account/1/1",
+      "description": "GET /tiendaapi/account/1/1",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 17,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/getSession",
+      "description": "GET /tiendaapi/getSession",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 18,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 19,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "OPTIONS /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 20,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 21,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "OPTIONS /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 22,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "OPTIONS /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 23,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/getSession",
+      "description": "GET /tiendaapi/getSession",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 24,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "OPTIONS /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 25,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "OPTIONS /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 26,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 27,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 28,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "GET /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 29,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "GET /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 30,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "GET /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 31,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 32,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "GET /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 33,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/img/null",
+      "description": "GET /tiendaapi/img/null",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 34,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "GET /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 35,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/getSession",
+      "description": "GET /tiendaapi/getSession",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 36,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "GET /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:43.000Z"
+    },
+    {
+      "id": 37,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 38,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/getSession",
+      "description": "GET /tiendaapi/getSession",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 39,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/account/1/1",
+      "description": "OPTIONS /tiendaapi/account/1/1",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 40,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/account/1/1",
+      "description": "GET /tiendaapi/account/1/1",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 41,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/account/1/1",
+      "description": "GET /tiendaapi/account/1/1",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 42,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 43,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "OPTIONS /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 44,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 45,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/img/null",
+      "description": "GET /tiendaapi/img/null",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 46,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "OPTIONS /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 47,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "OPTIONS /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 48,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 49,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "OPTIONS /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 50,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "OPTIONS /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 51,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "OPTIONS /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 52,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 53,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "GET /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 54,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "GET /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 55,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "GET /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 56,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "GET /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 57,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 58,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "GET /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 59,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "GET /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T12:47:44.000Z"
+    },
+    {
+      "id": 60,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:48:44.000Z"
+    },
+    {
+      "id": 61,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:48:44.000Z"
+    },
+    {
+      "id": 62,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:48:44.000Z"
+    },
+    {
+      "id": 63,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:48:44.000Z"
+    },
+    {
+      "id": 64,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T12:48:45.000Z"
+    },
+    {
+      "id": 65,
+      "httpMethod": "POST",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "POST /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T12:48:45.000Z"
+    },
+    {
+      "id": 66,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "OPTIONS /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T12:48:45.000Z"
+    },
+    {
+      "id": 67,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T12:48:45.000Z"
+    },
+    {
+      "id": 68,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "OPTIONS /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T12:48:45.000Z"
+    },
+    {
+      "id": 69,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "OPTIONS /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T12:48:45.000Z"
+    },
+    {
+      "id": 70,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "GET /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T12:48:45.000Z"
+    },
+    {
+      "id": 71,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "GET /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T12:48:46.000Z"
+    },
+    {
+      "id": 72,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "GET /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T12:48:46.000Z"
+    },
+    {
+      "id": 73,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/img/products/real-atun-lomitos-en-aceite-de-girasol-160-g-2ixb0.jpg",
+      "description": "GET /tiendaapi/img/products/real-atun-lomitos-en-aceite-de-girasol-160-g-2ixb0.jpg",
+      "system": "tienda",
+      "date": "2026-04-22T12:48:46.000Z"
+    },
+    {
+      "id": 74,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:49:44.000Z"
+    },
+    {
+      "id": 75,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:49:44.000Z"
+    },
+    {
+      "id": 76,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:49:44.000Z"
+    },
+    {
+      "id": 77,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:49:44.000Z"
+    },
+    {
+      "id": 78,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/comands/saveBackup",
+      "description": "OPTIONS /tiendaapi/comands/saveBackup",
+      "system": "tienda",
+      "date": "2026-04-22T12:50:07.000Z"
+    },
+    {
+      "id": 79,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:06.000Z"
+    },
+    {
+      "id": 80,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:06.000Z"
+    },
+    {
+      "id": 81,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:11.000Z"
+    },
+    {
+      "id": 82,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "OPTIONS /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:11.000Z"
+    },
+    {
+      "id": 83,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "OPTIONS /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:11.000Z"
+    },
+    {
+      "id": 84,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "OPTIONS /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:11.000Z"
+    },
+    {
+      "id": 85,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:11.000Z"
+    },
+    {
+      "id": 86,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "OPTIONS /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:11.000Z"
+    },
+    {
+      "id": 87,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "OPTIONS /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:11.000Z"
+    },
+    {
+      "id": 88,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "OPTIONS /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:11.000Z"
+    },
+    {
+      "id": 89,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:11.000Z"
+    },
+    {
+      "id": 90,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "GET /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:11.000Z"
+    },
+    {
+      "id": 91,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "GET /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:11.000Z"
+    },
+    {
+      "id": 92,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "GET /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:11.000Z"
+    },
+    {
+      "id": 93,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "GET /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:12.000Z"
+    },
+    {
+      "id": 94,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:12.000Z"
+    },
+    {
+      "id": 95,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "GET /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:12.000Z"
+    },
+    {
+      "id": 96,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "GET /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:12.000Z"
+    },
+    {
+      "id": 97,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:12.000Z"
+    },
+    {
+      "id": 98,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "OPTIONS /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:12.000Z"
+    },
+    {
+      "id": 99,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "OPTIONS /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:12.000Z"
+    },
+    {
+      "id": 100,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "OPTIONS /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:12.000Z"
+    },
+    {
+      "id": 101,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:12.000Z"
+    },
+    {
+      "id": 102,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "OPTIONS /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:12.000Z"
+    },
+    {
+      "id": 103,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "OPTIONS /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:13.000Z"
+    },
+    {
+      "id": 104,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "GET /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:13.000Z"
+    },
+    {
+      "id": 105,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "OPTIONS /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:13.000Z"
+    },
+    {
+      "id": 106,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "GET /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:13.000Z"
+    },
+    {
+      "id": 107,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "GET /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:13.000Z"
+    },
+    {
+      "id": 108,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:13.000Z"
+    },
+    {
+      "id": 109,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "GET /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:13.000Z"
+    },
+    {
+      "id": 110,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "GET /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:13.000Z"
+    },
+    {
+      "id": 111,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "GET /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:13.000Z"
+    },
+    {
+      "id": 112,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:51.000Z"
+    },
+    {
+      "id": 113,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:57:52.000Z"
+    },
+    {
+      "id": 114,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:58:06.000Z"
+    },
+    {
+      "id": 115,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:58:06.000Z"
+    },
+    {
+      "id": 116,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:58:51.000Z"
+    },
+    {
+      "id": 117,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:58:51.000Z"
+    },
+    {
+      "id": 118,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products/1",
+      "description": "OPTIONS /tiendaapi/tienda/products/1",
+      "system": "tienda",
+      "date": "2026-04-22T12:59:02.000Z"
+    },
+    {
+      "id": 119,
+      "httpMethod": "PUT",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products/1",
+      "description": "PUT /tiendaapi/tienda/products/1",
+      "system": "tienda",
+      "date": "2026-04-22T12:59:02.000Z"
+    },
+    {
+      "id": 120,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T12:59:02.000Z"
+    },
+    {
+      "id": 121,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "OPTIONS /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T12:59:03.000Z"
+    },
+    {
+      "id": 122,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "OPTIONS /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T12:59:03.000Z"
+    },
+    {
+      "id": 123,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "OPTIONS /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T12:59:03.000Z"
+    },
+    {
+      "id": 124,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T12:59:03.000Z"
+    },
+    {
+      "id": 125,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "GET /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T12:59:03.000Z"
+    },
+    {
+      "id": 126,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "GET /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T12:59:03.000Z"
+    },
+    {
+      "id": 127,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "GET /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T12:59:03.000Z"
+    },
+    {
+      "id": 128,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:59:06.000Z"
+    },
+    {
+      "id": 129,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:59:06.000Z"
+    },
+    {
+      "id": 130,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:59:51.000Z"
+    },
+    {
+      "id": 131,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T12:59:51.000Z"
+    },
+    {
+      "id": 132,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:00:06.000Z"
+    },
+    {
+      "id": 133,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:00:06.000Z"
+    },
+    {
+      "id": 134,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:00:51.000Z"
+    },
+    {
+      "id": 135,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:00:52.000Z"
+    },
+    {
+      "id": 136,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:01:06.000Z"
+    },
+    {
+      "id": 137,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:01:06.000Z"
+    },
+    {
+      "id": 138,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T13:01:43.000Z"
+    },
+    {
+      "id": 139,
+      "httpMethod": "POST",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "POST /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T13:01:43.000Z"
+    },
+    {
+      "id": 140,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "OPTIONS /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T13:01:43.000Z"
+    },
+    {
+      "id": 141,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T13:01:43.000Z"
+    },
+    {
+      "id": 142,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "OPTIONS /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T13:01:43.000Z"
+    },
+    {
+      "id": 143,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "OPTIONS /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T13:01:43.000Z"
+    },
+    {
+      "id": 144,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "GET /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T13:01:43.000Z"
+    },
+    {
+      "id": 145,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "GET /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T13:01:44.000Z"
+    },
+    {
+      "id": 146,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "GET /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T13:01:44.000Z"
+    },
+    {
+      "id": 147,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/img/products/real-atun-en-aceite-de-girasol-240-g-nntyg.jpg",
+      "description": "GET /tiendaapi/img/products/real-atun-en-aceite-de-girasol-240-g-nntyg.jpg",
+      "system": "tienda",
+      "date": "2026-04-22T13:01:44.000Z"
+    },
+    {
+      "id": 148,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:01:51.000Z"
+    },
+    {
+      "id": 149,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:01:51.000Z"
+    },
+    {
+      "id": 150,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:02:06.000Z"
+    },
+    {
+      "id": 151,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:02:06.000Z"
+    },
+    {
+      "id": 152,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:02:51.000Z"
+    },
+    {
+      "id": 153,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:02:51.000Z"
+    },
+    {
+      "id": 154,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:03:06.000Z"
+    },
+    {
+      "id": 155,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:03:06.000Z"
+    },
+    {
+      "id": 156,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:03:51.000Z"
+    },
+    {
+      "id": 157,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:03:51.000Z"
+    },
+    {
+      "id": 158,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:06.000Z"
+    },
+    {
+      "id": 159,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:06.000Z"
+    },
+    {
+      "id": 160,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:08.000Z"
+    },
+    {
+      "id": 161,
+      "httpMethod": "POST",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "POST /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:08.000Z"
+    },
+    {
+      "id": 162,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "OPTIONS /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:08.000Z"
+    },
+    {
+      "id": 163,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:08.000Z"
+    },
+    {
+      "id": 164,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "OPTIONS /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:08.000Z"
+    },
+    {
+      "id": 165,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "OPTIONS /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:08.000Z"
+    },
+    {
+      "id": 166,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "GET /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:08.000Z"
+    },
+    {
+      "id": 167,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "GET /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:09.000Z"
+    },
+    {
+      "id": 168,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "GET /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:09.000Z"
+    },
+    {
+      "id": 169,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products/3",
+      "description": "OPTIONS /tiendaapi/tienda/products/3",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:40.000Z"
+    },
+    {
+      "id": 170,
+      "httpMethod": "PUT",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products/3",
+      "description": "PUT /tiendaapi/tienda/products/3",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:40.000Z"
+    },
+    {
+      "id": 171,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:41.000Z"
+    },
+    {
+      "id": 172,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "OPTIONS /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:41.000Z"
+    },
+    {
+      "id": 173,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "OPTIONS /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:41.000Z"
+    },
+    {
+      "id": 174,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "OPTIONS /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:41.000Z"
+    },
+    {
+      "id": 175,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:41.000Z"
+    },
+    {
+      "id": 176,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/units",
+      "description": "GET /tiendaapi/tienda/units",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:41.000Z"
+    },
+    {
+      "id": 177,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/categories",
+      "description": "GET /tiendaapi/tienda/categories",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:41.000Z"
+    },
+    {
+      "id": 178,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/brands",
+      "description": "GET /tiendaapi/tienda/brands",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:41.000Z"
+    },
+    {
+      "id": 179,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/img/products/atun-real-atun-en-aceite-de-girasol-180-gr-kx9eb.jpg",
+      "description": "GET /tiendaapi/img/products/atun-real-atun-en-aceite-de-girasol-180-gr-kx9eb.jpg",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:41.000Z"
+    },
+    {
+      "id": 180,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:51.000Z"
+    },
+    {
+      "id": 181,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:04:51.000Z"
+    },
+    {
+      "id": 182,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:05:06.000Z"
+    },
+    {
+      "id": 183,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:05:06.000Z"
+    },
+    {
+      "id": 184,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/comands/saveBackup",
+      "description": "OPTIONS /tiendaapi/comands/saveBackup",
+      "system": "tienda",
+      "date": "2026-04-22T13:05:48.000Z"
+    },
+    {
+      "id": 185,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:56:06.000Z"
+    },
+    {
+      "id": 186,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:56:06.000Z"
+    },
+    {
+      "id": 187,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:56:21.000Z"
+    },
+    {
+      "id": 188,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:56:22.000Z"
+    },
+    {
+      "id": 189,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:57:06.000Z"
+    },
+    {
+      "id": 190,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:57:06.000Z"
+    },
+    {
+      "id": 191,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:57:21.000Z"
+    },
+    {
+      "id": 192,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:57:22.000Z"
+    },
+    {
+      "id": 193,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:58:06.000Z"
+    },
+    {
+      "id": 194,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:58:06.000Z"
+    },
+    {
+      "id": 195,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:58:21.000Z"
+    },
+    {
+      "id": 196,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:58:22.000Z"
+    },
+    {
+      "id": 197,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:59:06.000Z"
+    },
+    {
+      "id": 198,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:59:06.000Z"
+    },
+    {
+      "id": 199,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:59:21.000Z"
+    },
+    {
+      "id": 200,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T13:59:22.000Z"
+    },
+    {
+      "id": 201,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T13:59:45.000Z"
+    },
+    {
+      "id": 202,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "OPTIONS /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T13:59:45.000Z"
+    },
+    {
+      "id": 203,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T13:59:45.000Z"
+    },
+    {
+      "id": 204,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "OPTIONS /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T13:59:45.000Z"
+    },
+    {
+      "id": 205,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "GET /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T13:59:45.000Z"
+    },
+    {
+      "id": 206,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T13:59:45.000Z"
+    },
+    {
+      "id": 207,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "GET /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T13:59:46.000Z"
+    },
+    {
+      "id": 208,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T13:59:46.000Z"
+    },
+    {
+      "id": 209,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:06.000Z"
+    },
+    {
+      "id": 210,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:06.000Z"
+    },
+    {
+      "id": 211,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:13.000Z"
+    },
+    {
+      "id": 212,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:13.000Z"
+    },
+    {
+      "id": 213,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:13.000Z"
+    },
+    {
+      "id": 214,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:13.000Z"
+    },
+    {
+      "id": 215,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:53.000Z"
+    },
+    {
+      "id": 216,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "OPTIONS /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:53.000Z"
+    },
+    {
+      "id": 217,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:53.000Z"
+    },
+    {
+      "id": 218,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:53.000Z"
+    },
+    {
+      "id": 219,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "OPTIONS /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:53.000Z"
+    },
+    {
+      "id": 220,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:53.000Z"
+    },
+    {
+      "id": 221,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:53.000Z"
+    },
+    {
+      "id": 222,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:53.000Z"
+    },
+    {
+      "id": 223,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:53.000Z"
+    },
+    {
+      "id": 224,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:53.000Z"
+    },
+    {
+      "id": 225,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:54.000Z"
+    },
+    {
+      "id": 226,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:54.000Z"
+    },
+    {
+      "id": 227,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "OPTIONS /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:57.000Z"
+    },
+    {
+      "id": 228,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "OPTIONS /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:57.000Z"
+    },
+    {
+      "id": 229,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "OPTIONS /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:57.000Z"
+    },
+    {
+      "id": 230,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "OPTIONS /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:57.000Z"
+    },
+    {
+      "id": 231,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:57.000Z"
+    },
+    {
+      "id": 232,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:57.000Z"
+    },
+    {
+      "id": 233,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "GET /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:57.000Z"
+    },
+    {
+      "id": 234,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "GET /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:57.000Z"
+    },
+    {
+      "id": 235,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "GET /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:57.000Z"
+    },
+    {
+      "id": 236,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "GET /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:00:57.000Z"
+    },
+    {
+      "id": 237,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:00.000Z"
+    },
+    {
+      "id": 238,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "OPTIONS /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:00.000Z"
+    },
+    {
+      "id": 239,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:00.000Z"
+    },
+    {
+      "id": 240,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:00.000Z"
+    },
+    {
+      "id": 241,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "OPTIONS /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:00.000Z"
+    },
+    {
+      "id": 242,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:00.000Z"
+    },
+    {
+      "id": 243,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:00.000Z"
+    },
+    {
+      "id": 244,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:00.000Z"
+    },
+    {
+      "id": 245,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:00.000Z"
+    },
+    {
+      "id": 246,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:00.000Z"
+    },
+    {
+      "id": 247,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:00.000Z"
+    },
+    {
+      "id": 248,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:00.000Z"
+    },
+    {
+      "id": 249,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:01.000Z"
+    },
+    {
+      "id": 250,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "GET /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:01.000Z"
+    },
+    {
+      "id": 251,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:01.000Z"
+    },
+    {
+      "id": 252,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "GET /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:01.000Z"
+    },
+    {
+      "id": 253,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:06.000Z"
+    },
+    {
+      "id": 254,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "OPTIONS /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:06.000Z"
+    },
+    {
+      "id": 255,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:06.000Z"
+    },
+    {
+      "id": 256,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:06.000Z"
+    },
+    {
+      "id": 257,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "OPTIONS /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:06.000Z"
+    },
+    {
+      "id": 258,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:06.000Z"
+    },
+    {
+      "id": 259,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:06.000Z"
+    },
+    {
+      "id": 260,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:06.000Z"
+    },
+    {
+      "id": 261,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:06.000Z"
+    },
+    {
+      "id": 262,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:06.000Z"
+    },
+    {
+      "id": 263,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:06.000Z"
+    },
+    {
+      "id": 264,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:06.000Z"
+    },
+    {
+      "id": 265,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "OPTIONS /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:07.000Z"
+    },
+    {
+      "id": 266,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "OPTIONS /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:07.000Z"
+    },
+    {
+      "id": 267,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "OPTIONS /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:07.000Z"
+    },
+    {
+      "id": 268,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "OPTIONS /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:07.000Z"
+    },
+    {
+      "id": 269,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:07.000Z"
+    },
+    {
+      "id": 270,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "GET /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:07.000Z"
+    },
+    {
+      "id": 271,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "GET /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:07.000Z"
+    },
+    {
+      "id": 272,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:07.000Z"
+    },
+    {
+      "id": 273,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "GET /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:07.000Z"
+    },
+    {
+      "id": 274,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "GET /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:07.000Z"
+    },
+    {
+      "id": 275,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:13.000Z"
+    },
+    {
+      "id": 276,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:13.000Z"
+    },
+    {
+      "id": 277,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:13.000Z"
+    },
+    {
+      "id": 278,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "OPTIONS /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:13.000Z"
+    },
+    {
+      "id": 279,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:13.000Z"
+    },
+    {
+      "id": 280,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:13.000Z"
+    },
+    {
+      "id": 281,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:13.000Z"
+    },
+    {
+      "id": 282,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:13.000Z"
+    },
+    {
+      "id": 283,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "OPTIONS /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:13.000Z"
+    },
+    {
+      "id": 284,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:14.000Z"
+    },
+    {
+      "id": 285,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:14.000Z"
+    },
+    {
+      "id": 286,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:14.000Z"
+    },
+    {
+      "id": 287,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:14.000Z"
+    },
+    {
+      "id": 288,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:14.000Z"
+    },
+    {
+      "id": 289,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:14.000Z"
+    },
+    {
+      "id": 290,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:14.000Z"
+    },
+    {
+      "id": 291,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:28.000Z"
+    },
+    {
+      "id": 292,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "OPTIONS /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:28.000Z"
+    },
+    {
+      "id": 293,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:29.000Z"
+    },
+    {
+      "id": 294,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "OPTIONS /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:29.000Z"
+    },
+    {
+      "id": 295,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:29.000Z"
+    },
+    {
+      "id": 296,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:29.000Z"
+    },
+    {
+      "id": 297,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "GET /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:29.000Z"
+    },
+    {
+      "id": 298,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "GET /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:01:29.000Z"
+    },
+    {
+      "id": 299,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:13.000Z"
+    },
+    {
+      "id": 300,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:13.000Z"
+    },
+    {
+      "id": 301,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:14.000Z"
+    },
+    {
+      "id": 302,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:14.000Z"
+    },
+    {
+      "id": 303,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:47.000Z"
+    },
+    {
+      "id": 304,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "OPTIONS /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:47.000Z"
+    },
+    {
+      "id": 305,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:47.000Z"
+    },
+    {
+      "id": 306,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:47.000Z"
+    },
+    {
+      "id": 307,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "OPTIONS /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:47.000Z"
+    },
+    {
+      "id": 308,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:47.000Z"
+    },
+    {
+      "id": 309,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:47.000Z"
+    },
+    {
+      "id": 310,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:47.000Z"
+    },
+    {
+      "id": 311,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:47.000Z"
+    },
+    {
+      "id": 312,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:47.000Z"
+    },
+    {
+      "id": 313,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:47.000Z"
+    },
+    {
+      "id": 314,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:48.000Z"
+    },
+    {
+      "id": 315,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:54.000Z"
+    },
+    {
+      "id": 316,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "OPTIONS /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:54.000Z"
+    },
+    {
+      "id": 317,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:54.000Z"
+    },
+    {
+      "id": 318,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "OPTIONS /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:54.000Z"
+    },
+    {
+      "id": 319,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:55.000Z"
+    },
+    {
+      "id": 320,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "GET /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:55.000Z"
+    },
+    {
+      "id": 321,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:55.000Z"
+    },
+    {
+      "id": 322,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "GET /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:02:55.000Z"
+    },
+    {
+      "id": 323,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:03:07.000Z"
+    },
+    {
+      "id": 324,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "OPTIONS /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:03:07.000Z"
+    },
+    {
+      "id": 325,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:03:07.000Z"
+    },
+    {
+      "id": 326,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:03:07.000Z"
+    },
+    {
+      "id": 327,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:03:07.000Z"
+    },
+    {
+      "id": 328,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:03:07.000Z"
+    },
+    {
+      "id": 329,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "OPTIONS /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:03:07.000Z"
+    },
+    {
+      "id": 330,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:03:07.000Z"
+    },
+    {
+      "id": 331,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:03:07.000Z"
+    },
+    {
+      "id": 332,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:03:08.000Z"
+    },
+    {
+      "id": 333,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:03:08.000Z"
+    },
+    {
+      "id": 334,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:03:08.000Z"
+    },
+    {
+      "id": 335,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:03:13.000Z"
+    },
+    {
+      "id": 336,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:03:13.000Z"
+    },
+    {
+      "id": 337,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:03:14.000Z"
+    },
+    {
+      "id": 338,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:03:14.000Z"
+    },
+    {
+      "id": 339,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:04:13.000Z"
+    },
+    {
+      "id": 340,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:04:13.000Z"
+    },
+    {
+      "id": 341,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:04:14.000Z"
+    },
+    {
+      "id": 342,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:04:14.000Z"
+    },
+    {
+      "id": 343,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:05:13.000Z"
+    },
+    {
+      "id": 344,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:05:13.000Z"
+    },
+    {
+      "id": 345,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:05:14.000Z"
+    },
+    {
+      "id": 346,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:05:14.000Z"
+    },
+    {
+      "id": 347,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:08.000Z"
+    },
+    {
+      "id": 348,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "OPTIONS /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:08.000Z"
+    },
+    {
+      "id": 349,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:08.000Z"
+    },
+    {
+      "id": 350,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:08.000Z"
+    },
+    {
+      "id": 351,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "OPTIONS /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:08.000Z"
+    },
+    {
+      "id": 352,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:08.000Z"
+    },
+    {
+      "id": 353,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:08.000Z"
+    },
+    {
+      "id": 354,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:08.000Z"
+    },
+    {
+      "id": 355,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:08.000Z"
+    },
+    {
+      "id": 356,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:08.000Z"
+    },
+    {
+      "id": 357,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:08.000Z"
+    },
+    {
+      "id": 358,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:08.000Z"
+    },
+    {
+      "id": 359,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:13.000Z"
+    },
+    {
+      "id": 360,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:13.000Z"
+    },
+    {
+      "id": 361,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:30.000Z"
+    },
+    {
+      "id": 362,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "OPTIONS /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:30.000Z"
+    },
+    {
+      "id": 363,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "OPTIONS /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:30.000Z"
+    },
+    {
+      "id": 364,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:30.000Z"
+    },
+    {
+      "id": 365,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "OPTIONS /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:30.000Z"
+    },
+    {
+      "id": 366,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "OPTIONS /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:30.000Z"
+    },
+    {
+      "id": 367,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:30.000Z"
+    },
+    {
+      "id": 368,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "GET /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:30.000Z"
+    },
+    {
+      "id": 369,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "GET /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:31.000Z"
+    },
+    {
+      "id": 370,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:31.000Z"
+    },
+    {
+      "id": 371,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "GET /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:31.000Z"
+    },
+    {
+      "id": 372,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/supplier-orders",
+      "description": "GET /tiendaapi/tienda/supplier-orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:31.000Z"
+    },
+    {
+      "id": 373,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "OPTIONS /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:41.000Z"
+    },
+    {
+      "id": 374,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "OPTIONS /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:41.000Z"
+    },
+    {
+      "id": 375,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "GET /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:41.000Z"
+    },
+    {
+      "id": 376,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "GET /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:41.000Z"
+    },
+    {
+      "id": 377,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "OPTIONS /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:43.000Z"
+    },
+    {
+      "id": 378,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "OPTIONS /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:43.000Z"
+    },
+    {
+      "id": 379,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:43.000Z"
+    },
+    {
+      "id": 380,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:43.000Z"
+    },
+    {
+      "id": 381,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "OPTIONS /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:47.000Z"
+    },
+    {
+      "id": 382,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "OPTIONS /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:47.000Z"
+    },
+    {
+      "id": 383,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "GET /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:47.000Z"
+    },
+    {
+      "id": 384,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "GET /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:47.000Z"
+    },
+    {
+      "id": 385,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:48.000Z"
+    },
+    {
+      "id": 386,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:48.000Z"
+    },
+    {
+      "id": 387,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "GET /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:49.000Z"
+    },
+    {
+      "id": 388,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "GET /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:49.000Z"
+    },
+    {
+      "id": 389,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "OPTIONS /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:57.000Z"
+    },
+    {
+      "id": 390,
+      "httpMethod": "POST",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "POST /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:57.000Z"
+    },
+    {
+      "id": 391,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/suppliers",
+      "description": "GET /tiendaapi/tienda/suppliers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:58.000Z"
+    },
+    {
+      "id": 392,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:59.000Z"
+    },
+    {
+      "id": 393,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "OPTIONS /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:59.000Z"
+    },
+    {
+      "id": 394,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "OPTIONS /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:59.000Z"
+    },
+    {
+      "id": 395,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:59.000Z"
+    },
+    {
+      "id": 396,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "OPTIONS /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:59.000Z"
+    },
+    {
+      "id": 397,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:59.000Z"
+    },
+    {
+      "id": 398,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "OPTIONS /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:59.000Z"
+    },
+    {
+      "id": 399,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:59.000Z"
+    },
+    {
+      "id": 400,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:59.000Z"
+    },
+    {
+      "id": 401,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/products",
+      "description": "GET /tiendaapi/tienda/products",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:59.000Z"
+    },
+    {
+      "id": 402,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:59.000Z"
+    },
+    {
+      "id": 403,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/orders",
+      "description": "GET /tiendaapi/tienda/orders",
+      "system": "tienda",
+      "date": "2026-04-22T14:06:59.000Z"
+    },
+    {
+      "id": 404,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:07:04.000Z"
+    },
+    {
+      "id": 405,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:07:04.000Z"
+    },
+    {
+      "id": 406,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:07:06.000Z"
+    },
+    {
+      "id": 407,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:07:06.000Z"
+    },
+    {
+      "id": 408,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "OPTIONS /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:07:13.000Z"
+    },
+    {
+      "id": 409,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/notifications/unreadCount",
+      "description": "GET /tiendaapi/notifications/unreadCount",
+      "system": "tienda",
+      "date": "2026-04-22T14:07:13.000Z"
+    },
+    {
+      "id": 410,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "OPTIONS /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:07:30.000Z"
+    },
+    {
+      "id": 411,
+      "httpMethod": "POST",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "POST /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:07:31.000Z"
+    },
+    {
+      "id": 412,
+      "httpMethod": "GET",
+      "action": "request",
+      "endPoint": "/tiendaapi/tienda/customers",
+      "description": "GET /tiendaapi/tienda/customers",
+      "system": "tienda",
+      "date": "2026-04-22T14:07:31.000Z"
+    },
+    {
+      "id": 413,
+      "httpMethod": "OPTIONS",
+      "action": "request",
+      "endPoint": "/tiendaapi/comands/saveBackup",
+      "description": "OPTIONS /tiendaapi/comands/saveBackup",
+      "system": "tienda",
+      "date": "2026-04-22T14:07:39.000Z"
+    }
+  ],
+  "TiendaSuppliers": [
+    {
+      "id": 1,
+      "name": "El de los atunes",
+      "document": null,
+      "phone": "",
+      "address": "",
+      "note": null,
+      "isActive": 1,
+      "createdAt": "2026-04-22T14:06:57.000Z",
+      "updatedAt": "2026-04-22T14:06:57.000Z"
+    }
+  ],
+  "TiendaMeasureUnits": [
+    {
+      "id": 1,
+      "name": "Libra",
+      "abbreviation": "lb",
+      "groupName": "peso",
+      "factorToBase": 1,
+      "isBase": 1
+    },
+    {
+      "id": 2,
+      "name": "Arroba",
+      "abbreviation": "arroba",
+      "groupName": "peso",
+      "factorToBase": 25,
+      "isBase": 0
+    },
+    {
+      "id": 3,
+      "name": "Quintal",
+      "abbreviation": "qq",
+      "groupName": "peso",
+      "factorToBase": 100,
+      "isBase": 0
+    },
+    {
+      "id": 4,
+      "name": "Gramo",
+      "abbreviation": "g",
+      "groupName": "masa_g",
+      "factorToBase": 1,
+      "isBase": 1
+    },
+    {
+      "id": 5,
+      "name": "Hectogramo",
+      "abbreviation": "hg",
+      "groupName": "masa_g",
+      "factorToBase": 100,
+      "isBase": 0
+    },
+    {
+      "id": 6,
+      "name": "Kilogramo",
+      "abbreviation": "kg",
+      "groupName": "masa_g",
+      "factorToBase": 1000,
+      "isBase": 0
+    },
+    {
+      "id": 7,
+      "name": "Mililitro",
+      "abbreviation": "ml",
+      "groupName": "volumen",
+      "factorToBase": 1,
+      "isBase": 1
+    },
+    {
+      "id": 8,
+      "name": "Litro",
+      "abbreviation": "L",
+      "groupName": "volumen",
+      "factorToBase": 1000,
+      "isBase": 0
+    },
+    {
+      "id": 9,
+      "name": "Unidad",
+      "abbreviation": "u",
+      "groupName": "unit",
+      "factorToBase": 1,
+      "isBase": 1
+    }
+  ],
+  "TiendaProductCategories": [
+    {
+      "id": 1,
+      "name": "Abarrotes",
+      "slug": "abarrotes",
+      "parentId": null,
+      "description": "Granos y básicos de despensa. Los productos (cada marca/peso) se registran aparte.",
+      "isActive": 1,
+      "sortOrder": 1,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 2,
+      "name": "Arroz",
+      "slug": "arroz",
+      "parentId": 1,
+      "description": null,
+      "isActive": 1,
+      "sortOrder": 1,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 3,
+      "name": "Bebidas",
+      "slug": "bebidas",
+      "parentId": null,
+      "description": "Bebidas para mostrador. Aguas, jugos, gaseosas, etc. como subcategoría.",
+      "isActive": 1,
+      "sortOrder": 2,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 4,
+      "name": "Aguas",
+      "slug": "aguas",
+      "parentId": 3,
+      "description": null,
+      "isActive": 1,
+      "sortOrder": 1,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 5,
+      "name": "Jugos",
+      "slug": "jugos",
+      "parentId": 3,
+      "description": null,
+      "isActive": 1,
+      "sortOrder": 2,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 6,
+      "name": "Gaseosas y refrescos",
+      "slug": "gaseosas-y-refrescos",
+      "parentId": 3,
+      "description": null,
+      "isActive": 1,
+      "sortOrder": 3,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 7,
+      "name": "Lácteos",
+      "slug": "lacteos",
+      "parentId": null,
+      "description": "Leches, yogures y similares.",
+      "isActive": 1,
+      "sortOrder": 3,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 8,
+      "name": "Leches",
+      "slug": "leches",
+      "parentId": 7,
+      "description": null,
+      "isActive": 1,
+      "sortOrder": 1,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 9,
+      "name": "Yogures",
+      "slug": "yogures",
+      "parentId": 7,
+      "description": null,
+      "isActive": 1,
+      "sortOrder": 2,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 10,
+      "name": "Plásticos y desechables",
+      "slug": "plasticos-y-desechables",
+      "parentId": null,
+      "description": "Servilletas, platos, vasos, cubiertos desechables, etc.",
+      "isActive": 1,
+      "sortOrder": 4,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 11,
+      "name": "Servilletas",
+      "slug": "servilletas",
+      "parentId": 10,
+      "description": null,
+      "isActive": 1,
+      "sortOrder": 1,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 12,
+      "name": "Platos y vasos desechables",
+      "slug": "platos-y-vasos-desechables",
+      "parentId": 10,
+      "description": null,
+      "isActive": 1,
+      "sortOrder": 2,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 13,
+      "name": "Cubiertos desechables",
+      "slug": "cubiertos-desechables",
+      "parentId": 10,
+      "description": "Cucharas, tenedores, cuchillos.",
+      "isActive": 1,
+      "sortOrder": 3,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 14,
+      "name": "Snacks",
+      "slug": "snacks",
+      "parentId": null,
+      "description": "Galletas, papitas y picos.",
+      "isActive": 1,
+      "sortOrder": 5,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 15,
+      "name": "Galletas",
+      "slug": "galletas",
+      "parentId": 14,
+      "description": null,
+      "isActive": 1,
+      "sortOrder": 1,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    },
+    {
+      "id": 16,
+      "name": "Papitas y snacks salados",
+      "slug": "papitas-y-snacks-salados",
+      "parentId": 14,
+      "description": null,
+      "isActive": 1,
+      "sortOrder": 2,
+      "createdAt": "2026-04-22T12:46:42.000Z",
+      "updatedAt": "2026-04-22T12:46:42.000Z"
+    }
+  ],
+  "TiendaBrands": [
+    {
+      "id": 1,
+      "name": "Real",
+      "isActive": 1
+    },
+    {
+      "id": 2,
+      "name": "Nirsa",
+      "isActive": 1
+    },
+    {
+      "id": 3,
+      "name": "Isabel",
+      "isActive": 1
+    },
+    {
+      "id": 4,
+      "name": "Facundo",
+      "isActive": 1
+    },
+    {
+      "id": 5,
+      "name": "La Favorita",
+      "isActive": 1
+    },
+    {
+      "id": 6,
+      "name": "Oriental",
+      "isActive": 1
+    }
+  ],
+  "TiendaProducts": [
+    {
+      "id": 1,
+      "name": "Real Atún Lomitos En Aceite De Girasol 160 G",
+      "sku": null,
+      "barcode": "7862100603221",
+      "categoryId": null,
+      "brandId": null,
+      "baseUnitId": 9,
+      "sizeLabel": "95G",
+      "stockBase": 0,
+      "minStockBase": 0,
+      "avgCostBase": "0.0000",
+      "salePrice": "1.00",
+      "primaryImageUrl": "products/real-atun-lomitos-en-aceite-de-girasol-160-g-2ixb0.jpg",
+      "wholesaleMinQty": 0,
+      "wholesalePrice": "0.00",
+      "isActive": 1,
+      "createdAt": "2026-04-22T12:48:45.000Z",
+      "updatedAt": "2026-04-22T12:59:02.000Z"
+    },
+    {
+      "id": 2,
+      "name": "Real © Atún En Aceite De Girasol 240 G",
+      "sku": null,
+      "barcode": "\t090388001416",
+      "categoryId": null,
+      "brandId": null,
+      "baseUnitId": 9,
+      "sizeLabel": "240 G (3 X 80 G)",
+      "stockBase": 0,
+      "minStockBase": 0,
+      "avgCostBase": "0.0000",
+      "salePrice": "2.90",
+      "primaryImageUrl": "products/real-atun-en-aceite-de-girasol-240-g-nntyg.jpg",
+      "wholesaleMinQty": 0,
+      "wholesalePrice": "0.00",
+      "isActive": 1,
+      "createdAt": "2026-04-22T13:01:43.000Z",
+      "updatedAt": "2026-04-22T13:01:43.000Z"
+    },
+    {
+      "id": 3,
+      "name": "Atun Real Atún En Aceite De Girasol 180 Gr",
+      "sku": null,
+      "barcode": "090388000792",
+      "categoryId": null,
+      "brandId": null,
+      "baseUnitId": 9,
+      "sizeLabel": "180G",
+      "stockBase": 0,
+      "minStockBase": 0,
+      "avgCostBase": "0.0000",
+      "salePrice": "1.50",
+      "primaryImageUrl": "products/atun-real-atun-en-aceite-de-girasol-180-gr-kx9eb.jpg",
+      "wholesaleMinQty": 0,
+      "wholesalePrice": "0.00",
+      "isActive": 1,
+      "createdAt": "2026-04-22T13:04:08.000Z",
+      "updatedAt": "2026-04-22T13:04:41.000Z"
+    }
+  ],
+  "TiendaPurchases": [],
+  "TiendaPurchaseItems": [],
+  "TiendaStockMovements": [],
+  "TiendaFinanceEntries": [],
+  "TiendaCustomers": [
+    {
+      "id": 1,
+      "name": "Edgar Torres",
+      "ci": "1104661598",
+      "nickname": "Pato",
+      "email": "edgartorrrespc8@gmail.com",
+      "phone": null,
+      "secondaryPhone": null,
+      "address": "C. Centenario, Cariamanga, Ecuador",
+      "city": "CARIAMANGA",
+      "reference": null,
+      "notes": null,
+      "createdAt": "2026-04-22T14:07:31.000Z",
+      "updatedAt": "2026-04-22T14:07:31.000Z"
+    }
+  ],
+  "TiendaOrders": [],
+  "TiendaOrderItems": []
+}

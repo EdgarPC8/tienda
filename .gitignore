@@ -1,0 +1,34 @@
+# Dependencias
+backend/node_modules/
+
+# Variables de entorno
+.env
+.env.local
+.env.*.local
+!.env.example
+backend/.env
+
+# El frontend de desarrollo es raptor/frontend (npm run tienda / npm run dev:tienda).
+# Compilación de producción: npm run build:tienda → copia a AppsWeb/tienda/.
+
+# Datos sensibles / backups locales
+backend/src/database/backup.json
+backend/src/backups/
+backend/database.db
+*.backup.json
+# Dump completo de producción (incluye users/hashes); el catálogo limpio sí se versiona
+backup-tienda.json
+
+# Imágenes de catálogo / subidas (no versionar; viven en cada servidor)
+backend/src/img/sistema/products/
+backend/src/img/sistema/stores/
+backend/src/img/sistema/ads/
+backend/src/img/sistema/qr/
+backend/src/img/photos/
+backend/src/img/qrBank/
+backend/src/img/products/
+
+# Sistema
+.DS_Store
+*.log
+node_modules/

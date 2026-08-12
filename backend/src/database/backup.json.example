@@ -1,0 +1,6 @@
+{
+  "_comment": "Plantilla vacía. Genera backup real con: npm run db:check-backup (en backend/). No versionar backup.json con datos reales.",
+  "users": [],
+  "accounts": [],
+  "roles": []
+}

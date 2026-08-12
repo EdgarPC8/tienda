@@ -1,0 +1,3 @@
+# Firma electrónica SRI (nunca pública)
+src/private/sri/*
+!src/private/sri/.gitkeep

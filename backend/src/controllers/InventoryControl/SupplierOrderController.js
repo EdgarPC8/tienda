@@ -89,6 +89,18 @@ async function ensureSupplierOrderItemLotSchema() {
   } catch (e) {
     console.warn("ensureSupplierOrder unitPrice precision:", e?.message || e);
   }
+  try {
+    const [found] = await sequelize.query(
+      "SHOW COLUMNS FROM `ERP_supplier_order_items` LIKE 'discount'",
+    );
+    if (!Array.isArray(found) || found.length === 0) {
+      await sequelize.query(
+        "ALTER TABLE `ERP_supplier_order_items` ADD COLUMN `discount` DECIMAL(14,6) NOT NULL DEFAULT 0",
+      );
+    }
+  } catch (e) {
+    console.warn("ensureSupplierOrder discount:", e?.message || e);
+  }
   supplierItemLotSchemaReady = true;
 }
 
@@ -160,6 +172,7 @@ function buildItemCreatePayload(orderId, row) {
     productId,
     quantity,
     unitPrice: toNum(row.unitPrice ?? row.price, 0),
+    discount: Math.max(0, toNum(row.discount, 0)),
     taxRate: Math.max(0, toNum(row.taxRate, 0)),
     ...lot,
   };
@@ -198,12 +211,18 @@ const orderIncludes = [
   },
 ];
 
+function lineNet(it) {
+  const gross = toNum(it.quantity) * toNum(it.unitPrice);
+  const disc = Math.max(0, toNum(it.discount, 0));
+  return Math.max(0, gross - disc);
+}
+
 function orderTotal(items = []) {
   const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
   let sub = 0;
   let iva = 0;
   for (const it of items) {
-    const line = toNum(it.quantity) * toNum(it.unitPrice);
+    const line = lineNet(it);
     sub += line;
     iva += line * (toNum(it.taxRate) / 100);
   }
@@ -621,6 +640,7 @@ export const addSupplierOrderItem = async (req, res) => {
       productId,
       quantity,
       unitPrice: unitPrice >= 0 ? unitPrice : toNum(product.distributorPrice ?? product.price, 0),
+      discount: Math.max(0, toNum(req.body?.discount, 0)),
       taxRate: Math.max(0, toNum(req.body?.taxRate, 0)),
     });
 
@@ -742,7 +762,7 @@ export const markSupplierOrderReceived = async (req, res) => {
           }
           const g = batchGroups.get(key);
           g.quantity += qty;
-          g.unitPriceSum += toNum(item.unitPrice) * qty;
+          g.unitPriceSum += lineNet(item);
           g.itemIds.push(item.id);
         } else {
           plainItems.push(item);
@@ -826,7 +846,7 @@ export const markSupplierOrderReceived = async (req, res) => {
             reason: "ENTRADA_COMPRA",
             quantity: qty,
             description: `Recepción pedido proveedor #${order.id}`,
-            price: toNum(item.unitPrice) * qty,
+            price: lineNet(item),
             referenceType: "supplier_order",
             referenceId: order.id,
             createdBy: user.accountId,

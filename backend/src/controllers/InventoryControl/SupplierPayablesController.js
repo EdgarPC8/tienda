@@ -31,7 +31,9 @@ function orderTotal(items = []) {
   let sub = 0;
   let iva = 0;
   for (const it of items) {
-    const line = toNum(it.quantity) * toNum(it.unitPrice);
+    const gross = toNum(it.quantity) * toNum(it.unitPrice);
+    const disc = Math.max(0, toNum(it.discount));
+    const line = Math.max(0, gross - disc);
     sub += line;
     iva += line * (toNum(it.taxRate) / 100);
   }

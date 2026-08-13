@@ -9,6 +9,7 @@ export const DEFAULT_RECEIPT_DETAIL_SETTINGS = {
   collapseSpaces: true,
   applyToFactura: true,
   applyToNotaVenta: true,
+  defaultPrintFormat: "a4",
 };
 
 const CASE_ALLOWED = new Set(["as_stored", "upper", "lower", "title"]);
@@ -37,6 +38,11 @@ export function normalizeReceiptDetailSettings(raw) {
     applyToFactura: src.applyToFactura !== false && src.applyToFactura !== "false",
     applyToNotaVenta:
       src.applyToNotaVenta !== false && src.applyToNotaVenta !== "false",
+    defaultPrintFormat: ["a4", "ticket80", "ticket55"].includes(
+      String(src.defaultPrintFormat || ""),
+    )
+      ? String(src.defaultPrintFormat)
+      : "a4",
   };
   return out;
 }

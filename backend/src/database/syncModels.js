@@ -34,7 +34,6 @@ const MODELS_TO_SYNC = [
   InventoryUnit,
   InventoryCategory,
   Supplier,
-  SupplierProductCode,
   MediaAsset,
   PublicidadCampaign,
   NotificationProgram,
@@ -49,6 +48,7 @@ const MODELS_TO_SYNC = [
   Store,
   CashRegister,
   InventoryProduct,
+  SupplierProductCode, // FK → suppliers + inventory_products
   CashShift,
   Order,
   SupplierOrder,

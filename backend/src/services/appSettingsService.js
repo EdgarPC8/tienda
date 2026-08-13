@@ -285,13 +285,24 @@ function asBool(value, fallback = true) {
   return fallback;
 }
 
+/** Defaults listos para columnas TEXT (JSON serializado). */
+function defaultsForDb() {
+  return {
+    ...DEFAULT_APP_SETTINGS,
+    receiptDetailSettings: serializeReceiptDetailSettings(
+      DEFAULT_APP_SETTINGS.receiptDetailSettings,
+    ),
+    themePalette: serializeThemePalette(DEFAULT_APP_SETTINGS.themePalette),
+  };
+}
+
 export async function loadAppSettings() {
   await ensureAppSettingsSchema();
   await ensureInventoryProductMoneySchema();
   await AppSettings.sync();
   let row = await AppSettings.findByPk(1);
   if (!row) {
-    row = await AppSettings.create({ id: 1, ...DEFAULT_APP_SETTINGS });
+    row = await AppSettings.create({ id: 1, ...defaultsForDb() });
   }
   row = await migrateSettingsRow(row);
   const raw = row.toJSON();
@@ -354,7 +365,7 @@ export async function updateAppSettings(payload) {
   }
   let row = await AppSettings.findByPk(1);
   if (!row) {
-    row = await AppSettings.create({ id: 1, ...DEFAULT_APP_SETTINGS, ...patch });
+    row = await AppSettings.create({ id: 1, ...defaultsForDb(), ...patch });
   } else {
     await row.update(patch);
   }

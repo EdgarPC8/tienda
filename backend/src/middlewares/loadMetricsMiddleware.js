@@ -1,20 +1,24 @@
-import { loadMetricsEnabled, reportLoadMinute } from "../services/loadMetricsReporter.js";
+import { loadMetricsEnabled, reportLoadSample } from "../services/loadMetricsReporter.js";
 
 const SKIP_PREFIXES = ["/socket.io"];
 const MAX_LATENCIES = 2000;
+const SAMPLE_SECONDS = Math.max(
+  10,
+  Math.min(300, Number(process.env.RAPTOR_LOAD_METRICS_INTERVAL_SECONDS || 10) || 10),
+);
+const SAMPLE_MS = SAMPLE_SECONDS * 1000;
 
 const buckets = new Map();
 let flushTimer = null;
 
-function minuteStart(date = new Date()) {
+function sampleStart(date = new Date()) {
   const d = new Date(date);
-  d.setUTCSeconds(0, 0);
-  d.setUTCMilliseconds(0);
+  d.setTime(Math.floor(d.getTime() / SAMPLE_MS) * SAMPLE_MS);
   return d;
 }
 
 function bucketFor(date = new Date()) {
-  const start = minuteStart(date);
+  const start = sampleStart(date);
   const key = start.toISOString();
   let bucket = buckets.get(key);
   if (!bucket) {
@@ -49,14 +53,15 @@ function toBytes(value) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-async function flushClosedMinutes(forceAll = false) {
+async function flushClosedSamples(forceAll = false) {
   if (!loadMetricsEnabled()) {
     buckets.clear();
     return;
   }
-  const currentKey = minuteStart().toISOString();
+  const currentKey = sampleStart().toISOString();
   for (const [key, bucket] of [...buckets.entries()]) {
-    await reportLoadMinute({
+    if (!forceAll && key === currentKey) continue;
+    await reportLoadSample({
       interval_start: bucket.interval_start,
       requests: bucket.requests,
       bytes_in: bucket.bytes_in,
@@ -64,15 +69,15 @@ async function flushClosedMinutes(forceAll = false) {
       errors: bucket.errors,
       latency_p95_ms: percentile95(bucket.latencies),
     });
-    if (forceAll || key !== currentKey) buckets.delete(key);
+    buckets.delete(key);
   }
 }
 
 function ensureTimer() {
   if (flushTimer) return;
   flushTimer = setInterval(() => {
-    void flushClosedMinutes(false);
-  }, 60_000);
+    void flushClosedSamples(false);
+  }, SAMPLE_MS);
   flushTimer.unref?.();
 }
 
@@ -97,9 +102,9 @@ export function loadMetricsMiddleware(req, res, next) {
 }
 
 export async function flushLoadMetricsNow() {
-  await flushClosedMinutes(true);
+  await flushClosedSamples(true);
 }
 
 process.on("beforeExit", () => {
-  void flushClosedMinutes(true);
+  void flushClosedSamples(true);
 });

@@ -1,5 +1,5 @@
 /**
- * Reporta el agregado de un minuto al gestor.
+ * Reporta el agregado de un intervalo al gestor.
  * POST /raptorsolutions/api/webhooks/app-load
  */
 export function loadMetricsEnabled() {
@@ -9,7 +9,7 @@ export function loadMetricsEnabled() {
   );
 }
 
-export async function reportLoadMinute(payload) {
+export async function reportLoadSample(payload) {
   if (!loadMetricsEnabled()) return false;
 
   const host = process.env.RAPTOR_WEBHOOK_HOST || "localhost";

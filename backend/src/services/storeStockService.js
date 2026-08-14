@@ -261,6 +261,49 @@ export async function setStoreStockAbsolute(
 }
 
 /**
+ * Stock desde ficha de producto (alta/edición).
+ * - Sin multistock: concentra la cantidad en el local de operación (el de caja)
+ *   y deja en 0 cualquier otra fila, para que Caja no siga viendo 0.
+ * - Con multistock: la cantidad inicial/editada va a Bodega.
+ */
+export async function setProductCatalogStock(
+  productId,
+  quantity,
+  { transaction, allowNegative = false } = {},
+) {
+  const target = numStock(quantity);
+  if (!allowNegative && target < 0) {
+    throw new Error("La cantidad de stock no puede ser negativa.");
+  }
+  const multi = Boolean(getAppSettingsSync()?.multiStockEnabled);
+  const run = async (t) => {
+    const storeId = await getDefaultStockStoreId({ transaction: t });
+    await setStoreStockAbsolute(storeId, productId, target, {
+      transaction: t,
+      allowNegative,
+    });
+    if (!multi) {
+      await StoreStock.update(
+        { quantity: 0 },
+        {
+          where: { productId, storeId: { [Op.ne]: storeId } },
+          transaction: t,
+        },
+      );
+      await syncProductStockFromStores(productId, { transaction: t });
+    }
+    return {
+      storeId,
+      productId,
+      quantity: target,
+      productStock: await sumProductStoreStock(productId, { transaction: t }),
+    };
+  };
+  if (transaction) return run(transaction);
+  return sequelize.transaction(run);
+}
+
+/**
  * Migración inicial: si no hay filas de stock por local,
  * mueve product.stock actual a Bodega y deja el total sincronizado.
  */

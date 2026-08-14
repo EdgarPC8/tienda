@@ -20,8 +20,10 @@ import { parsePagination, sendPaginated } from "../../utils/pagination.js";
 import {
   getDefaultStockStoreId,
   setStoreStockAbsolute,
+  setProductCatalogStock,
   listProductStoreStocks,
 } from "../../services/storeStockService.js";
+import { getAppSettingsSync } from "../../services/appSettingsService.js";
 
 const PRODUCT_TYPE_ORDER = literal(
   `CASE \`${InventoryProduct.tableName}\`.\`type\` WHEN 'final' THEN 1 WHEN 'intermediate' THEN 2 ELSE 3 END`,
@@ -239,10 +241,35 @@ export const updateProduct = async (req, res) => {
       updates.packageTiers = normalizePackageTiersStrict(updates.packageTiers);
     }
 
+    // Stock de ficha: sin multistock hay que escribir también ERP_store_stocks
+    // (Caja lee el local del turno, no solo InventoryProduct.stock).
+    const multiStockEnabled = Boolean(getAppSettingsSync()?.multiStockEnabled);
+    let catalogStock = null;
+    if ("stock" in updates) {
+      if (multiStockEnabled) {
+        // En multistock el stock por local se gestiona en movimientos/locales.
+        delete updates.stock;
+      } else if (updates.stock !== undefined && updates.stock !== null && updates.stock !== "") {
+        const n = Number(updates.stock);
+        if (!Number.isFinite(n) || n < 0) {
+          notifyFail("product.update_failed", "Stock inválido", { req, httpStatus: 400 });
+          return res.status(400).json({ message: "Stock inválido" });
+        }
+        catalogStock = n;
+        delete updates.stock;
+      } else {
+        delete updates.stock;
+      }
+    }
+
     // ===============================
     // 3️⃣ Actualiza BD
     // ===============================
     await row.update(updates);
+    if (catalogStock != null) {
+      await setProductCatalogStock(row.id, catalogStock, { allowNegative: false });
+      await row.reload();
+    }
 
     notifyOk("product.updated", `Producto #${id}`, { product: row });
 
@@ -259,7 +286,7 @@ export const updateProduct = async (req, res) => {
       notifyFail("product.update_failed", uniqueMsg, { error, req, httpStatus: 409 });
       return res.status(409).json({ message: uniqueMsg });
     }
-    if (error?.message && /(wholesaleRules|packageTiers)/.test(error.message)) {
+    if (error?.message && /(wholesaleRules|packageTiers|stock)/i.test(error.message)) {
       notifyFail("product.update_failed", error.message, { error, req, httpStatus: 400 });
       return res.status(400).json({ message: error.message });
     }
@@ -350,6 +377,12 @@ export const createProduct = async (req, res) => {
 
     // --- crear producto ---
     const product = await InventoryProduct.create(payload);
+    // Alta: el stock de ficha debe quedar también en el local (Caja / bodega).
+    const initialStock = Number(product.stock ?? 0);
+    if (Number.isFinite(initialStock) && initialStock >= 0) {
+      await setProductCatalogStock(product.id, initialStock, { allowNegative: false });
+      await product.reload();
+    }
     notifyOk("product.created", `Producto #${product.id}`, { product });
     return res.status(201).json(product);
   } catch (error) {
@@ -361,7 +394,7 @@ export const createProduct = async (req, res) => {
       notifyFail("product.create_failed", uniqueMsg, { error, req, httpStatus: 409 });
       return res.status(409).json({ message: uniqueMsg });
     }
-    if (error?.message && /(wholesaleRules|packageTiers)/.test(error.message)) {
+    if (error?.message && /(wholesaleRules|packageTiers|stock)/i.test(error.message)) {
       notifyFail("product.create_failed", error.message, { error, req, httpStatus: 400 });
       return res.status(400).json({ message: error.message });
     }

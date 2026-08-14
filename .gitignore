@@ -7,6 +7,8 @@ backend/node_modules/
 .env.*.local
 !.env.example
 backend/.env
+backend/.env.*
+!backend/.env.example
 
 # El frontend de desarrollo es raptor/frontend (npm run tienda / npm run dev:tienda).
 # Compilación de producción: npm run build:tienda → copia a AppsWeb/tienda/.
@@ -31,4 +33,5 @@ backend/src/img/products/
 # Sistema
 .DS_Store
 *.log
+*.bak
 node_modules/

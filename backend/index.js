@@ -13,6 +13,7 @@ import { sequelize } from "./src/database/connection.js";
 import "./src/database/registerEdDeliModels.js";
 import { recreateDatabaseFromBackup } from "./src/database/insertData.js";
 import { loggerMiddleware } from "./src/middlewares/loggerMiddleware.js";
+import { loadMetricsMiddleware } from "./src/middlewares/loadMetricsMiddleware.js";
 
 import UsersRoutes from "./src/routes/UsersRoutes.js";
 import AuthRoutes from "./src/routes/AuthRoutes.js";
@@ -81,6 +82,7 @@ const io = new Server(httpServer, {
 // Middleware
 app.use(express.json());
 app.use(loggerMiddleware);
+app.use(loadMetricsMiddleware);
 
 // CORS — localhost, LAN 192.168/10.x y dominio institucional (sin IPs fijas)
 app.use(

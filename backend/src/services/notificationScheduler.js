@@ -3,6 +3,7 @@ import {
   seedDefaultNotificationPrograms,
 } from "./notificationService.js";
 import { syncRecurringExpenseReminders } from "../controllers/InventoryControl/RecurringExpenseController.js";
+import { runPaymentInstallmentReminders } from "./orderPaymentScheduleService.js";
 
 let started = false;
 let tickTimer = null;
@@ -22,6 +23,7 @@ export async function startNotificationScheduler() {
     try {
       await runScheduledNotificationPrograms();
       await syncRecurringExpenseReminders();
+      await runPaymentInstallmentReminders();
     } catch (err) {
       console.error("Error en scheduler de notificaciones:", err?.message || err);
     }

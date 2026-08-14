@@ -102,6 +102,17 @@ async function ensureSupplierPayablesSchema() {
       );
     }
 
+    // Columna del modelo SupplierOrder; sin esto el workbench rompe con ER_BAD_FIELD_ERROR.
+    const [invoiceCols] = await sequelize.query(
+      `SHOW COLUMNS FROM \`ERP_supplier_orders\` LIKE 'invoiceNumber'`
+    );
+    if (!Array.isArray(invoiceCols) || invoiceCols.length === 0) {
+      await sequelize.query(
+        `ALTER TABLE \`ERP_supplier_orders\`
+         ADD COLUMN \`invoiceNumber\` VARCHAR(80) NULL`
+      );
+    }
+
     const [fks] = await sequelize.query(
       `SELECT CONSTRAINT_NAME AS name
        FROM information_schema.KEY_COLUMN_USAGE

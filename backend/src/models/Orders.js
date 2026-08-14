@@ -301,6 +301,8 @@ export const OrderPaymentInstallment = sequelize.define(
     dueDate: { type: DataTypes.DATEONLY, allowNull: false },
     amount: { type: DataTypes.DECIMAL(14, 2), allowNull: false, defaultValue: 0 },
     notes: { type: DataTypes.STRING(255), allowNull: true },
+    reminderEnabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    reminderDaysBefore: { type: DataTypes.TINYINT, allowNull: false, defaultValue: 1 },
   },
   { timestamps: true },
 );
@@ -315,6 +317,8 @@ export const SupplierOrderPaymentInstallment = sequelize.define(
     dueDate: { type: DataTypes.DATEONLY, allowNull: false },
     amount: { type: DataTypes.DECIMAL(14, 2), allowNull: false, defaultValue: 0 },
     notes: { type: DataTypes.STRING(255), allowNull: true },
+    reminderEnabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    reminderDaysBefore: { type: DataTypes.TINYINT, allowNull: false, defaultValue: 1 },
   },
   { timestamps: true },
 );

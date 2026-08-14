@@ -16,6 +16,8 @@ import { ensureInventoryBatchesSchema } from "./BatchController.js";
 import { getAppSettingsSync } from "../../services/appSettingsService.js";
 import {
   adjustStoreStock,
+  ensureBodegaStore,
+  ensureStoreLocationKindEnum,
   getDefaultStockStoreId,
   storeHoldsInventory,
 } from "../../services/storeStockService.js";
@@ -702,6 +704,8 @@ export const markSupplierOrderReceived = async (req, res) => {
   try {
     await ensureSupplierOrderItemLotSchema();
     await ensureInventoryBatchesSchema();
+    await ensureStoreLocationKindEnum();
+    await ensureBodegaStore();
     const token = getHeaderToken(req);
     const user = await verifyJWT(token);
     const order = await SupplierOrder.findByPk(req.params.id, {

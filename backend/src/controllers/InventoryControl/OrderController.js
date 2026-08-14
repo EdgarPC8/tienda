@@ -189,8 +189,16 @@ export const posCheckout = async (req, res) => {
     const user = await verifyJWT(token);
     const { accountId } = user;
 
-    const { customerId, notes, items, paymentMethod, saleType, documentType, cashRegisterId } =
-      req.body;
+    const {
+      customerId,
+      notes,
+      items,
+      paymentMethod,
+      saleType,
+      documentType,
+      cashRegisterId,
+      paymentInstallments,
+    } = req.body;
     if (!customerId || !Array.isArray(items) || items.length === 0) {
       notifyFail("order.pos_checkout_failed", "Faltan customerId o items.", { req, httpStatus: 400 });
       return res.status(400).json({ message: "Faltan customerId o items." });
@@ -206,6 +214,7 @@ export const posCheckout = async (req, res) => {
     }
 
     const isCredit = saleType === "credito";
+    await ensurePaymentScheduleSchema();
     const docType = ["factura", "nota_venta", "documento", "consumidor_final"].includes(
       String(documentType || ""),
     )
@@ -257,6 +266,7 @@ export const posCheckout = async (req, res) => {
         { transaction: t },
       );
 
+      let orderTotal = 0;
       for (const row of items) {
         const productId = Number(row.productId);
         const qty = Number(row.quantity);
@@ -264,6 +274,10 @@ export const posCheckout = async (req, res) => {
         if (!Number.isFinite(productId) || !Number.isFinite(qty) || qty <= 0) {
           throw new Error("Ítem inválido en el carrito.");
         }
+        if (!Number.isFinite(price) || price < 0) {
+          throw new Error("Precio inválido en el carrito.");
+        }
+        orderTotal += Number((price * qty).toFixed(2));
 
         const product = await InventoryProduct.findByPk(productId, {
           transaction: t,
@@ -344,6 +358,20 @@ export const posCheckout = async (req, res) => {
             { transaction: t },
           );
         }
+      }
+
+      if (isCredit) {
+        if (!Array.isArray(paymentInstallments) || paymentInstallments.length === 0) {
+          throw new Error("Definí la fecha de cobro o las cuotas del crédito.");
+        }
+        const scheduledTotal = paymentInstallments.reduce(
+          (sum, row) => sum + Number(row?.amount || 0),
+          0,
+        );
+        if (Math.abs(scheduledTotal - orderTotal) > 0.009) {
+          throw new Error("La suma de las cuotas debe coincidir con el total de la venta.");
+        }
+        await replaceCustomerInstallments(order.id, paymentInstallments, { transaction: t });
       }
 
       return order;

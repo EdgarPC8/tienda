@@ -97,6 +97,15 @@ export const AppSettings = sequelize.define(
       defaultValue: true,
     },
     /**
+     * Caja: si falta stock al cobrar y el producto es destino de un empaque enlazado
+     * con stock, sugerir abrir el empaque antes de bloquear o autocompletar.
+     */
+    suggestOpenPackOnPosShortage: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    /**
      * Formato del detalle de productos en factura / nota de venta (JSON).
      * Ej: mayúsculas, código, número de línea, etc.
      */

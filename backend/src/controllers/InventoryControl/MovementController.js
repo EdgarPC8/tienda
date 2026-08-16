@@ -798,7 +798,7 @@ function gramsToProductStockUnits(product, unit, grams) {
 
 /**
  * POST /inventory/movements/open-presentation
- * Abre presentación(es) de compra y transfiere stock al insumo genérico (sin precio).
+ * Abre presentación(es) y transfiere stock a su destino (genérico o final), sin precio.
  */
 export const openPresentationMovement = async (req, res) => {
   try {
@@ -808,6 +808,7 @@ export const openPresentationMovement = async (req, res) => {
     const {
       presentationProductId,
       packsToOpen = 1,
+      storeId: storeIdInput,
       description,
       date: movementDateInput,
     } = req.body;
@@ -838,7 +839,7 @@ export const openPresentationMovement = async (req, res) => {
         throw err;
       }
       if (!presentation.genericProductId) {
-        const err = new Error("Este producto no está enlazado a un insumo genérico.");
+        const err = new Error("Este producto no tiene un destino configurado para apertura.");
         err.statusCode = 400;
         throw err;
       }
@@ -848,22 +849,29 @@ export const openPresentationMovement = async (req, res) => {
         throw err;
       }
 
-      const generic = await InventoryProduct.findByPk(presentation.genericProductId, {
+      const target = await InventoryProduct.findByPk(presentation.genericProductId, {
         include: [{ model: InventoryUnit }],
         transaction: t,
         lock: t.LOCK.UPDATE,
       });
 
-      if (!generic?.isGenericIngredient || generic.type !== "raw") {
-        const err = new Error("El insumo genérico asociado no es válido.");
+      if (
+        !target ||
+        (target.type !== "final" && !(target.isGenericIngredient && target.type === "raw"))
+      ) {
+        const err = new Error("El destino configurado para apertura no es válido.");
         err.statusCode = 400;
         throw err;
       }
 
-      const presStock = num(presentation.stock);
+      const stockStoreId =
+        storeIdInput != null && storeIdInput !== ""
+          ? Number(storeIdInput)
+          : await getDefaultStockStoreId({ transaction: t });
+      const presStock = await getStoreStockQty(stockStoreId, presentation.id, { transaction: t });
       if (presStock < packs) {
         const err = new Error(
-          `Stock insuficiente en presentación (hay ${presStock}, se pidieron ${packs}).`,
+          `Stock insuficiente en el local seleccionado (hay ${presStock}, se pidieron ${packs}).`,
         );
         err.statusCode = 400;
         throw err;
@@ -874,26 +882,27 @@ export const openPresentationMovement = async (req, res) => {
         presentation.InventoryUnit,
       );
       const totalGrams = round2(gramsPerPack * packs);
-      const genericQty = round2(
-        gramsToProductStockUnits(generic, generic.InventoryUnit, totalGrams),
-      );
+      const configuredUnits = Number(presentation.unitsPerPack);
+      const targetQty = Number.isInteger(configuredUnits) && configuredUnits > 0
+        ? configuredUnits * packs
+        : round2(gramsToProductStockUnits(target, target.InventoryUnit, totalGrams));
 
-      if (totalGrams <= 0 || genericQty <= 0) {
+      if (targetQty <= 0) {
         const err = new Error(
-          "No se pudo calcular la cantidad a transferir. Revisa unidades de la presentación y del genérico.",
+          "No se pudo calcular la cantidad a transferir. Configura Unidades por paca en el enlace.",
         );
         err.statusCode = 400;
         throw err;
       }
 
-      await applyMovementSalida(presentation, packs, t);
-      await applyMovementEntrada(generic, genericQty, t);
+      await applyMovementSalida(presentation, packs, t, stockStoreId);
+      await applyMovementEntrada(target, targetQty, t, stockStoreId);
 
       const presLabel =
         presentation.purchasePresentation || presentation.name;
       const desc =
         description?.trim() ||
-        `Apertura: ${packs} × ${presLabel} → ${generic.name} (+${totalGrams} g)`;
+        `Apertura: ${packs} × ${presLabel} → ${target.name} (+${targetQty} ${target.InventoryUnit?.abbreviation || "u"})`;
 
       const movementDate = resolveMovementDate(movementDateInput, user);
       const batchRef = createBatchReferenceId();
@@ -916,10 +925,10 @@ export const openPresentationMovement = async (req, res) => {
 
       const entrada = await createInventoryMovementRow(
         {
-          productId: generic.id,
+          productId: target.id,
           type: "entrada",
           reason: "ENTRADA_OTRA",
-          quantity: genericQty,
+          quantity: targetQty,
           description: desc,
           price: null,
           referenceType: PRESENTATION_OPEN_REF,
@@ -936,13 +945,14 @@ export const openPresentationMovement = async (req, res) => {
           name: presentation.name,
           stockAfter: round2(num(presentation.stock)),
         },
-        generic: {
-          id: generic.id,
-          name: generic.name,
-          stockAfter: round2(num(generic.stock)),
+        target: {
+          id: target.id,
+          name: target.name,
+          type: target.isGenericIngredient ? "generic" : "final",
+          stockAfter: round2(num(target.stock)),
           addedGrams: totalGrams,
-          addedInUnit: genericQty,
-          unitAbbrev: generic.InventoryUnit?.abbreviation ?? "—",
+          addedInUnit: targetQty,
+          unitAbbrev: target.InventoryUnit?.abbreviation ?? "—",
         },
         packsOpened: packs,
         movementIds: [salida.id, entrada.id],
@@ -954,7 +964,7 @@ export const openPresentationMovement = async (req, res) => {
       packsOpened: result.packsOpened,
     });
     return res.status(201).json({
-      message: "Presentación abierta y stock transferido al insumo genérico.",
+      message: "Presentación abierta y stock transferido al destino configurado.",
       ...result,
     });
   } catch (error) {

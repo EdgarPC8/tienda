@@ -1,4 +1,5 @@
 import { Op } from "sequelize";
+import { sequelize } from "../../database/connection.js";
 import {
   InventoryProduct,
   InventoryCategory,
@@ -19,6 +20,22 @@ const productInclude = [
   { model: InventoryUnit, attributes: ["id", "name", "abbreviation", "factor"] },
 ];
 
+/** Migración liviana para instalaciones existentes. */
+async function ensurePresentationLinkSchema() {
+  try {
+    const [cols] = await sequelize.query(
+      "SHOW COLUMNS FROM `ERP_inventory_products` LIKE 'unitsPerPack'",
+    );
+    if (!Array.isArray(cols) || cols.length === 0) {
+      await sequelize.query(
+        "ALTER TABLE `ERP_inventory_products` ADD COLUMN `unitsPerPack` INT NULL AFTER `genericProductId`",
+      );
+    }
+  } catch (error) {
+    console.warn("ensurePresentationLinkSchema:", error?.message || error);
+  }
+}
+
 function shapeProductRow(row) {
   const unit = row.InventoryUnit || row.ERP_inventory_unit;
   const stockGrams = productStockToGrams(row, unit);
@@ -38,6 +55,7 @@ function shapeProductRow(row) {
     categoryName: category?.name ?? "—",
     isGenericIngredient: !!row.isGenericIngredient,
     genericProductId: row.genericProductId,
+    unitsPerPack: row.unitsPerPack == null ? null : Number(row.unitsPerPack),
     stockGrams: round2(stockGrams),
     isCountUnit: isCountUnit(unit),
   };
@@ -435,6 +453,7 @@ export async function runGenericIngredientsBootstrap() {
  */
 export const getGenericIngredientsWorkbench = async (req, res) => {
   try {
+    await ensurePresentationLinkSchema();
     const generics = await InventoryProduct.findAll({
       where: {
         isGenericIngredient: true,
@@ -728,13 +747,15 @@ export const createPresentation = async (req, res) => {
  */
 export const linkPresentation = async (req, res) => {
   try {
+    await ensurePresentationLinkSchema();
     const productId = Number(req.params.productId);
-    const { genericProductId, purchasePresentation } = req.body;
-    const genericId = Number(genericProductId);
+    const { genericProductId, targetProductId, purchasePresentation, unitsPerPack } = req.body;
+    const targetId = Number(targetProductId ?? genericProductId);
+    const units = Number(unitsPerPack);
 
-    const [product, generic] = await Promise.all([
+    const [product, target] = await Promise.all([
       InventoryProduct.findByPk(productId),
-      InventoryProduct.findByPk(genericId),
+      InventoryProduct.findByPk(targetId),
     ]);
 
     if (!product) {
@@ -758,11 +779,16 @@ export const linkPresentation = async (req, res) => {
         message: "Enlaza un producto tipo final (ej. Quintal de harina).",
       });
     }
-    if (!generic?.isGenericIngredient || generic.type !== "raw") {
-      notifyFail("presentation.link_failed", "Insumo genérico no encontrado", { req, httpStatus: 404 });
-      return res.status(404).json({ message: "Insumo genérico no encontrado." });
+    if (!target || (target.type !== "final" && !(target.isGenericIngredient && target.type === "raw"))) {
+      return res.status(400).json({ message: "El destino debe ser un insumo genérico o un producto final." });
     }
-    if (isAzucarComunGeneric(generic) && isAzucarImpalpableProduct(product)) {
+    if (target.id === product.id) {
+      return res.status(400).json({ message: "Una presentación no puede abrirse sobre sí misma." });
+    }
+    if (!Number.isInteger(units) || units < 1) {
+      return res.status(400).json({ message: "Unidades por paca debe ser un número entero mayor o igual a 1." });
+    }
+    if (target.isGenericIngredient && isAzucarComunGeneric(target) && isAzucarImpalpableProduct(product)) {
       notifyFail("presentation.link_failed", "Azúcar impalpable no se enlaza bajo Azúcar común", {
         req,
         httpStatus: 400,
@@ -773,7 +799,8 @@ export const linkPresentation = async (req, res) => {
     }
 
     const patch = {
-      genericProductId: genericId,
+      genericProductId: targetId,
+      unitsPerPack: units,
       isGenericIngredient: false,
       purchasePresentation: purchasePresentation ?? product.purchasePresentation,
     };
@@ -785,7 +812,8 @@ export const linkPresentation = async (req, res) => {
     const full = await InventoryProduct.findByPk(product.id, { include: productInclude });
     notifyOk("presentation.linked", `Presentación #${productId} vinculada`, {
       productId,
-      genericProductId: genericId,
+      targetProductId: targetId,
+      unitsPerPack: units,
     });
     res.json(shapeProductRow(full));
   } catch (error) {
@@ -800,13 +828,14 @@ export const linkPresentation = async (req, res) => {
  */
 export const unlinkPresentation = async (req, res) => {
   try {
+    await ensurePresentationLinkSchema();
     const product = await InventoryProduct.findByPk(req.params.productId);
     if (!product) {
       notifyFail("presentation.unlink_failed", "Producto no encontrado", { req, httpStatus: 404 });
       return res.status(404).json({ message: "Producto no encontrado." });
     }
 
-    await product.update({ genericProductId: null });
+    await product.update({ genericProductId: null, unitsPerPack: null });
     const full = await InventoryProduct.findByPk(product.id, { include: productInclude });
     notifyOk("presentation.unlinked", `Presentación #${req.params.productId} desvinculada`, {
       productId: req.params.productId,

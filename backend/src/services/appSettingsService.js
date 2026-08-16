@@ -50,6 +50,7 @@ export const DEFAULT_APP_SETTINGS = {
   moneyDisplayDecimals: 2,
   moneyRoundingMode: "up",
   ordersAllowDeliverStockAdjust: true,
+  suggestOpenPackOnPosShortage: false,
   receiptDetailSettings: { ...DEFAULT_RECEIPT_DETAIL_SETTINGS },
   themePalette: normalizeThemePalette(DEFAULT_THEME_PALETTE),
 };
@@ -196,6 +197,7 @@ async function ensureAppSettingsSchema() {
     ["multiStockEnabled", false],
     ["showProductCostInSelect", false],
     ["ordersAllowDeliverStockAdjust", true],
+    ["suggestOpenPackOnPosShortage", false],
   ];
   for (const [col, def] of boolCols) {
     if (!table[col]) {
@@ -315,6 +317,7 @@ export async function loadAppSettings() {
     multiStockEnabled: asBool(raw.multiStockEnabled, false),
     showProductCostInSelect: asBool(raw.showProductCostInSelect, false),
     ordersAllowDeliverStockAdjust: asBool(raw.ordersAllowDeliverStockAdjust, true),
+    suggestOpenPackOnPosShortage: asBool(raw.suggestOpenPackOnPosShortage, false),
     moneyDisplayDecimals: normalizeMoneyDisplayDecimals(raw.moneyDisplayDecimals, 2),
     moneyRoundingMode: normalizeMoneyRoundingMode(raw.moneyRoundingMode, "up"),
     receiptDetailSettings: normalizeReceiptDetailSettings(raw.receiptDetailSettings),
@@ -341,6 +344,12 @@ export async function updateAppSettings(payload) {
     patch.ordersAllowDeliverStockAdjust = asBool(
       patch.ordersAllowDeliverStockAdjust,
       true,
+    );
+  }
+  if ("suggestOpenPackOnPosShortage" in patch) {
+    patch.suggestOpenPackOnPosShortage = asBool(
+      patch.suggestOpenPackOnPosShortage,
+      false,
     );
   }
   if ("moneyDisplayDecimals" in patch) {
@@ -379,6 +388,7 @@ export async function updateAppSettings(payload) {
     multiStockEnabled: asBool(raw.multiStockEnabled, false),
     showProductCostInSelect: asBool(raw.showProductCostInSelect, false),
     ordersAllowDeliverStockAdjust: asBool(raw.ordersAllowDeliverStockAdjust, true),
+    suggestOpenPackOnPosShortage: asBool(raw.suggestOpenPackOnPosShortage, false),
     moneyDisplayDecimals: normalizeMoneyDisplayDecimals(raw.moneyDisplayDecimals, 2),
     moneyRoundingMode: normalizeMoneyRoundingMode(raw.moneyRoundingMode, "up"),
     receiptDetailSettings: normalizeReceiptDetailSettings(raw.receiptDetailSettings),
@@ -417,6 +427,7 @@ export function toPublicSettings(data = cache) {
     multiStockEnabled: asBool(data.multiStockEnabled, false),
     showProductCostInSelect: asBool(data.showProductCostInSelect, false),
     ordersAllowDeliverStockAdjust: asBool(data.ordersAllowDeliverStockAdjust, true),
+    suggestOpenPackOnPosShortage: asBool(data.suggestOpenPackOnPosShortage, false),
     moneyDisplayDecimals: normalizeMoneyDisplayDecimals(data.moneyDisplayDecimals, 2),
     moneyRoundingMode: normalizeMoneyRoundingMode(data.moneyRoundingMode, "up"),
     receiptDetailSettings: normalizeReceiptDetailSettings(data.receiptDetailSettings),

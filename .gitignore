@@ -13,11 +13,16 @@ backend/.env.*
 # El frontend de desarrollo es raptor/frontend (npm run tienda / npm run dev:tienda).
 # Compilación de producción: npm run build:tienda → copia a AppsWeb/tienda/.
 
-# Datos sensibles / backups locales
+# Datos sensibles / backups locales (nunca subir dumps con users/hashes)
 backend/src/database/backup.json
 backend/src/backups/
+backend/backup-eddeli-servidor.json
+backup-eddeli-servidor.json
 backend/database.db
 *.backup.json
+backup-*.json
+!backup.json.example
+!**/backup.json.example
 # Dump completo de producción (incluye users/hashes); el catálogo limpio sí se versiona
 backup-tienda.json
 

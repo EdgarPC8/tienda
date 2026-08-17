@@ -17,6 +17,7 @@ import "../models/CashShiftMovement.js";
 import "../models/StoreStock.js";
 import "../models/Tasks.js";
 import "../models/Publicidad.js";
+import "../models/MarketingPromotions.js";
 import "../models/MediaAsset.js";
 import "../models/DocumentAttachment.js";
 import "../models/License.js";

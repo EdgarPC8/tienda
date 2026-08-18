@@ -26,7 +26,8 @@
     "sync:from-eddeli": "bash scripts/sync-from-eddeli.sh",
     "db:check-backup": "node scripts/check-backup.js",
     "db:fix:pos-customer": "node scripts/fix-pos-consumidor-final.js",
-    "db:fix:empleado-role": "node scripts/fix-estudiante-to-empleado-role.js"
+    "db:fix:empleado-role": "node scripts/fix-estudiante-to-empleado-role.js",
+    "demo:toasts": "node scripts/demo-notification-toasts.js"
   },
   "keywords": [],
   "author": "",

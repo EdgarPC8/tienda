@@ -83,6 +83,20 @@ const requireOwnAccountOrAdmin = (req, res, next) => {
   return res.status(403).json({ message: "No puedes consultar la cuenta de otro usuario" });
 };
 
+/** Solo peticiones desde esta máquina (scripts de demo). */
+const requireLocalhost = (req, res, next) => {
+  const ip = String(req.ip || req.socket?.remoteAddress || "");
+  const local =
+    ip === "127.0.0.1" ||
+    ip === "::1" ||
+    ip === "::ffff:127.0.0.1" ||
+    ip.endsWith("127.0.0.1");
+  if (!local) {
+    return res.status(403).json({ message: "Solo desde localhost" });
+  }
+  next();
+};
+
 export {
   isAuthenticated,
   requireProgrammer,
@@ -90,4 +104,5 @@ export {
   requireStaff,
   requireSelfOrAdmin,
   requireOwnAccountOrAdmin,
+  requireLocalhost,
 };

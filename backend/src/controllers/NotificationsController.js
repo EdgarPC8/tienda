@@ -1,5 +1,9 @@
 import { Notifications } from "../models/Notifications.js";
-import { createAndPushNotification } from "../services/notificationService.js";
+import {
+  createAndPushNotification,
+  resolveAdminUserIds,
+  sendDemoNotificationToasts,
+} from "../services/notificationService.js";
 import { notifyOk, notifyFail } from "../services/notifyRaptorSolutions.js";
 
 export const getUnreadCountByUser = async (req, res) => {
@@ -58,6 +62,29 @@ export const createNotification = async (req, res) => {
       req,
       httpStatus: 500,
     });
+    res.status(500).json({ message: error.message });
+  }
+};
+
+/** Demo temporal: 4 avisos (saludo, stock, crédito, caducidad) para ver toasts. */
+export const demoNotificationToasts = async (req, res) => {
+  try {
+    const fromAuth = Number(req.user?.userId);
+    const fromBody = Number(req.body?.userId);
+    let ids;
+    if (Number.isFinite(fromAuth) && fromAuth > 0) {
+      ids = [fromAuth];
+    } else if (Number.isFinite(fromBody) && fromBody > 0) {
+      ids = [fromBody];
+    } else {
+      ids = await resolveAdminUserIds();
+    }
+    if (!ids.length) {
+      return res.status(400).json({ message: "No hay usuario destino para la demo" });
+    }
+    const result = await sendDemoNotificationToasts(ids);
+    res.json({ ok: true, ...result });
+  } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };

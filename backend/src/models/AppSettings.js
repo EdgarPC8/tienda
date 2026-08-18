@@ -132,6 +132,36 @@ export const AppSettings = sequelize.define(
       allowNull: false,
       defaultValue: false,
     },
+    notificationsToastGreeting: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    notificationsToastStock: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    notificationsToastCredit: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    notificationsToastExpiry: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    notificationsCreditEnabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
+    notificationsExpiryEnabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
     /**
      * Formato del detalle de productos en factura / nota de venta (JSON).
      * Ej: mayúsculas, código, número de línea, etc.

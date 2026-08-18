@@ -1,9 +1,11 @@
 import {
   runScheduledNotificationPrograms,
   seedDefaultNotificationPrograms,
+  runBatchExpiryReminders,
 } from "./notificationService.js";
 import { syncRecurringExpenseReminders } from "../controllers/InventoryControl/RecurringExpenseController.js";
 import { runPaymentInstallmentReminders } from "./orderPaymentScheduleService.js";
+import { getAppSettingsSync } from "./appSettingsService.js";
 
 let started = false;
 let tickTimer = null;
@@ -23,7 +25,11 @@ export async function startNotificationScheduler() {
     try {
       await runScheduledNotificationPrograms();
       await syncRecurringExpenseReminders();
-      await runPaymentInstallmentReminders();
+      const settings = getAppSettingsSync();
+      if (settings?.notificationsCreditEnabled !== false) {
+        await runPaymentInstallmentReminders();
+      }
+      await runBatchExpiryReminders();
     } catch (err) {
       console.error("Error en scheduler de notificaciones:", err?.message || err);
     }

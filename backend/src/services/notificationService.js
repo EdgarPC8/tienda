@@ -7,9 +7,10 @@ import {
 import { Users } from "../models/Users.js";
 import { Account } from "../models/Account.js";
 import { Roles } from "../models/Roles.js";
-import { InventoryProduct } from "../models/Inventory.js";
+import { InventoryProduct, InventoryBatch } from "../models/Inventory.js";
 import { sendNotificationToUser } from "../sockets/notificationSocket.js";
 import { getAppTimezone, getZonedParts, nowApp } from "../utils/appDateTime.js";
+import { getAppSettingsSync } from "./appSettingsService.js";
 
 const ADMIN_ROLE_NAMES = ["Administrador", "Programador"];
 
@@ -48,8 +49,10 @@ export async function createAndPushNotification({
   message,
   link = null,
   sourceKey = null,
+  force = false,
 }) {
   const existing =
+    !force &&
     sourceKey &&
     (await Notifications.findOne({
       where: {
@@ -206,6 +209,107 @@ export async function runStockMinimumCheck(targetUserIds = null) {
   return sent;
 }
 
+function daysUntilExpiry(isoDay) {
+  const day = String(isoDay || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const today = todayDateOnly();
+  const start = Date.parse(`${today}T00:00:00`);
+  const end = Date.parse(`${day}T00:00:00`);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  return Math.round((end - start) / 86400000);
+}
+
+export async function runBatchExpiryReminders({ warnDays = 30 } = {}) {
+  const settings = getAppSettingsSync();
+  if (!settings?.notificationsExpiryEnabled) return 0;
+
+  try {
+    const { ensureInventoryBatchesSchema } = await import(
+      "../controllers/InventoryControl/BatchController.js"
+    );
+    await ensureInventoryBatchesSchema();
+  } catch {
+    return 0;
+  }
+
+  const userIds = await resolveAdminUserIds();
+  if (!userIds.length) return 0;
+
+  const days = Math.min(90, Math.max(1, Number(warnDays) || 30));
+  const rows = await InventoryBatch.findAll({
+    where: {
+      status: "active",
+      quantityRemaining: { [Op.gt]: 0 },
+    },
+    include: [
+      {
+        model: InventoryProduct,
+        as: "product",
+        attributes: ["id", "name"],
+      },
+    ],
+    order: [
+      ["expiresAt", "ASC"],
+      ["id", "ASC"],
+    ],
+    limit: 200,
+  });
+
+  const expired = [];
+  const expiring = [];
+  for (const row of rows) {
+    const plain = typeof row.toJSON === "function" ? row.toJSON() : row;
+    const remaining = Number(plain.quantityRemaining || 0);
+    if (remaining <= 0.0001) continue;
+    const delta = daysUntilExpiry(plain.expiresAt);
+    if (delta == null) continue;
+    const name = plain.product?.name || `Producto #${plain.productId}`;
+    const item = {
+      name,
+      expiresAt: String(plain.expiresAt || "").slice(0, 10),
+      days: delta,
+    };
+    if (delta < 0) expired.push(item);
+    else if (delta <= days) expiring.push(item);
+  }
+
+  if (!expired.length && !expiring.length) return 0;
+
+  const lines = [];
+  if (expired.length) {
+    lines.push(
+      `${expired.length} lote${expired.length === 1 ? "" : "s"} vencido${expired.length === 1 ? "" : "s"}`,
+    );
+  }
+  if (expiring.length) {
+    lines.push(
+      `${expiring.length} lote${expiring.length === 1 ? "" : "s"} por vencer (≤ ${days} días)`,
+    );
+  }
+  const samples = [...expired, ...expiring].slice(0, 4).map((item) => {
+    if (item.days < 0) return `${item.name} (venció ${item.expiresAt})`;
+    if (item.days === 0) return `${item.name} (vence hoy)`;
+    return `${item.name} (vence ${item.expiresAt})`;
+  });
+  const message = `${lines.join(". ")}. ${samples.join("; ")}${
+    expired.length + expiring.length > samples.length ? "…" : "."
+  }`;
+
+  let sent = 0;
+  for (const userId of userIds) {
+    const row = await createAndPushNotification({
+      userId,
+      type: "alert",
+      title: "Caducidad de productos",
+      message,
+      link: "/inventario/lotes",
+      sourceKey: `batch_expiry:digest:${todayDateOnly()}`,
+    });
+    if (row) sent += 1;
+  }
+  return sent;
+}
+
 export async function onInventoryStockChanged(productId) {
   const p = await InventoryProduct.findByPk(productId, {
     attributes: ["id", "name", "stock", "minStock", "isActive"],
@@ -326,4 +430,68 @@ export async function seedDefaultNotificationPrograms() {
       await stockProg.update({ targetRoleIds: roles.map((r) => r.id) });
     }
   }
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Demo temporal: dispara los 4 tipos para ver toasts. */
+export async function sendDemoNotificationToasts(userIds) {
+  const ids = (Array.isArray(userIds) ? userIds : [userIds])
+    .map(Number)
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (!ids.length) {
+    throw new Error("userId inválido");
+  }
+  const stamp = Date.now();
+  const samples = [
+    {
+      type: "info",
+      title: "¡Buenos días!",
+      message: "Demo de saludo. Así se ve el toast de saludos.",
+      link: "/inicio",
+      sourceKey: `program:BUENOS_DIAS:demo:${stamp}`,
+    },
+    {
+      type: "alert",
+      title: "Stock mínimo alcanzado",
+      message: "Pan de sal: quedan 2 unidades (mínimo 10).",
+      link: "/inventario/productos",
+      sourceKey: `stock_min:demo:${stamp}`,
+    },
+    {
+      type: "alert",
+      title: "Recordatorio de cuota: cobro a cliente",
+      message: "Cliente Demo: pedido #128, cuota 2 por $45.00 vence hoy.",
+      link: "/pedidos",
+      sourceKey: `payment_installment:customer:demo:${stamp}`,
+    },
+    {
+      type: "alert",
+      title: "Caducidad de productos",
+      message:
+        "1 lote vencido y 2 por vencer (≤ 30 días). Leche Gloria (venció 2026-08-10); Yogurt Mora (vence hoy).",
+      link: "/inventario/lotes",
+      sourceKey: `batch_expiry:digest:demo:${stamp}`,
+    },
+  ];
+
+  const sent = [];
+  for (const sample of samples) {
+    const rows = await Promise.all(
+      ids.map((uid) =>
+        createAndPushNotification({
+          userId: uid,
+          ...sample,
+          force: true,
+        }),
+      ),
+    );
+    sent.push({
+      type: sample.sourceKey.split(":")[0],
+      title: sample.title,
+      ids: rows.map((row) => row?.id),
+    });
+    await sleep(1200);
+  }
+  return { userIds: ids, sent };
 }

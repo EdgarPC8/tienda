@@ -65,6 +65,12 @@ export async function putAppSettings(req, res) {
       "cajaAllowCreateProductFromScan",
       "cajaAllowEditProductFromCart",
       "cajaSuggestUpdateProductPrice",
+      "notificationsToastGreeting",
+      "notificationsToastStock",
+      "notificationsToastCredit",
+      "notificationsToastExpiry",
+      "notificationsCreditEnabled",
+      "notificationsExpiryEnabled",
       "receiptDetailSettings",
       "themePalette",
     ];

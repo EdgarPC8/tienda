@@ -105,6 +105,33 @@ export const AppSettings = sequelize.define(
       allowNull: false,
       defaultValue: false,
     },
+    /** Caja: botón + al lado del buscador para crear producto (formulario completo). */
+    cajaAllowCreateProductFromSelect: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    /** Caja: si el escáner no encuentra el código, ofrece crear producto (nombre + precio). */
+    cajaAllowCreateProductFromScan: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    /** Caja: lápiz en el carrito para editar el producto del catálogo. */
+    cajaAllowEditProductFromCart: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    /**
+     * Caja: al cobrar, si el precio del carrito no coincide con el del catálogo,
+     * sugerir actualizar el precio del producto. Apagado por defecto.
+     */
+    cajaSuggestUpdateProductPrice: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
     /**
      * Formato del detalle de productos en factura / nota de venta (JSON).
      * Ej: mayúsculas, código, número de línea, etc.

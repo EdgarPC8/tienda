@@ -51,6 +51,10 @@ export const DEFAULT_APP_SETTINGS = {
   moneyRoundingMode: "up",
   ordersAllowDeliverStockAdjust: true,
   suggestOpenPackOnPosShortage: false,
+  cajaAllowCreateProductFromSelect: false,
+  cajaAllowCreateProductFromScan: false,
+  cajaAllowEditProductFromCart: false,
+  cajaSuggestUpdateProductPrice: false,
   receiptDetailSettings: { ...DEFAULT_RECEIPT_DETAIL_SETTINGS },
   themePalette: normalizeThemePalette(DEFAULT_THEME_PALETTE),
 };
@@ -198,6 +202,10 @@ async function ensureAppSettingsSchema() {
     ["showProductCostInSelect", false],
     ["ordersAllowDeliverStockAdjust", true],
     ["suggestOpenPackOnPosShortage", false],
+    ["cajaAllowCreateProductFromSelect", false],
+    ["cajaAllowCreateProductFromScan", false],
+    ["cajaAllowEditProductFromCart", false],
+    ["cajaSuggestUpdateProductPrice", false],
   ];
   for (const [col, def] of boolCols) {
     if (!table[col]) {
@@ -318,6 +326,10 @@ export async function loadAppSettings() {
     showProductCostInSelect: asBool(raw.showProductCostInSelect, false),
     ordersAllowDeliverStockAdjust: asBool(raw.ordersAllowDeliverStockAdjust, true),
     suggestOpenPackOnPosShortage: asBool(raw.suggestOpenPackOnPosShortage, false),
+    cajaAllowCreateProductFromSelect: asBool(raw.cajaAllowCreateProductFromSelect, false),
+    cajaAllowCreateProductFromScan: asBool(raw.cajaAllowCreateProductFromScan, false),
+    cajaAllowEditProductFromCart: asBool(raw.cajaAllowEditProductFromCart, false),
+    cajaSuggestUpdateProductPrice: asBool(raw.cajaSuggestUpdateProductPrice, false),
     moneyDisplayDecimals: normalizeMoneyDisplayDecimals(raw.moneyDisplayDecimals, 2),
     moneyRoundingMode: normalizeMoneyRoundingMode(raw.moneyRoundingMode, "up"),
     receiptDetailSettings: normalizeReceiptDetailSettings(raw.receiptDetailSettings),
@@ -349,6 +361,30 @@ export async function updateAppSettings(payload) {
   if ("suggestOpenPackOnPosShortage" in patch) {
     patch.suggestOpenPackOnPosShortage = asBool(
       patch.suggestOpenPackOnPosShortage,
+      false,
+    );
+  }
+  if ("cajaAllowCreateProductFromSelect" in patch) {
+    patch.cajaAllowCreateProductFromSelect = asBool(
+      patch.cajaAllowCreateProductFromSelect,
+      false,
+    );
+  }
+  if ("cajaAllowCreateProductFromScan" in patch) {
+    patch.cajaAllowCreateProductFromScan = asBool(
+      patch.cajaAllowCreateProductFromScan,
+      false,
+    );
+  }
+  if ("cajaAllowEditProductFromCart" in patch) {
+    patch.cajaAllowEditProductFromCart = asBool(
+      patch.cajaAllowEditProductFromCart,
+      false,
+    );
+  }
+  if ("cajaSuggestUpdateProductPrice" in patch) {
+    patch.cajaSuggestUpdateProductPrice = asBool(
+      patch.cajaSuggestUpdateProductPrice,
       false,
     );
   }
@@ -389,6 +425,10 @@ export async function updateAppSettings(payload) {
     showProductCostInSelect: asBool(raw.showProductCostInSelect, false),
     ordersAllowDeliverStockAdjust: asBool(raw.ordersAllowDeliverStockAdjust, true),
     suggestOpenPackOnPosShortage: asBool(raw.suggestOpenPackOnPosShortage, false),
+    cajaAllowCreateProductFromSelect: asBool(raw.cajaAllowCreateProductFromSelect, false),
+    cajaAllowCreateProductFromScan: asBool(raw.cajaAllowCreateProductFromScan, false),
+    cajaAllowEditProductFromCart: asBool(raw.cajaAllowEditProductFromCart, false),
+    cajaSuggestUpdateProductPrice: asBool(raw.cajaSuggestUpdateProductPrice, false),
     moneyDisplayDecimals: normalizeMoneyDisplayDecimals(raw.moneyDisplayDecimals, 2),
     moneyRoundingMode: normalizeMoneyRoundingMode(raw.moneyRoundingMode, "up"),
     receiptDetailSettings: normalizeReceiptDetailSettings(raw.receiptDetailSettings),
@@ -428,6 +468,10 @@ export function toPublicSettings(data = cache) {
     showProductCostInSelect: asBool(data.showProductCostInSelect, false),
     ordersAllowDeliverStockAdjust: asBool(data.ordersAllowDeliverStockAdjust, true),
     suggestOpenPackOnPosShortage: asBool(data.suggestOpenPackOnPosShortage, false),
+    cajaAllowCreateProductFromSelect: asBool(data.cajaAllowCreateProductFromSelect, false),
+    cajaAllowCreateProductFromScan: asBool(data.cajaAllowCreateProductFromScan, false),
+    cajaAllowEditProductFromCart: asBool(data.cajaAllowEditProductFromCart, false),
+    cajaSuggestUpdateProductPrice: asBool(data.cajaSuggestUpdateProductPrice, false),
     moneyDisplayDecimals: normalizeMoneyDisplayDecimals(data.moneyDisplayDecimals, 2),
     moneyRoundingMode: normalizeMoneyRoundingMode(data.moneyRoundingMode, "up"),
     receiptDetailSettings: normalizeReceiptDetailSettings(data.receiptDetailSettings),

@@ -61,6 +61,10 @@ export async function putAppSettings(req, res) {
       "moneyRoundingMode",
       "ordersAllowDeliverStockAdjust",
       "suggestOpenPackOnPosShortage",
+      "cajaAllowCreateProductFromSelect",
+      "cajaAllowCreateProductFromScan",
+      "cajaAllowEditProductFromCart",
+      "cajaSuggestUpdateProductPrice",
       "receiptDetailSettings",
       "themePalette",
     ];

@@ -457,7 +457,7 @@ export async function createShiftMovement(req, res) {
   try {
     const { accountId, userId } = req.user;
     const { id } = req.params;
-    const { direction, category, amount, concept, notes, productId, quantity } = req.body;
+    const { direction, category, amount, concept, notes, productId, quantity, skipExpense } = req.body;
 
     const shift = await CashShift.findByPk(id);
     if (!shift) {
@@ -541,7 +541,9 @@ export async function createShiftMovement(req, res) {
         inventoryMovementId = invMovement.id;
       }
 
-      const expense = await registerExpenseForMovement({
+      const expense = skipExpense
+        ? null
+        : await registerExpenseForMovement({
         category,
         amount: amt,
         concept: conceptTrim,

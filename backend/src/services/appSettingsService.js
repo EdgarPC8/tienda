@@ -24,32 +24,32 @@ const IMG_BASE = path.resolve(__dirname, "../img");
 
 export const DEFAULT_APP_SETTINGS = {
   id: 1,
-  name: "Tienda",
-  alias: "Tienda",
+  name: "EdDeli - Panadería, Pastelería y Repostería",
+  alias: "EdDeli",
   version: "1.0.0",
-  description: "Aplicación sin configurar. Definí nombre, logo y opciones en Sistema → Configuración.",
-  author: "Raptor",
-  logoPath: null,
+  description: "Sistema de Gestión de Negocios",
+  author: "SoftEd",
+  logoPath: "sistema/logos/logo.jpeg",
   iconPath: null,
-  phone: "",
-  socialWhatsapp: "",
-  socialFacebook: "",
-  socialInstagram: "",
-  socialTiktok: "",
-  socialEmail: "",
+  phone: "0969236901",
+  socialWhatsapp: "https://wa.me/593969236901",
+  socialFacebook: "https://facebook.com/profile.php?id=61581806494763",
+  socialInstagram: "https://instagram.com/panaderia_eddeli",
+  socialTiktok: "https://tiktok.com/@panaderia_eddeli",
+  socialEmail: "panaderiaeddeli@gmail.com",
   mediaFolderPrefix: "sistema",
-  cajaQuickCategoryMatch: "",
+  cajaQuickCategoryMatch: "panader",
   walkInCustomerLabel: "Consumidor Final",
   timezone: "America/Guayaquil",
-  showPublicCatalog: false,
-  showPublicStoresPropia: false,
-  showPublicStoresVitrina: false,
-  // Tienda: un solo stock general (sin varios locales). Multistock se activa por config/gestor.
-  multiStockEnabled: false,
+  showPublicCatalog: true,
+  showPublicStoresPropia: true,
+  showPublicStoresVitrina: true,
+  multiStockEnabled: true,
   showProductCostInSelect: false,
   moneyDisplayDecimals: 2,
   moneyRoundingMode: "up",
   ordersAllowDeliverStockAdjust: true,
+  financeAllowAdminCorrections: true,
   suggestOpenPackOnPosShortage: false,
   cajaAllowCreateProductFromSelect: false,
   cajaAllowCreateProductFromScan: false,
@@ -115,44 +115,16 @@ export function ensureStandardAssetDirs(prefix = mediaFolderPrefix()) {
 
 async function migrateSettingsRow(row) {
   const prefix = String(row.mediaFolderPrefix || "sistema").trim() || "sistema";
+  const canonicalLogo = `${prefix}/logos/logo.jpeg`;
   const patch = {};
 
-  const alias = String(row.alias || "").trim();
-  const name = String(row.name || "").trim();
-  const author = String(row.author || "").trim();
-  const stillEddeliTemplate =
-    /^eddeli$/i.test(alias) ||
-    /eddeli/i.test(name) ||
-    /panader/i.test(name) ||
-    /^softed$/i.test(author);
-
-  // Clonado desde EdDeli: marca Raptor; Store sin multistock por defecto.
-  if (stillEddeliTemplate) {
-    Object.assign(patch, {
-      name: DEFAULT_APP_SETTINGS.name,
-      alias: DEFAULT_APP_SETTINGS.alias,
-      description: DEFAULT_APP_SETTINGS.description,
-      author: DEFAULT_APP_SETTINGS.author,
-      logoPath: null,
-      iconPath: null,
-      phone: "",
-      socialWhatsapp: "",
-      socialFacebook: "",
-      socialInstagram: "",
-      socialTiktok: "",
-      socialEmail: "",
-      cajaQuickCategoryMatch: "",
-      showPublicCatalog: false,
-      showPublicStoresPropia: false,
-      showPublicStoresVitrina: false,
-      multiStockEnabled: false,
-    });
-  } else if (
+  if (
+    !row.logoPath ||
     row.logoPath === `${prefix}/logo.jpeg` ||
     row.logoPath === "EdDeli/logo.jpeg" ||
     row.logoPath === "EdDeli/logos/logo.jpeg"
   ) {
-    patch.logoPath = null;
+    patch.logoPath = canonicalLogo;
   }
 
   const tz = row.timezone != null ? String(row.timezone).trim() : "";
@@ -201,12 +173,13 @@ async function ensureAppSettingsSchema() {
     });
   }
   const boolCols = [
-    ["showPublicCatalog", false],
-    ["showPublicStoresPropia", false],
-    ["showPublicStoresVitrina", false],
-    ["multiStockEnabled", false],
+    ["showPublicCatalog", true],
+    ["showPublicStoresPropia", true],
+    ["showPublicStoresVitrina", true],
+    ["multiStockEnabled", true],
     ["showProductCostInSelect", false],
     ["ordersAllowDeliverStockAdjust", true],
+    ["financeAllowAdminCorrections", true],
     ["suggestOpenPackOnPosShortage", false],
     ["cajaAllowCreateProductFromSelect", false],
     ["cajaAllowCreateProductFromScan", false],
@@ -307,36 +280,26 @@ function asBool(value, fallback = true) {
   return fallback;
 }
 
-/** Defaults listos para columnas TEXT (JSON serializado). */
-function defaultsForDb() {
-  return {
-    ...DEFAULT_APP_SETTINGS,
-    receiptDetailSettings: serializeReceiptDetailSettings(
-      DEFAULT_APP_SETTINGS.receiptDetailSettings,
-    ),
-    themePalette: serializeThemePalette(DEFAULT_APP_SETTINGS.themePalette),
-  };
-}
-
 export async function loadAppSettings() {
   await ensureAppSettingsSchema();
   await ensureInventoryProductMoneySchema();
   await AppSettings.sync();
   let row = await AppSettings.findByPk(1);
   if (!row) {
-    row = await AppSettings.create({ id: 1, ...defaultsForDb() });
+    row = await AppSettings.create({ id: 1, ...DEFAULT_APP_SETTINGS });
   }
   row = await migrateSettingsRow(row);
   const raw = row.toJSON();
   cache = {
     ...DEFAULT_APP_SETTINGS,
     ...raw,
-    showPublicCatalog: asBool(raw.showPublicCatalog, false),
-    showPublicStoresPropia: asBool(raw.showPublicStoresPropia, false),
-    showPublicStoresVitrina: asBool(raw.showPublicStoresVitrina, false),
-    multiStockEnabled: asBool(raw.multiStockEnabled, false),
+    showPublicCatalog: asBool(raw.showPublicCatalog, true),
+    showPublicStoresPropia: asBool(raw.showPublicStoresPropia, true),
+    showPublicStoresVitrina: asBool(raw.showPublicStoresVitrina, true),
+    multiStockEnabled: asBool(raw.multiStockEnabled, true),
     showProductCostInSelect: asBool(raw.showProductCostInSelect, false),
     ordersAllowDeliverStockAdjust: asBool(raw.ordersAllowDeliverStockAdjust, true),
+    financeAllowAdminCorrections: asBool(raw.financeAllowAdminCorrections, true),
     suggestOpenPackOnPosShortage: asBool(raw.suggestOpenPackOnPosShortage, false),
     cajaAllowCreateProductFromSelect: asBool(raw.cajaAllowCreateProductFromSelect, false),
     cajaAllowCreateProductFromScan: asBool(raw.cajaAllowCreateProductFromScan, false),
@@ -365,7 +328,7 @@ export async function updateAppSettings(payload) {
     "showPublicStoresVitrina",
     "multiStockEnabled",
   ]) {
-    if (key in patch) patch[key] = asBool(patch[key], false);
+    if (key in patch) patch[key] = asBool(patch[key], true);
   }
   if ("showProductCostInSelect" in patch) {
     patch.showProductCostInSelect = asBool(patch.showProductCostInSelect, false);
@@ -375,6 +338,9 @@ export async function updateAppSettings(payload) {
       patch.ordersAllowDeliverStockAdjust,
       true,
     );
+  }
+  if ("financeAllowAdminCorrections" in patch) {
+    patch.financeAllowAdminCorrections = asBool(patch.financeAllowAdminCorrections, true);
   }
   if ("suggestOpenPackOnPosShortage" in patch) {
     patch.suggestOpenPackOnPosShortage = asBool(
@@ -446,7 +412,7 @@ export async function updateAppSettings(payload) {
   }
   let row = await AppSettings.findByPk(1);
   if (!row) {
-    row = await AppSettings.create({ id: 1, ...defaultsForDb(), ...patch });
+    row = await AppSettings.create({ id: 1, ...DEFAULT_APP_SETTINGS, ...patch });
   } else {
     await row.update(patch);
   }
@@ -454,12 +420,13 @@ export async function updateAppSettings(payload) {
   cache = {
     ...DEFAULT_APP_SETTINGS,
     ...raw,
-    showPublicCatalog: asBool(raw.showPublicCatalog, false),
-    showPublicStoresPropia: asBool(raw.showPublicStoresPropia, false),
-    showPublicStoresVitrina: asBool(raw.showPublicStoresVitrina, false),
-    multiStockEnabled: asBool(raw.multiStockEnabled, false),
+    showPublicCatalog: asBool(raw.showPublicCatalog, true),
+    showPublicStoresPropia: asBool(raw.showPublicStoresPropia, true),
+    showPublicStoresVitrina: asBool(raw.showPublicStoresVitrina, true),
+    multiStockEnabled: asBool(raw.multiStockEnabled, true),
     showProductCostInSelect: asBool(raw.showProductCostInSelect, false),
     ordersAllowDeliverStockAdjust: asBool(raw.ordersAllowDeliverStockAdjust, true),
+    financeAllowAdminCorrections: asBool(raw.financeAllowAdminCorrections, true),
     suggestOpenPackOnPosShortage: asBool(raw.suggestOpenPackOnPosShortage, false),
     cajaAllowCreateProductFromSelect: asBool(raw.cajaAllowCreateProductFromSelect, false),
     cajaAllowCreateProductFromScan: asBool(raw.cajaAllowCreateProductFromScan, false),
@@ -503,12 +470,13 @@ export function toPublicSettings(data = cache) {
     cajaQuickCategoryMatch: data.cajaQuickCategoryMatch || "",
     walkInCustomerLabel: data.walkInCustomerLabel || "Consumidor Final",
     timezone: data.timezone || "America/Guayaquil",
-    showPublicCatalog: asBool(data.showPublicCatalog, false),
-    showPublicStoresPropia: asBool(data.showPublicStoresPropia, false),
-    showPublicStoresVitrina: asBool(data.showPublicStoresVitrina, false),
-    multiStockEnabled: asBool(data.multiStockEnabled, false),
+    showPublicCatalog: asBool(data.showPublicCatalog, true),
+    showPublicStoresPropia: asBool(data.showPublicStoresPropia, true),
+    showPublicStoresVitrina: asBool(data.showPublicStoresVitrina, true),
+    multiStockEnabled: asBool(data.multiStockEnabled, true),
     showProductCostInSelect: asBool(data.showProductCostInSelect, false),
     ordersAllowDeliverStockAdjust: asBool(data.ordersAllowDeliverStockAdjust, true),
+    financeAllowAdminCorrections: asBool(data.financeAllowAdminCorrections, true),
     suggestOpenPackOnPosShortage: asBool(data.suggestOpenPackOnPosShortage, false),
     cajaAllowCreateProductFromSelect: asBool(data.cajaAllowCreateProductFromSelect, false),
     cajaAllowCreateProductFromScan: asBool(data.cajaAllowCreateProductFromScan, false),

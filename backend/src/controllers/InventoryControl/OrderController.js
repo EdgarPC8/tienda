@@ -27,6 +27,16 @@ import {
   loadCustomerInstallmentsMap,
   attachInstallmentsToRows,
 } from "../../services/orderPaymentScheduleService.js";
+import {
+  resolveCustomerItemIncomeDate,
+  syncOrderItemIncomeDate,
+  syncGroupFinanceDates,
+} from "../../utils/customerOrderFinanceUtils.js";
+import {
+  canFinanceCascadeCorrection,
+  cleanupOrderItemFinance,
+  cleanupCustomerOrderFinance,
+} from "../../utils/financeCascadeUtils.js";
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
@@ -845,19 +855,27 @@ export const updateOrderItem = async (req, res) => {
 
         if (groupHasPayments) {
           if (existingIncome) await existingIncome.destroy({ transaction: t });
+          if ("paidAt" in payload && payload.paidAt && groupLink?.groupId) {
+            await syncGroupFinanceDates(groupLink.groupId, payload.paidAt, t);
+          }
         } else if (updated.paidAt) {
+          const order = await Order.findByPk(updated.orderId, {
+            attributes: ["id", "date"],
+            transaction: t,
+          });
+          const incomeDate = resolveCustomerItemIncomeDate({ orderItem: updated, order });
           const amount = Number((Number(updated.price || 0) * billableQty).toFixed(2));
           const concept = `Pago ítem #${updated.id} (Order #${updated.orderId})`;
 
           if (existingIncome) {
             await existingIncome.update(
-              { amount, date: new Date(), concept, category: "Venta" },
+              { amount, date: incomeDate, concept, category: "Venta" },
               { transaction: t }
             );
           } else {
             await Income.create(
               {
-                date: new Date(),
+                date: incomeDate,
                 amount,
                 concept,
                 category: "Venta",
@@ -1102,6 +1120,7 @@ export const closeOrderItemLogistics = async (req, res) => {
 
 export const markItemAsPaid = async (req, res) => {
   const { itemId } = req.params;
+  const { paidAt: paidAtBody } = req.body || {};
 
   try {
     const token = getHeaderToken(req);
@@ -1123,7 +1142,12 @@ export const markItemAsPaid = async (req, res) => {
       // ✅ Cobrar por vendido (soldQty). Si no existe soldQty, cobra por quantity (compat).
       const billableQty = getBillableQty(item);
 
-      item.paidAt = new Date();
+      const payDate = resolveCustomerItemIncomeDate({
+        explicitDate: paidAtBody,
+        orderItem: item,
+        order: item.ERP_order,
+      });
+      item.paidAt = payDate;
       await item.save({ transaction: t });
 
       const itemTotal = Number((num(item.price) * billableQty).toFixed(2));
@@ -1157,7 +1181,7 @@ export const markItemAsPaid = async (req, res) => {
         const [row, created] = await Income.findOrCreate({
           where: { referenceType: "order_item", referenceId: item.id },
           defaults: {
-            date: new Date(),
+            date: payDate,
             amount: itemTotal,
             concept,
             category: "Venta",
@@ -1170,7 +1194,7 @@ export const markItemAsPaid = async (req, res) => {
         income = row;
         if (!created) {
           await income.update(
-            { amount: itemTotal, date: new Date(), concept, category: "Venta" },
+            { amount: itemTotal, date: payDate, concept, category: "Venta" },
             { transaction: t }
           );
         }
@@ -1227,7 +1251,17 @@ export const unmarkItemAsPaid = async (req, res) => {
 
   try {
     const token = getHeaderToken(req);
-    await verifyJWT(token);
+    const user = await verifyJWT(token);
+
+    if (!canFinanceCascadeCorrection(user)) {
+      notifyFail("order_item.update_failed", "No tiene permiso para anular cobros", {
+        req,
+        httpStatus: 403,
+      });
+      return res.status(403).json({
+        message: "Solo Admin (con config activa) o Programador pueden anular un cobro",
+      });
+    }
 
     const result = await sequelize.transaction(async (t) => {
       const item = await OrderItem.findByPk(itemId, { transaction: t, lock: t.LOCK.UPDATE });
@@ -1238,10 +1272,7 @@ export const unmarkItemAsPaid = async (req, res) => {
       item.paidAt = null;
       await item.save({ transaction: t });
 
-      await Income.destroy({
-        where: { referenceType: "order_item", referenceId: item.id },
-        transaction: t,
-      });
+      await cleanupOrderItemFinance(item.id, t);
 
       const allItems = await OrderItem.findAll({
         where: { orderId: item.orderId },
@@ -1511,8 +1542,59 @@ export const markOrderAsPaid = async (req, res) => {
   }
 };
 
+export const unmarkOrderAsPaid = async (req, res) => {
+  try {
+    const token = getHeaderToken(req);
+    const user = await verifyJWT(token);
+    const { id } = req.params;
+
+    if (!canFinanceCascadeCorrection(user)) {
+      notifyFail("order.unmark_paid_failed", "No tiene permiso para anular cobros", {
+        req,
+        httpStatus: 403,
+      });
+      return res.status(403).json({
+        message: "Solo Admin (con config activa) o Programador pueden anular cobros",
+      });
+    }
+
+    const result = await sequelize.transaction(async (t) => {
+      const order = await Order.findByPk(id, { transaction: t, lock: t.LOCK.UPDATE });
+      if (!order) return { status: 404, body: { message: "Pedido no encontrado" } };
+
+      await cleanupCustomerOrderFinance(order.id, t);
+      await OrderItem.update({ paidAt: null }, { where: { orderId: order.id }, transaction: t });
+      order.status = "pendiente";
+      await order.save({ transaction: t });
+
+      return { status: 200, body: { message: "Cobro anulado (ingresos vinculados eliminados)", order } };
+    });
+
+    if (result.status >= 400) {
+      notifyFail("order.unmark_paid_failed", result.body?.message || "Error al anular cobro", {
+        req,
+        httpStatus: result.status,
+        extra: { orderId: id },
+      });
+    } else {
+      notifyOk("order.unmark_paid", `Cobro anulado pedido #${id}`, { orderId: Number(id) });
+    }
+    return res.status(result.status).json(result.body);
+  } catch (error) {
+    notifyFail("order.unmark_paid_failed", "Error al anular cobro del pedido", {
+      error,
+      req,
+      httpStatus: 500,
+    });
+    return res.status(500).json({ message: "Error al anular cobro", error: String(error?.message || error) });
+  }
+};
+
 export const deleteOrderItem = async (req, res) => {
   try {
+    const token = getHeaderToken(req);
+    const user = await verifyJWT(token);
+
     const item = await OrderItem.findByPk(req.params.id);
     if (!item) {
       notifyFail("order_item.delete_failed", `Ítem #${req.params.id} no encontrado`, {
@@ -1521,9 +1603,24 @@ export const deleteOrderItem = async (req, res) => {
       });
       return res.status(404).json({ message: "Ítem no encontrado" });
     }
-    await item.destroy();
+
+    if (item.paidAt && !canFinanceCascadeCorrection(user)) {
+      notifyFail("order_item.delete_failed", "No se puede eliminar un ítem ya cobrado", {
+        req,
+        httpStatus: 403,
+      });
+      return res.status(403).json({
+        message: "Anule el cobro primero o use Admin/Programador con correcciones financieras activas",
+      });
+    }
+
+    await sequelize.transaction(async (t) => {
+      await cleanupOrderItemFinance(item.id, t);
+      await item.destroy({ transaction: t });
+    });
+
     notifyOk("order_item.deleted", `Ítem pedido #${req.params.id}`, { itemId: Number(req.params.id) });
-    res.json({ message: "Ítem eliminado correctamente" });
+    res.json({ message: "Ítem eliminado correctamente (ingreso vinculado eliminado si existía)" });
   } catch (error) {
     notifyFail("order_item.delete_failed", "Error al eliminar ítem", { error, req, httpStatus: 500 });
     res.status(500).json({ message: "Error al eliminar ítem", error });
@@ -1531,7 +1628,12 @@ export const deleteOrderItem = async (req, res) => {
 };
 export const deleteOrder = async (req, res) => {
   try {
-    const order = await Order.findByPk(req.params.id);
+    const token = getHeaderToken(req);
+    const user = await verifyJWT(token);
+
+    const order = await Order.findByPk(req.params.id, {
+      include: [{ model: OrderItem, as: "ERP_order_items", attributes: ["id", "paidAt"] }],
+    });
     if (!order) {
       notifyFail("order.delete_failed", `Pedido #${req.params.id} no encontrado`, {
         req,
@@ -1539,9 +1641,26 @@ export const deleteOrder = async (req, res) => {
       });
       return res.status(404).json({ message: "Orden no encontrado" });
     }
-    await order.destroy();
+
+    const items = order.ERP_order_items || [];
+    const hasPaid = items.some((i) => i.paidAt) || order.status === "pagado";
+    if (hasPaid && !canFinanceCascadeCorrection(user)) {
+      notifyFail("order.delete_failed", "No se puede eliminar un pedido con cobros", {
+        req,
+        httpStatus: 403,
+      });
+      return res.status(403).json({
+        message: "Anule los cobros primero o use Admin/Programador con correcciones financieras activas",
+      });
+    }
+
+    await sequelize.transaction(async (t) => {
+      await cleanupCustomerOrderFinance(order.id, t);
+      await order.destroy({ transaction: t });
+    });
+
     notifyOk("order.deleted", `Pedido #${req.params.id}`, { orderId: Number(req.params.id) });
-    res.json({ message: "Orden eliminado correctamente" });
+    res.json({ message: "Orden eliminada (ingresos/abonos vinculados eliminados si existían)" });
   } catch (error) {
     notifyFail("order.delete_failed", "Error al eliminar Orden", { error, req, httpStatus: 500 });
     res.status(500).json({ message: "Error al eliminar Orden", error });
@@ -1920,6 +2039,17 @@ export const programmerDashboardOrderItemCorrection = async (req, res) => {
         if (order) {
           order.status = allPaid ? "pagado" : "pendiente";
           await order.save({ transaction: t });
+        }
+
+        if (paidParsed !== undefined && paidParsed) {
+          await syncOrderItemIncomeDate(item.id, paidParsed, t);
+          const groupLink = await ItemGroupItem.findOne({
+            where: { orderItemId: item.id },
+            transaction: t,
+          });
+          if (groupLink?.groupId) {
+            await syncGroupFinanceDates(groupLink.groupId, paidParsed, t);
+          }
         }
       }
 

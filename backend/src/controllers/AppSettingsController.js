@@ -60,6 +60,7 @@ export async function putAppSettings(req, res) {
       "moneyDisplayDecimals",
       "moneyRoundingMode",
       "ordersAllowDeliverStockAdjust",
+      "financeAllowAdminCorrections",
       "suggestOpenPackOnPosShortage",
       "cajaAllowCreateProductFromSelect",
       "cajaAllowCreateProductFromScan",

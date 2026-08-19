@@ -16,8 +16,10 @@ import {
   updateOrder,
   addOrderItem,
   markOrderAsPaid,
+  unmarkOrderAsPaid,
   markItemAsDelivered,
   markItemAsPaid,
+  unmarkItemAsPaid,
   updateOrderItem,
   programmerDashboardOrderItemCorrection,
   deleteOrderItem,
@@ -49,6 +51,7 @@ import {
   deleteSupplierOrder,
   markSupplierOrderReceived,
   markSupplierOrderPaid,
+  unmarkSupplierOrderPaid,
 } from "../controllers/InventoryControl/SupplierOrderController.js";
 import {
   exportOrdersMonth,
@@ -193,6 +196,7 @@ router.put("/supplier-orders/:id", isAuthenticated, updateSupplierOrder);
 router.delete("/supplier-orders/:id", isAuthenticated, deleteSupplierOrder);
 router.put("/supplier-orders/:id/received", isAuthenticated, markSupplierOrderReceived);
 router.put("/supplier-orders/:id/paid", isAuthenticated, markSupplierOrderPaid);
+router.put("/supplier-orders/:id/unmark-paid", isAuthenticated, unmarkSupplierOrderPaid);
 
 // Cuentas por pagar (abonos a pedidos de proveedor)
 router.get("/supplier-payables/workbench", isAuthenticated, getSupplierPayablesWorkbench);
@@ -224,6 +228,7 @@ router.get("", isAuthenticated, getAllOrders);
 
 // Montado en /orders → ruta correcta /:id/mark-paid (antes /orders/:id duplicaba prefijo)
 router.put("/:id/mark-paid", isAuthenticated, markOrderAsPaid);
+router.put("/:id/unmark-paid", isAuthenticated, unmarkOrderAsPaid);
 
 // =====================================================
 // ✅ CLIENTES (LO TUYO NORMAL)
@@ -238,6 +243,7 @@ router.delete("/customers/:id", isAuthenticated, deleteCustomer);
 // =====================================================
 router.put("/order-items/:itemId/mark-delivered", isAuthenticated, markItemAsDelivered);
 router.put("/order-items/:itemId/mark-paid", isAuthenticated, markItemAsPaid);
+router.put("/order-items/:itemId/unmark-paid", isAuthenticated, unmarkItemAsPaid);
 
 router.patch(
   "/order-items/:itemId/programmer-dashboard",

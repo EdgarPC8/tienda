@@ -18,6 +18,7 @@ import {
   loadSupplierInstallmentsMap,
   attachInstallmentsToRows,
 } from "../../services/orderPaymentScheduleService.js";
+import { resolveSupplierOrderPayDate } from "../../utils/supplierOrderFinanceUtils.js";
 
 const toNum = (v, d = 0) => {
   const n = Number(v ?? d);
@@ -436,7 +437,7 @@ export const paySupplierOrder = async (req, res) => {
     const amount = round2(req.body?.amount);
     const method = String(req.body?.method || "efectivo").trim() || "efectivo";
     const note = req.body?.note != null ? String(req.body.note).trim() : "Abono a proveedor";
-    const payDate = req.body?.date ? toAppDateTime(req.body.date) : nowApp();
+    const explicitPayDate = req.body?.date ? toAppDateTime(req.body.date) : null;
 
     if (!Number.isFinite(orderId) || orderId <= 0) {
       notifyFail("supplier_payable.paid_failed", "Pedido inválido", { req, httpStatus: 400 });
@@ -462,6 +463,12 @@ export const paySupplierOrder = async (req, res) => {
       if (order.status === "cancelado") {
         return { status: 400, body: { message: "El pedido está cancelado" } };
       }
+
+      const instMap = await loadSupplierInstallmentsMap([order.id]);
+      const firstInstallmentDueDate = (instMap.get(order.id) || [])[0]?.dueDate || null;
+      const payDate =
+        explicitPayDate ||
+        resolveSupplierOrderPayDate({ order, installmentDueDate: firstInstallmentDueDate });
 
       const total = orderTotal(order.ERP_supplier_order_items || []);
       let paid = await paidSumForOrder(orderId, t);

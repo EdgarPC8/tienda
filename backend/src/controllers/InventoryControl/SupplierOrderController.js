@@ -28,6 +28,15 @@ import {
   loadSupplierInstallmentsMap,
   attachInstallmentsToRows,
 } from "../../services/orderPaymentScheduleService.js";
+import {
+  resolveSupplierOrderPayDate,
+  resolveSupplierOrderReceiveDate,
+  syncSupplierOrderFinanceDates,
+} from "../../utils/supplierOrderFinanceUtils.js";
+import {
+  canFinanceCascadeCorrection,
+  cleanupSupplierOrderFinance,
+} from "../../utils/financeCascadeUtils.js";
 
 const toNum = (v, d = 0) => {
   const n = Number(v ?? d);
@@ -553,6 +562,10 @@ export const updateSupplierOrder = async (req, res) => {
         { transaction: t }
       );
 
+      if (paidAt !== undefined && paidAt) {
+        await syncSupplierOrderFinanceDates(Number(id), paidAt, t);
+      }
+
       if (!isReceived && Array.isArray(items)) {
         await SupplierOrderItem.destroy({ where: { orderId: order.id }, transaction: t });
         for (const row of items) {
@@ -561,6 +574,16 @@ export const updateSupplierOrder = async (req, res) => {
         }
       }
     });
+
+    if (date && paidAt === undefined) {
+      const paidCheck = await SupplierOrder.findByPk(id);
+      if (paidCheck?.paidAt) {
+        await sequelize.transaction(async (t) => {
+          await syncSupplierOrderFinanceDates(Number(id), date, t);
+          await paidCheck.update({ paidAt: new Date(date) }, { transaction: t });
+        });
+      }
+    }
 
     const full = await SupplierOrder.findByPk(id, { include: orderIncludes });
     if (paymentInstallments !== undefined) {
@@ -669,6 +692,9 @@ export const addSupplierOrderItem = async (req, res) => {
 
 export const deleteSupplierOrder = async (req, res) => {
   try {
+    const token = getHeaderToken(req);
+    const user = await verifyJWT(token);
+
     const order = await SupplierOrder.findByPk(req.params.id);
     if (!order) {
       notifyFail("supplier_order.delete_failed", `Pedido proveedor #${req.params.id} no encontrado`, {
@@ -677,18 +703,29 @@ export const deleteSupplierOrder = async (req, res) => {
       });
       return res.status(404).json({ message: "Pedido no encontrado" });
     }
-    if (order.receivedAt) {
-      notifyFail("supplier_order.delete_failed", "No se puede eliminar un pedido ya recibido", {
+
+    const hasFinance = Boolean(order.paidAt || order.receivedAt);
+    if (hasFinance && !canFinanceCascadeCorrection(user)) {
+      notifyFail("supplier_order.delete_failed", "No se puede eliminar un pedido con pago o recepción", {
         req,
-        httpStatus: 400,
+        httpStatus: 403,
       });
-      return res.status(400).json({ message: "No se puede eliminar un pedido ya recibido" });
+      return res.status(403).json({
+        message: "Anule el pago primero o use Admin/Programador con correcciones financieras activas",
+      });
     }
-    await order.destroy();
+
+    await sequelize.transaction(async (t) => {
+      if (hasFinance) {
+        await cleanupSupplierOrderFinance(order.id, t);
+      }
+      await order.destroy({ transaction: t });
+    });
+
     notifyOk("supplier_order.deleted", `Pedido proveedor #${req.params.id}`, {
       supplierOrderId: Number(req.params.id),
     });
-    res.json({ message: "Pedido a proveedor eliminado" });
+    res.json({ message: "Pedido a proveedor eliminado (gastos/abonos vinculados eliminados si existían)" });
   } catch (error) {
     console.error("deleteSupplierOrder:", error);
     notifyFail("supplier_order.delete_failed", `Error al eliminar pedido #${req.params.id}`, {
@@ -700,11 +737,63 @@ export const deleteSupplierOrder = async (req, res) => {
   }
 };
 
+export const unmarkSupplierOrderPaid = async (req, res) => {
+  try {
+    const token = getHeaderToken(req);
+    const user = await verifyJWT(token);
+
+    if (!canFinanceCascadeCorrection(user)) {
+      notifyFail("supplier_order.unmark_paid_failed", "No tiene permiso para anular pagos", {
+        req,
+        httpStatus: 403,
+      });
+      return res.status(403).json({
+        message: "Solo Admin (con config activa) o Programador pueden anular un pago a proveedor",
+      });
+    }
+
+    const order = await SupplierOrder.findByPk(req.params.id, { include: orderIncludes });
+    if (!order) {
+      notifyFail("supplier_order.unmark_paid_failed", `Pedido proveedor #${req.params.id} no encontrado`, {
+        req,
+        httpStatus: 404,
+      });
+      return res.status(404).json({ message: "Pedido no encontrado" });
+    }
+    if (!order.paidAt) {
+      return res.status(400).json({ message: "El pedido no está marcado como pagado" });
+    }
+
+    await sequelize.transaction(async (t) => {
+      await cleanupSupplierOrderFinance(order.id, t);
+      order.paidAt = null;
+      order.paymentMethod = null;
+      order.financeExpenseId = null;
+      await order.save({ transaction: t });
+    });
+
+    const full = await SupplierOrder.findByPk(order.id, { include: orderIncludes });
+    notifyOk("supplier_order.unmark_paid", `Pago anulado pedido proveedor #${req.params.id}`, {
+      supplierOrderId: order.id,
+    });
+    res.json((await formatSupplierOrdersList([full]))[0]);
+  } catch (error) {
+    console.error("unmarkSupplierOrderPaid:", error);
+    notifyFail("supplier_order.unmark_paid_failed", "Error al anular pago del pedido", {
+      error,
+      req,
+      httpStatus: 500,
+    });
+    res.status(500).json({ message: "Error al anular pago del pedido" });
+  }
+};
+
 export const markSupplierOrderReceived = async (req, res) => {
   try {
     await ensureSupplierOrderItemLotSchema();
     await ensureInventoryBatchesSchema();
     await ensureStoreLocationKindEnum();
+    // Corrige locales llamados "Bodega*" mal tipados como vitrina.
     await ensureBodegaStore();
     const token = getHeaderToken(req);
     const user = await verifyJWT(token);
@@ -726,7 +815,10 @@ export const markSupplierOrderReceived = async (req, res) => {
       return res.status(400).json({ message: "El pedido ya fue marcado como recibido" });
     }
 
-    const receivedAt = req.body?.receivedAt ? new Date(req.body.receivedAt) : new Date();
+    const receivedAt = resolveSupplierOrderReceiveDate({
+      receivedAt: req.body?.receivedAt,
+      order,
+    });
 
     await sequelize.transaction(async (t) => {
       const receiveStoreId = await resolveReceiveStoreId(req.body || {}, {
@@ -909,7 +1001,13 @@ export const markSupplierOrderPaid = async (req, res) => {
       return res.status(400).json({ message: "El pedido ya fue marcado como pagado" });
     }
 
-    const payDate = paidAt ? toAppDateTime(paidAt) : nowApp();
+    const instMap = await loadSupplierInstallmentsMap([order.id]);
+    const firstInstallmentDueDate = (instMap.get(order.id) || [])[0]?.dueDate || null;
+    const payDate = resolveSupplierOrderPayDate({
+      paidAt,
+      order,
+      installmentDueDate: firstInstallmentDueDate,
+    });
     const total = orderTotal(order.ERP_supplier_order_items || []);
     const supplierName = order.ERP_supplier?.name || "Proveedor";
 

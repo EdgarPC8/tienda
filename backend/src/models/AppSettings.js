@@ -43,28 +43,28 @@ export const AppSettings = sequelize.define(
     showPublicCatalog: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
-      defaultValue: false,
+      defaultValue: true,
     },
     /** Vista pública: mostrar sucursales propias (puntos de venta). */
     showPublicStoresPropia: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
-      defaultValue: false,
+      defaultValue: true,
     },
     /** Vista pública: mostrar vitrinas (locales de entrega). */
     showPublicStoresVitrina: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
-      defaultValue: false,
+      defaultValue: true,
     },
     /**
      * Stock por local (bodega / sucursales).
-     * Store arranca en stock general; multistock se activa por config.
+     * true = multistock; false = stock general editable en Productos.
      */
     multiStockEnabled: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
-      defaultValue: false,
+      defaultValue: true,
     },
     /** En selects de producto: mostrar chip de costo (precio proveedor del catálogo). */
     showProductCostInSelect: {
@@ -92,6 +92,15 @@ export const AppSettings = sequelize.define(
      * Admin/Programador puede registrar un ajuste y completar.
      */
     ordersAllowDeliverStockAdjust: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
+    /**
+     * Admin/Programador pueden anular cobros/pagos y borrar pedidos
+     * eliminando ingresos/gastos vinculados en finanzas.
+     */
+    financeAllowAdminCorrections: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: true,

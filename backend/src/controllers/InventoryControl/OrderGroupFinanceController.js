@@ -21,6 +21,10 @@ import {
   applyFifoPaidToInstallments,
   summarizeNextCredit,
 } from "../../services/orderPaymentScheduleService.js";
+import {
+  resolveGroupPaymentDate,
+  syncGroupFinanceDates,
+} from "../../utils/customerOrderFinanceUtils.js";
 const toNum = (v, def = 0) => {
     const n = Number(v ?? def);
     return Number.isFinite(n) ? n : def;
@@ -375,9 +379,18 @@ const toNum = (v, def = 0) => {
         const items = await OrderItem.findAll({
           where: { id: { [Op.in]: itemIds } },
           // agrega aquí los campos que uses para el total real (dañado/yapa/etc)
-          attributes: ["id", "price", "quantity", "paidAt", "damagedQty", "giftQty"],
+          attributes: ["id", "orderId", "price", "quantity", "paidAt", "damagedQty", "giftQty"],
           transaction: t,
         });
+
+        const orderIds = [...new Set(items.map((it) => it.orderId).filter(Boolean))];
+        const orders = orderIds.length
+          ? await Order.findAll({
+              where: { id: { [Op.in]: orderIds } },
+              attributes: ["id", "date"],
+              transaction: t,
+            })
+          : [];
   
         // ✅ total basado en "vendido cobrable"
         // vendido = quantity - damagedQty - giftQty
@@ -482,7 +495,11 @@ const toNum = (v, def = 0) => {
           return { status: 400, body: { message: `Abono excede saldo. Saldo: ${remaining}` } };
         }
   
-        const paymentDate = date ? toFinanceDateTime(date) : new Date();
+        const paymentDate = resolveGroupPaymentDate({
+          explicitDate: date ? toFinanceDateTime(date) : null,
+          orderItems: items,
+          orders,
+        });
         const newPaid = roundMoney(alreadyPaid + payAmount);
         const newRemaining = roundMoney(Math.max(0, total - newPaid));
         const isFullSettlement = newRemaining <= EPS;

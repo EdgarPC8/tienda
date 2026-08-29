@@ -28,6 +28,9 @@ export const EditorTemplate = sequelize.define(
 
     backgroundSrc: { type: DataTypes.STRING(800), allowNull: true },
 
+    // tipo de plantilla: producto | manual | mixto (+ requiresProduct, backgroundMode)
+    settingsJson: { type: DataTypes.JSON, allowNull: true },
+
     // principal/default por app+format (controlado por tu lógica)
     isDefault: { type: DataTypes.BOOLEAN, defaultValue: false },
 

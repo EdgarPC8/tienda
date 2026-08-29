@@ -16,7 +16,14 @@ export function requireGestorSyncSecret(req, res, next) {
     return res.status(401).json({ error: "No autorizado (gestor sync)" });
   }
 
-  //console.log(req.headers.authorization);
+  /** Probe del gestor: valida auth sin modificar entitlement. */
+  if (req.body && req.body._gestor_probe === true) {
+    return res.json({
+      ok: true,
+      probe: true,
+      module: "subscription/entitlement",
+    });
+  }
 
   return next();
 }

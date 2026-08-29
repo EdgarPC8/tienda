@@ -345,6 +345,11 @@ export const getSupplierPayablesWorkbench = async (req, res) => {
           unitPrice: toNum(it.unitPrice),
           taxRate: toNum(it.taxRate),
           packId: itemPackMap.get(Number(it.id)) || null,
+          packKey: it.packKey || null,
+          packName: it.packName || null,
+          lotCode: it.lotCode || null,
+          expiresAt: it.expiresAt ? isoDateOnly(it.expiresAt) : null,
+          manufacturedAt: it.manufacturedAt ? isoDateOnly(it.manufacturedAt) : null,
           lineTotal: round2(
             toNum(it.quantity) * toNum(it.unitPrice) * (1 + toNum(it.taxRate) / 100)
           ),

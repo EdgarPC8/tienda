@@ -34,11 +34,14 @@ import EditorRoutes from "./src/routes/EditorRoutes.js";
 import ComandsRoutes from "./src/routes/ComandsRoutes.js";
 import AppSettingsRoutes from "./src/routes/AppSettingsRoutes.js";
 import SubscriptionRoutes from "./src/routes/SubscriptionRoutes.js";
+import NewsRoutes from "./src/routes/NewsRoutes.js";
 import SriBillingRoutes from "./src/routes/SriBillingRoutes.js";
 import { loadAppSettings, getAppSettingsSync } from "./src/services/appSettingsService.js";
 import { loadSriBillingSettings } from "./src/services/sriBillingService.js";
 import { ensureEntitlementTable } from "./src/services/entitlementService.js";
+import { ensureAppNewsTable } from "./src/services/appNewsService.js";
 import { seedDefaultCashRegistersForOwnStores } from "./src/models/CashRegister.js";
+import { ensureAccountIsActiveColumn } from "./src/models/Account.js";
 import {
   ensureBodegaStore,
   ensureSingleLocalOwnStore,
@@ -106,6 +109,7 @@ app.use(`/${api}/files`, express.static(path.resolve(__dirname, "src/files")));
 // ================================
 app.use(`/${api}`, AppSettingsRoutes);
 app.use(`/${api}`, SubscriptionRoutes);
+app.use(`/${api}`, NewsRoutes);
 app.use(`/${api}/sri`, SriBillingRoutes);
 app.use(`/${api}/comands`, ComandsRoutes);
 app.use(`/${api}/editor`, EditorRoutes);
@@ -137,6 +141,8 @@ export async function main() {
     await loadSriBillingSettings();
     // Sin sync({ alter }) en arranque: el esquema se alinea a mano con `npm run db:sync`.
     await ensureEntitlementTable({ alter: false });
+    await ensureAppNewsTable({ alter: false });
+    await ensureAccountIsActiveColumn();
     // Multistock: Bodega + migración. Un solo local: asegurar un local «propia» para turno.
     if (getAppSettingsSync()?.multiStockEnabled) {
       await ensureBodegaStore();

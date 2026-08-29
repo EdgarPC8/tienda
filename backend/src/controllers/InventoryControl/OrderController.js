@@ -370,10 +370,7 @@ export const posCheckout = async (req, res) => {
         }
       }
 
-      if (isCredit) {
-        if (!Array.isArray(paymentInstallments) || paymentInstallments.length === 0) {
-          throw new Error("Definí la fecha de cobro o las cuotas del crédito.");
-        }
+      if (isCredit && Array.isArray(paymentInstallments) && paymentInstallments.length > 0) {
         const scheduledTotal = paymentInstallments.reduce(
           (sum, row) => sum + Number(row?.amount || 0),
           0,

@@ -71,3 +71,17 @@ Account.belongsTo(Users, {
   foreignKey: "userId",
   targetKey: "id",
 });
+
+/** Alinea accounts: columna isActive para login y gestión de usuarios. */
+export async function ensureAccountIsActiveColumn() {
+  try {
+    const [cols] = await sequelize.query(`SHOW COLUMNS FROM \`accounts\` LIKE 'isActive'`);
+    if (Array.isArray(cols) && cols.length) return;
+    await sequelize.query(
+      "ALTER TABLE `accounts` ADD COLUMN `isActive` TINYINT(1) NOT NULL DEFAULT 1 AFTER `userId`",
+    );
+    console.log("[account] Columna isActive añadida a accounts.");
+  } catch (err) {
+    console.warn("[account] ensureAccountIsActiveColumn:", err.message);
+  }
+}

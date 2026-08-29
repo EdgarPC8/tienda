@@ -141,6 +141,15 @@ export const AppSettings = sequelize.define(
       allowNull: false,
       defaultValue: false,
     },
+    /**
+     * Caja: columna de descuento % por producto y % sobre el total de la compra.
+     * Apagado por defecto.
+     */
+    cajaAllowPercentDiscount: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
     notificationsToastGreeting: {
       type: DataTypes.BOOLEAN,
       allowNull: false,

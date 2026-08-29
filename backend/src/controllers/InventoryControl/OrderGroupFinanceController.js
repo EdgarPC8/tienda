@@ -1029,10 +1029,23 @@ export const getFinanceWorkbenchAll = async (req, res) => {
               {
                 model: OrderItem,
                 as: "ERP_order_items",
-                attributes: ["id", "orderId", "productId", "quantity", "price", "paidAt",      "soldQty",
-                "damagedQty",
-                "giftQty",
-                "replacedQty",],
+                attributes: [
+                  "id",
+                  "orderId",
+                  "productId",
+                  "quantity",
+                  "price",
+                  "paidAt",
+                  "soldQty",
+                  "damagedQty",
+                  "giftQty",
+                  "replacedQty",
+                  "packKey",
+                  "packName",
+                  "lotCode",
+                  "expiresAt",
+                  "manufacturedAt",
+                ],
                 include: [
                   {
                     model: InventoryProduct,
@@ -1238,6 +1251,7 @@ export const getFinanceWorkbenchAll = async (req, res) => {
 
               return {
                 id: it.id,
+                productId: it.productId,
                 product: it.ERP_inventory_product?.name ?? "(sin nombre)",
                 qty: toNum(it.quantity),
                 price: toNum(it.price),
@@ -1246,6 +1260,11 @@ export const getFinanceWorkbenchAll = async (req, res) => {
                 damagedQty:toNum(it.damagedQty),
                 giftQty:toNum(it.giftQty),
                 replacedQty:toNum(it.replacedQty),
+                packKey: it.packKey || null,
+                packName: it.packName || null,
+                lotCode: it.lotCode || null,
+                expiresAt: it.expiresAt ? isoDateOnly(it.expiresAt) : null,
+                manufacturedAt: it.manufacturedAt ? isoDateOnly(it.manufacturedAt) : null,
 
                 // ✅ IMPORTANTÍSIMO para el frontend
                 inGroup: !!gid,

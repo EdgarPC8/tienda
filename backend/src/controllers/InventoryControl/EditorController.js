@@ -12,6 +12,7 @@ import {
 import { sequelize } from "../../database/connection.js";
 import { verifyJWT,getHeaderToken } from "../../libs/jwt.js";
 import { notifyOk, notifyFail } from "../../services/notifyRaptorSolutions.js";
+import { extractTemplateSettings, settingsToMeta } from "../../libs/templateSettings.js";
 
 
 
@@ -195,6 +196,13 @@ export const updateTemplateDoc = async (req, res) => {
     if (doc?.backgroundSrc !== undefined) patch.backgroundSrc = doc.backgroundSrc ? String(doc.backgroundSrc) : null;
     if (updatedBy) patch.updatedBy = updatedBy;
 
+    const settings = extractTemplateSettings({
+      doc,
+      layers: layersIn,
+      backgroundSrc: doc?.backgroundSrc ?? tpl.backgroundSrc,
+    });
+    patch.settingsJson = settings;
+
     await tpl.update(patch, { transaction: t });
 
     // 2) BORRAR HIJOS (reemplazo completo)
@@ -361,6 +369,13 @@ export const importTemplate = async (req, res) => {
     };
   };
 
+  const importSettings = extractTemplateSettings({
+    body: req.body,
+    templateJson,
+    layers: layersIn,
+    backgroundSrc: templateJson.backgroundSrc ?? null,
+  });
+
   const t = await sequelize.transaction();
   try {
     // 1) Template
@@ -372,6 +387,7 @@ export const importTemplate = async (req, res) => {
         canvasWidth: toInt(templateJson.canvas?.width, 1920),
         canvasHeight: toInt(templateJson.canvas?.height, 1080),
         backgroundSrc: templateJson.backgroundSrc ?? null,
+        settingsJson: importSettings,
         isDefault: toBool(templateJson.isDefault, false),
         isActive: toBool(templateJson.isActive, true),
         createdBy,
@@ -646,6 +662,11 @@ export const updateTemplate = async (req, res) => {
           canvasWidth: toInt(doc?.canvas?.width, tpl.canvasWidth || 1920),
           canvasHeight: toInt(doc?.canvas?.height, tpl.canvasHeight || 1080),
           backgroundSrc: doc.backgroundSrc ? toRelativeImgPath(doc.backgroundSrc) : null,
+          settingsJson: extractTemplateSettings({
+            doc,
+            layers: layersIn,
+            backgroundSrc: doc.backgroundSrc ?? tpl.backgroundSrc,
+          }),
           updatedBy: updatedBy || null,
         };
 
@@ -768,6 +789,27 @@ export const updateTemplate = async (req, res) => {
       if (req.body.isActive != null) patch.isActive = toBool(req.body.isActive, tpl.isActive);
       if (req.body.isDefault != null) patch.isDefault = toBool(req.body.isDefault, tpl.isDefault);
 
+      if (
+        req.body.templateKind != null ||
+        req.body.requiresProduct != null ||
+        req.body.backgroundMode != null ||
+        req.body.settingsJson != null
+      ) {
+        patch.settingsJson = extractTemplateSettings({
+          body: {
+            settingsJson: {
+              ...(tpl.settingsJson || {}),
+              ...(req.body.settingsJson || {}),
+            },
+            templateKind: req.body.templateKind ?? tpl.settingsJson?.templateKind,
+            requiresProduct: req.body.requiresProduct ?? tpl.settingsJson?.requiresProduct,
+            backgroundMode: req.body.backgroundMode ?? tpl.settingsJson?.backgroundMode,
+          },
+          layers: tpl.layers || [],
+          backgroundSrc: patch.backgroundSrc ?? tpl.backgroundSrc,
+        });
+      }
+
       if (updatedBy) patch.updatedBy = updatedBy;
 
       await tpl.update(patch, { transaction: t });
@@ -827,11 +869,39 @@ const buildResolvedDocFromTemplateRow = (templateRow) => {
     }))
     .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
 
+  const settings = extractTemplateSettings({
+    body: { settingsJson: templateRow.settingsJson },
+    layers,
+    backgroundSrc: templateRow.backgroundSrc,
+  });
+
   return {
     canvas: { width: templateRow.canvasWidth, height: templateRow.canvasHeight },
     backgroundSrc: templateRow.backgroundSrc,
+    meta: {
+      name: templateRow.name,
+      ...settingsToMeta(settings),
+    },
     groups,
     layers,
+  };
+};
+
+const templateSummaryFromRow = (row) => {
+  const settings = extractTemplateSettings({
+    body: { settingsJson: row.settingsJson },
+    layers: row.layers || [],
+    backgroundSrc: row.backgroundSrc,
+  });
+  return {
+    id: row.id,
+    name: row.name,
+    app: row.app,
+    format: row.format,
+    isDefault: row.isDefault,
+    isActive: row.isActive,
+    settingsJson: settings,
+    ...settings,
   };
 };
 
@@ -862,14 +932,7 @@ export const getTemplateResolvedById = async (req, res) => {
 
     return res.json({
       templateId: row.id,
-      template: {
-        id: row.id,
-        name: row.name,
-        app: row.app,
-        format: row.format,
-        isDefault: row.isDefault,
-        isActive: row.isActive,
-      },
+      template: templateSummaryFromRow(row),
       resolved,
     });
   } catch (error) {
@@ -936,14 +999,7 @@ export const getDefaultTemplateResolved = async (req, res) => {
 
     return res.json({
       templateId: row.id,
-      template: {
-        id: row.id,
-        name: row.name,
-        app: row.app,
-        format: row.format,
-        isDefault: row.isDefault,
-        isActive: row.isActive,
-      },
+      template: templateSummaryFromRow(row),
       resolved,
     });
   } catch (error) {

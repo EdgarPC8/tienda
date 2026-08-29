@@ -253,13 +253,23 @@ export function loadMetricsMiddleware(req, res, next) {
     const bucket = bucketFor();
     if (!bucket.errorsDetail) bucket.errorsDetail = new Map();
     bucket.requests += 1;
-    bucket.bytes_in += toBytes(req.headers["content-length"]);
-    bucket.bytes_out += toBytes(res.getHeader("content-length")) || outgoingBytes();
+    const reqBytesIn = toBytes(req.headers["content-length"]);
+    const reqBytesOut = toBytes(res.getHeader("content-length")) || outgoingBytes();
+    bucket.bytes_in += reqBytesIn;
+    bucket.bytes_out += reqBytesOut;
     const usage = classifyUsage(req);
     const method = String(req.method || "GET").toUpperCase();
     const usageKey = `${usage.module}::${usage.section}::${method}`;
-    const usageRow = bucket.usage.get(usageKey) || { ...usage, method, requests: 0 };
+    const usageRow = bucket.usage.get(usageKey) || {
+      ...usage,
+      method,
+      requests: 0,
+      bytes_in: 0,
+      bytes_out: 0,
+    };
     usageRow.requests += 1;
+    usageRow.bytes_in += reqBytesIn;
+    usageRow.bytes_out += reqBytesOut;
     bucket.usage.set(usageKey, usageRow);
     const status = Number(res.statusCode) || 0;
     if (status >= 400) {

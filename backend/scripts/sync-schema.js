@@ -18,6 +18,7 @@ import {
   migrateGlobalStockToBodega,
 } from "../src/services/storeStockService.js";
 import { seedDefaultCashRegistersForOwnStores } from "../src/models/CashRegister.js";
+import { ensureAccountIsActiveColumn } from "../src/models/Account.js";
 
 try {
   await sequelize.authenticate();
@@ -25,6 +26,7 @@ try {
   await ensureStoreLocationKindEnum();
   await ensureStoreIsVisibleColumn();
   await ensureCustomerNameSchema();
+  await ensureAccountIsActiveColumn();
   await ensureEntitlementTable({ alter: true });
   await seedDefaultCashRegistersForOwnStores();
   await ensureBodegaStore();

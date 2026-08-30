@@ -616,13 +616,39 @@ function isMissingTableError(error) {
   return /doesn't exist|Unknown table|no such table|ER_NO_SUCH_TABLE/i.test(msg);
 }
 
+function isMissingColumnError(error) {
+  const msg = String(error?.parent?.sqlMessage || error?.message || error || "");
+  return /Unknown column|ER_BAD_FIELD_ERROR/i.test(msg);
+}
+
+/** SELECT de backup: si falta una columna del modelo en la BD, usa solo las columnas existentes. */
+async function findAllForBackup(model) {
+  try {
+    return await model.findAll({ raw: true });
+  } catch (error) {
+    if (!isMissingColumnError(error)) throw error;
+    const tableName = model.getTableName();
+    const table =
+      typeof tableName === "string"
+        ? tableName
+        : tableName?.tableName || String(tableName);
+    const desc = await sequelize.getQueryInterface().describeTable(table);
+    const dbCols = new Set(Object.keys(desc));
+    const attrs = Object.keys(model.rawAttributes).filter((attr) => {
+      const field = model.rawAttributes[attr].field || attr;
+      return dbCols.has(field) || dbCols.has(attr);
+    });
+    return model.findAll({ raw: true, attributes: attrs });
+  }
+}
+
 async function fetchAllBackupTables() {
   const warnings = [];
   const backupData = {};
 
   for (const entry of BACKUP_TABLE_ENTRIES) {
     try {
-      let rows = await entry.model.findAll({ raw: true });
+      let rows = await findAllForBackup(entry.model);
       if (entry.sanitize && SANITIZE_CONFIG[entry.sanitize]) {
         rows = sanitizeRows(rows, SANITIZE_CONFIG[entry.sanitize]);
       }
@@ -630,6 +656,13 @@ async function fetchAllBackupTables() {
     } catch (error) {
       if (isMissingTableError(error)) {
         warnings.push(`${entry.key}: tabla no existe (ejecutá npm run db:sync en el backend)`);
+        backupData[entry.key] = [];
+        continue;
+      }
+      if (isMissingColumnError(error)) {
+        warnings.push(
+          `${entry.key}: hay columnas del modelo que no existen en la BD (ej. settingsJson → npm run db:sync:editor)`,
+        );
         backupData[entry.key] = [];
         continue;
       }

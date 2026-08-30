@@ -26,10 +26,13 @@ import { notifyOk, notifyFail } from "../services/notifyRaptorSolutions.js";
 
 export const saveBackupController = async (req, res) => {
   try {
-    const { backupPath, counts } = await saveBackup();
+    const { backupPath, counts, warnings = [] } = await saveBackup();
     const users = counts?.Users ?? 0;
     const products = counts?.InventoryProduct ?? 0;
     let message = "Copia de seguridad guardada correctamente.";
+    if (warnings.length) {
+      message += ` Aviso: ${warnings.length} tabla(s) no existían y se exportaron vacías.`;
+    }
     if (users === 0 && products === 0) {
       message +=
         " Advertencia: la BD está vacía; el JSON guardado no tendrá usuarios ni productos. Restaura backup.json desde tu PC antes.";
@@ -40,6 +43,7 @@ export const saveBackupController = async (req, res) => {
       message,
       path: backupPath,
       tables: counts,
+      warnings,
     });
   } catch (error) {
     console.error("Error en saveBackupController:", error);

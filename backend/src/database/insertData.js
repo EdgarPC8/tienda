@@ -611,20 +611,38 @@ export const insertData = async () => {
  * - updateMainBackup true (default): copia con fecha en src/backups/ y actualiza src/database/backup.json
  * - updateMainBackup false: solo copia con fecha en src/backups/ (antes de recargar BD)
  */
-export const saveBackup = async ({ updateMainBackup = true } = {}) => {
-  try {
-    const fetched = await Promise.all(
-      BACKUP_TABLE_ENTRIES.map((entry) => entry.model.findAll({ raw: true })),
-    );
+function isMissingTableError(error) {
+  const msg = String(error?.parent?.sqlMessage || error?.message || error || "");
+  return /doesn't exist|Unknown table|no such table|ER_NO_SUCH_TABLE/i.test(msg);
+}
 
-    const backupData = {};
-    BACKUP_TABLE_ENTRIES.forEach((entry, index) => {
-      let rows = fetched[index];
+async function fetchAllBackupTables() {
+  const warnings = [];
+  const backupData = {};
+
+  for (const entry of BACKUP_TABLE_ENTRIES) {
+    try {
+      let rows = await entry.model.findAll({ raw: true });
       if (entry.sanitize && SANITIZE_CONFIG[entry.sanitize]) {
         rows = sanitizeRows(rows, SANITIZE_CONFIG[entry.sanitize]);
       }
       backupData[entry.key] = rows;
-    });
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        warnings.push(`${entry.key}: tabla no existe (ejecutá npm run db:sync en el backend)`);
+        backupData[entry.key] = [];
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  return { backupData, warnings };
+}
+
+export const saveBackup = async ({ updateMainBackup = true } = {}) => {
+  try {
+    const { backupData, warnings } = await fetchAllBackupTables();
 
     const normalized = prepareBackupForRestore(ensureBackupShape(backupData));
     const counts = summarizeBackupData(normalized);
@@ -649,7 +667,7 @@ export const saveBackup = async ({ updateMainBackup = true } = {}) => {
       console.log("backup.json principal actualizado:", backupFilePath);
     }
     console.log("Filas por tabla:", counts);
-    return { backupPath, counts, mainBackupUpdated: updateMainBackup };
+    return { backupPath, counts, mainBackupUpdated: updateMainBackup, warnings };
   } catch (error) {
     console.error("Error al guardar el backup:", error);
     throw error;

@@ -75,6 +75,7 @@ export async function putAppSettings(req, res) {
       "notificationsExpiryEnabled",
       "receiptDetailSettings",
       "themePalette",
+      "keyboardShortcuts",
     ];
     const patch = {};
     for (const key of allowed) {

@@ -19,6 +19,24 @@ import {
 } from "../src/services/storeStockService.js";
 import { seedDefaultCashRegistersForOwnStores } from "../src/models/CashRegister.js";
 import { ensureAccountIsActiveColumn } from "../src/models/Account.js";
+import { spawn } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+function runFixExpenseReferenceFk() {
+  const script = path.resolve(__dirname, "fix-expense-reference-fk.js");
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [script], {
+      stdio: "inherit",
+      env: process.env,
+      cwd: path.resolve(__dirname, ".."),
+    });
+    child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`fix-expense-reference-fk exit ${code}`))));
+    child.on("error", reject);
+  });
+}
 
 try {
   await sequelize.authenticate();
@@ -31,6 +49,7 @@ try {
   await seedDefaultCashRegistersForOwnStores();
   await ensureBodegaStore();
   await migrateGlobalStockToBodega();
+  await runFixExpenseReferenceFk();
   console.log("✅ Esquema sincronizado:", result.models?.join(", ") || "ok");
   process.exit(0);
 } catch (error) {

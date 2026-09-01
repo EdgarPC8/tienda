@@ -18,6 +18,10 @@ import {
   normalizeThemePalette,
   serializeThemePalette,
 } from "../utils/themePaletteSettings.js";
+import {
+  normalizeKeyboardShortcuts,
+  serializeKeyboardShortcuts,
+} from "../utils/keyboardShortcutsSettings.js";
 
 const { __dirname } = fileDirName(import.meta);
 const IMG_BASE = path.resolve(__dirname, "../img");
@@ -229,6 +233,12 @@ async function ensureAppSettingsSchema() {
       allowNull: true,
     });
   }
+  if (!table.keyboardShortcuts) {
+    await qi.addColumn("app_settings", "keyboardShortcuts", {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    });
+  }
 }
 
 /** Amplía columnas de precio a DECIMAL(14,6) si aún no lo son. */
@@ -318,6 +328,7 @@ export async function loadAppSettings() {
     moneyRoundingMode: normalizeMoneyRoundingMode(raw.moneyRoundingMode, "up"),
     receiptDetailSettings: normalizeReceiptDetailSettings(raw.receiptDetailSettings),
     themePalette: normalizeThemePalette(raw.themePalette),
+    keyboardShortcuts: normalizeKeyboardShortcuts(raw.keyboardShortcuts),
   };
   ensureStandardAssetDirs(cache.mediaFolderPrefix);
   return cache;
@@ -419,6 +430,9 @@ export async function updateAppSettings(payload) {
   if ("themePalette" in patch) {
     patch.themePalette = serializeThemePalette(patch.themePalette);
   }
+  if ("keyboardShortcuts" in patch) {
+    patch.keyboardShortcuts = serializeKeyboardShortcuts(patch.keyboardShortcuts);
+  }
   let row = await AppSettings.findByPk(1);
   if (!row) {
     row = await AppSettings.create({ id: 1, ...DEFAULT_APP_SETTINGS, ...patch });
@@ -452,6 +466,7 @@ export async function updateAppSettings(payload) {
     moneyRoundingMode: normalizeMoneyRoundingMode(raw.moneyRoundingMode, "up"),
     receiptDetailSettings: normalizeReceiptDetailSettings(raw.receiptDetailSettings),
     themePalette: normalizeThemePalette(raw.themePalette),
+    keyboardShortcuts: normalizeKeyboardShortcuts(raw.keyboardShortcuts),
   };
   return cache;
 }
@@ -503,5 +518,6 @@ export function toPublicSettings(data = cache) {
     moneyRoundingMode: normalizeMoneyRoundingMode(data.moneyRoundingMode, "up"),
     receiptDetailSettings: normalizeReceiptDetailSettings(data.receiptDetailSettings),
     themePalette: normalizeThemePalette(data.themePalette),
+    keyboardShortcuts: normalizeKeyboardShortcuts(data.keyboardShortcuts),
   };
 }

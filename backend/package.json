@@ -14,6 +14,8 @@
     "db:seed:catalog": "npm run seed:catalog",
     "db:sync:categories": "node scripts/sync-category-schema.js",
     "db:sync:editor": "node scripts/sync-editor-schema.js",
+    "db:fix:expense-reference-fk": "node scripts/fix-expense-reference-fk.js",
+    "db:diagnose:supplier-pay": "node scripts/diagnose-supplier-pay.js",
     "db:migrate:categories": "node scripts/migrate-category-hierarchy.js",
     "db:reorganize:categories": "node scripts/reorganize-categories-products.js",
     "db:repair:json-fields": "node scripts/repair-json-fields.js",

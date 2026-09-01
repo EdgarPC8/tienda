@@ -196,6 +196,11 @@ export const AppSettings = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    /** Atajos de teclado por comando (JSON: { "caja.checkout": { keys, enabled } }). */
+    keyboardShortcuts: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
   },
   { timestamps: true },
 );

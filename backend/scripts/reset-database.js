@@ -36,6 +36,21 @@ async function runSeed() {
   });
 }
 
+async function runFixExpenseReferenceFk() {
+  const script = path.resolve(__dirname, "fix-expense-reference-fk.js");
+  await new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [script], {
+      stdio: "inherit",
+      env: process.env,
+      cwd: path.resolve(__dirname, ".."),
+    });
+    child.on("exit", (code) =>
+      code === 0 ? resolve() : reject(new Error(`fix-expense-reference-fk exit ${code}`)),
+    );
+    child.on("error", reject);
+  });
+}
+
 try {
   await sequelize.authenticate();
   console.warn(`⚠️  Reset BD Store… MySQL: ${process.env.DB_USER || "root"}@${process.env.DB_HOST || "localhost"}/${dbName}`);
@@ -63,6 +78,7 @@ try {
   console.warn(`   Tamaño: ${summary.sizeMB} MB · Filas totales: ${summary.totalRows}`);
 
   const result = await recreateDatabaseFromBackup();
+  await runFixExpenseReferenceFk();
   console.log(`✅ BD reseteada (modo: ${result.resetMode}).`, result.tables);
   if (result.tablesRecreated?.length) {
     console.log("   Tablas recreadas:", result.tablesRecreated.join(", "));

@@ -3,7 +3,7 @@ import { DataTypes } from "sequelize";
 import { sequelize } from "../database/connection.js";
 
 import { Account } from "./Account.js";
-import { InventoryProduct, Store } from "./Inventory.js";
+import { Store } from "./Inventory.js";
 
 // ✅ Ajusta a tu proyecto real:
 import { OrderItem, Customer, Supplier, SupplierOrder, SupplierOrderItem } from "./Orders.js";
@@ -611,9 +611,7 @@ export const RecurringExpenseOccurrence = sequelize.define("ERP_finance_recurrin
 Income.belongsTo(Account, { foreignKey: "createdBy" });
 Expense.belongsTo(Account, { foreignKey: "createdBy" });
 
-// Expense -> InventoryProduct (si referenceId apunta a producto)
-InventoryProduct.hasMany(Expense, { foreignKey: "referenceId" });
-Expense.belongsTo(InventoryProduct, { foreignKey: "referenceId" });
+// referenceId es polimórfico (referenceType); no FK a inventario.
 
 // Grupo -> Account
 ItemGroup.belongsTo(Account, { foreignKey: "createdBy" });

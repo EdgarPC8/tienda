@@ -64,7 +64,7 @@ export const AppSettings = sequelize.define(
     multiStockEnabled: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
-      defaultValue: true,
+      defaultValue: false,
     },
     /** En selects de producto: mostrar chip de costo (precio proveedor del catálogo). */
     showProductCostInSelect: {

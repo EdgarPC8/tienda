@@ -38,7 +38,7 @@ import NewsRoutes from "./src/routes/NewsRoutes.js";
 import SriBillingRoutes from "./src/routes/SriBillingRoutes.js";
 import { loadAppSettings, getAppSettingsSync } from "./src/services/appSettingsService.js";
 import { loadSriBillingSettings } from "./src/services/sriBillingService.js";
-import { ensureEntitlementTable } from "./src/services/entitlementService.js";
+import { ensureEntitlementTable, enforceEntitlementSideEffectsOnBoot } from "./src/services/entitlementService.js";
 import { ensureAppNewsTable } from "./src/services/appNewsService.js";
 import { seedDefaultCashRegistersForOwnStores } from "./src/models/CashRegister.js";
 import { ensureAccountIsActiveColumn } from "./src/models/Account.js";
@@ -141,6 +141,8 @@ export async function main() {
     await loadSriBillingSettings();
     // Sin sync({ alter }) en arranque: el esquema se alinea a mano con `npm run db:sync`.
     await ensureEntitlementTable({ alter: false });
+    await enforceEntitlementSideEffectsOnBoot();
+    await loadAppSettings();
     await ensureAppNewsTable({ alter: false });
     await ensureAccountIsActiveColumn();
     // Multistock: Bodega + migración. Un solo local: asegurar un local «propia» para turno.

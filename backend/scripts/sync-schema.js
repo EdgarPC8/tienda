@@ -38,6 +38,19 @@ function runFixExpenseReferenceFk() {
   });
 }
 
+function runFixMultistockOff() {
+  const script = path.resolve(__dirname, "fix-multistock-off.js");
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [script], {
+      stdio: "inherit",
+      env: process.env,
+      cwd: path.resolve(__dirname, ".."),
+    });
+    child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`fix-multistock-off exit ${code}`))));
+    child.on("error", reject);
+  });
+}
+
 try {
   await sequelize.authenticate();
   const result = await syncDatabaseSchema({ alter: true });
@@ -50,6 +63,7 @@ try {
   await ensureBodegaStore();
   await migrateGlobalStockToBodega();
   await runFixExpenseReferenceFk();
+  await runFixMultistockOff();
   console.log("✅ Esquema sincronizado:", result.models?.join(", ") || "ok");
   process.exit(0);
 } catch (error) {

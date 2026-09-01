@@ -48,7 +48,7 @@ export const DEFAULT_APP_SETTINGS = {
   showPublicCatalog: true,
   showPublicStoresPropia: true,
   showPublicStoresVitrina: true,
-  multiStockEnabled: true,
+  multiStockEnabled: false,
   showProductCostInSelect: false,
   moneyDisplayDecimals: 2,
   moneyRoundingMode: "up",
@@ -181,7 +181,7 @@ async function ensureAppSettingsSchema() {
     ["showPublicCatalog", true],
     ["showPublicStoresPropia", true],
     ["showPublicStoresVitrina", true],
-    ["multiStockEnabled", true],
+    ["multiStockEnabled", false],
     ["showProductCostInSelect", false],
     ["ordersAllowDeliverStockAdjust", true],
     ["financeAllowAdminCorrections", true],
@@ -308,7 +308,7 @@ export async function loadAppSettings() {
     showPublicCatalog: asBool(raw.showPublicCatalog, true),
     showPublicStoresPropia: asBool(raw.showPublicStoresPropia, true),
     showPublicStoresVitrina: asBool(raw.showPublicStoresVitrina, true),
-    multiStockEnabled: asBool(raw.multiStockEnabled, true),
+    multiStockEnabled: asBool(raw.multiStockEnabled, false),
     showProductCostInSelect: asBool(raw.showProductCostInSelect, false),
     ordersAllowDeliverStockAdjust: asBool(raw.ordersAllowDeliverStockAdjust, true),
     financeAllowAdminCorrections: asBool(raw.financeAllowAdminCorrections, true),
@@ -340,9 +340,11 @@ export async function updateAppSettings(payload) {
     "showPublicCatalog",
     "showPublicStoresPropia",
     "showPublicStoresVitrina",
-    "multiStockEnabled",
   ]) {
     if (key in patch) patch[key] = asBool(patch[key], true);
+  }
+  if ("multiStockEnabled" in patch) {
+    patch.multiStockEnabled = asBool(patch.multiStockEnabled, false);
   }
   if ("showProductCostInSelect" in patch) {
     patch.showProductCostInSelect = asBool(patch.showProductCostInSelect, false);
@@ -446,7 +448,7 @@ export async function updateAppSettings(payload) {
     showPublicCatalog: asBool(raw.showPublicCatalog, true),
     showPublicStoresPropia: asBool(raw.showPublicStoresPropia, true),
     showPublicStoresVitrina: asBool(raw.showPublicStoresVitrina, true),
-    multiStockEnabled: asBool(raw.multiStockEnabled, true),
+    multiStockEnabled: asBool(raw.multiStockEnabled, false),
     showProductCostInSelect: asBool(raw.showProductCostInSelect, false),
     ordersAllowDeliverStockAdjust: asBool(raw.ordersAllowDeliverStockAdjust, true),
     financeAllowAdminCorrections: asBool(raw.financeAllowAdminCorrections, true),
@@ -498,7 +500,7 @@ export function toPublicSettings(data = cache) {
     showPublicCatalog: asBool(data.showPublicCatalog, true),
     showPublicStoresPropia: asBool(data.showPublicStoresPropia, true),
     showPublicStoresVitrina: asBool(data.showPublicStoresVitrina, true),
-    multiStockEnabled: asBool(data.multiStockEnabled, true),
+    multiStockEnabled: asBool(data.multiStockEnabled, false),
     showProductCostInSelect: asBool(data.showProductCostInSelect, false),
     ordersAllowDeliverStockAdjust: asBool(data.ordersAllowDeliverStockAdjust, true),
     financeAllowAdminCorrections: asBool(data.financeAllowAdminCorrections, true),

@@ -151,6 +151,21 @@ export async function saveEntitlement(rawPayload, source = "gestor_push") {
   return getEntitlementResponse();
 }
 
+/** Al arrancar: reaplica bloqueos del gestor (Store/Tienda = un solo local salvo multi_stock activo). */
+export async function enforceEntitlementSideEffectsOnBoot() {
+  try {
+    const row = await AppEntitlement.findByPk(1);
+    const payload = coerceJson(row?.payload) || EMPTY;
+    const features = normalizeFeatures(payload.features);
+    const multi = features.find((f) => f && f.key === "multi_stock");
+    if (!multi || !featureIsUnlocked(multi.status)) {
+      await updateAppSettings({ multiStockEnabled: false });
+    }
+  } catch (err) {
+    console.error("[entitlement] enforceEntitlementSideEffectsOnBoot:", err?.message || err);
+  }
+}
+
 /** Trae del gestor y guarda localmente (bootstrap / refresh manual). */
 export async function pullEntitlementFromGestor() {
   if (!GESTOR_SYNC_SECRET) {

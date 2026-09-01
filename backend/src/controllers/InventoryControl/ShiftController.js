@@ -2,7 +2,7 @@ import { Op } from "sequelize";
 import { sequelize } from "../../database/connection.js";
 import { CashShift } from "../../models/CashShift.js";
 import { CashShiftMovement } from "../../models/CashShiftMovement.js";
-import { Order, OrderItem, Customer } from "../../models/Orders.js";
+import { Order, OrderItem, Customer, SupplierOrder } from "../../models/Orders.js";
 import { Users } from "../../models/Users.js";
 import { InventoryProduct, InventoryMovement, Store } from "../../models/Inventory.js";
 import {
@@ -243,6 +243,13 @@ async function registerInventoryPurchase({ productId, quantity, amount, concept,
   );
 
   return invMovement;
+}
+
+async function resolveSupplierOrderExpenseId(notes, { transaction } = {}) {
+  const match = String(notes || "").match(/supplier_order:(\d+)/);
+  if (!match) return null;
+  const order = await SupplierOrder.findByPk(Number(match[1]), { transaction });
+  return order?.financeExpenseId ?? null;
 }
 
 async function registerExpenseForMovement({
@@ -542,9 +549,14 @@ export async function createShiftMovement(req, res) {
         inventoryMovementId = invMovement.id;
       }
 
-      const expense = skipExpense
-        ? null
-        : await registerExpenseForMovement({
+      if (skipExpense) {
+        expenseId = await resolveSupplierOrderExpenseId(notes, { transaction });
+      }
+
+      const expense =
+        expenseId || skipExpense
+          ? null
+          : await registerExpenseForMovement({
         category,
         amount: amt,
         concept: conceptTrim,
@@ -554,7 +566,7 @@ export async function createShiftMovement(req, res) {
         transaction,
         date: movementCreatedAt,
       });
-      if (expense) expenseId = expense.id;
+      if (!expenseId && expense) expenseId = expense.id;
 
       if (inventoryMovementId || expenseId) {
         await row.update({ inventoryMovementId, expenseId }, { transaction });

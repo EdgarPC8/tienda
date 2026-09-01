@@ -2,7 +2,7 @@ import { Op } from "sequelize";
 import { sequelize } from "../database/connection.js";
 import { InventoryProduct, Store } from "../models/Inventory.js";
 import { StoreStock } from "../models/StoreStock.js";
-import { getAppSettingsSync } from "./appSettingsService.js";
+import { getAppSettingsSync, isMultiStockEnabled } from "./appSettingsService.js";
 
 const BODEGA_NAME = "Bodega";
 
@@ -57,7 +57,7 @@ export async function ensureStoreIsVisibleColumn() {
 
 /** Obtiene o crea el local Bodega (solo multistock). Sin multistock → local de operación. */
 export async function ensureBodegaStore({ transaction } = {}) {
-  if (!getAppSettingsSync()?.multiStockEnabled) {
+  if (!isMultiStockEnabled()) {
     return ensureSingleLocalOwnStore({ transaction });
   }
 
@@ -96,7 +96,7 @@ export async function ensureBodegaStore({ transaction } = {}) {
 }
 
 export async function getDefaultStockStoreId({ transaction } = {}) {
-  if (!getAppSettingsSync()?.multiStockEnabled) {
+  if (!isMultiStockEnabled()) {
     const store = await ensureSingleLocalOwnStore({ transaction });
     return store.id;
   }
@@ -114,7 +114,16 @@ export async function ensureSingleLocalOwnStore({ transaction } = {}) {
     order: [["id", "ASC"]],
     transaction,
   });
-  if (propia) return propia;
+  if (propia) {
+    await Store.update(
+      { isActive: false },
+      {
+        where: { locationKind: "bodega", isActive: true },
+        transaction,
+      },
+    );
+    return propia;
+  }
 
   const anyActive = await Store.findOne({
     where: { isActive: true },
@@ -275,7 +284,7 @@ export async function setProductCatalogStock(
   if (!allowNegative && target < 0) {
     throw new Error("La cantidad de stock no puede ser negativa.");
   }
-  const multi = Boolean(getAppSettingsSync()?.multiStockEnabled);
+  const multi = isMultiStockEnabled();
   const run = async (t) => {
     const storeId = await getDefaultStockStoreId({ transaction: t });
     await setStoreStockAbsolute(storeId, productId, target, {
@@ -308,6 +317,10 @@ export async function setProductCatalogStock(
  * mueve product.stock actual a Bodega y deja el total sincronizado.
  */
 export async function migrateGlobalStockToBodega() {
+  if (!isMultiStockEnabled()) {
+    console.log("[storeStock] Multistock OFF: no se migra stock a Bodega.");
+    return { migrated: false, skipped: "single_local" };
+  }
   const existing = await StoreStock.count();
   if (existing > 0) {
     console.log(`[storeStock] Ya hay ${existing} filas en ERP_store_stocks; no se remigra.`);

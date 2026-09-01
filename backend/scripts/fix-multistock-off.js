@@ -13,6 +13,7 @@ import {
   ensureEntitlementTable,
   enforceEntitlementSideEffectsOnBoot,
 } from "../src/services/entitlementService.js";
+import { ensureSingleLocalOwnStore } from "../src/services/storeStockService.js";
 
 try {
   await sequelize.authenticate();
@@ -33,6 +34,8 @@ try {
 
   await enforceEntitlementSideEffectsOnBoot();
   await loadAppSettings();
+  const store = await ensureSingleLocalOwnStore();
+  console.log(`✅ Local de turno: «${store.name}» (#${store.id}) — bodegas desactivadas si había.`);
   console.log("✅ Listo. Reiniciá el backend (pm2 restart).");
   process.exit(0);
 } catch (error) {

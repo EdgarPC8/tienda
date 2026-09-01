@@ -76,6 +76,11 @@ export function getAppSettingsSync() {
   return cache;
 }
 
+/** true solo si la instalación tiene multistock encendido en app_settings (y gestor). */
+export function isMultiStockEnabled() {
+  return Boolean(getAppSettingsSync()?.multiStockEnabled);
+}
+
 export function mediaFolderPrefix() {
   const p = String(cache.mediaFolderPrefix || "sistema").trim() || "sistema";
   return p.replace(/\/+$/, "");

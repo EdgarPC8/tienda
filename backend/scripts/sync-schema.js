@@ -10,11 +10,13 @@ import { sequelize } from "../src/database/connection.js";
 import "../src/database/registerEdDeliModels.js";
 import { syncDatabaseSchema } from "../src/database/syncModels.js";
 import { ensureCustomerNameSchema } from "../src/services/customerNameService.js";
+import { loadAppSettings, getAppSettingsSync } from "../src/services/appSettingsService.js";
 import { ensureEntitlementTable } from "../src/services/entitlementService.js";
 import {
   ensureStoreLocationKindEnum,
   ensureStoreIsVisibleColumn,
   ensureBodegaStore,
+  ensureSingleLocalOwnStore,
   migrateGlobalStockToBodega,
 } from "../src/services/storeStockService.js";
 import { seedDefaultCashRegistersForOwnStores } from "../src/models/CashRegister.js";
@@ -60,8 +62,13 @@ try {
   await ensureAccountIsActiveColumn();
   await ensureEntitlementTable({ alter: true });
   await seedDefaultCashRegistersForOwnStores();
-  await ensureBodegaStore();
-  await migrateGlobalStockToBodega();
+  await loadAppSettings();
+  if (getAppSettingsSync()?.multiStockEnabled) {
+    await ensureBodegaStore();
+    await migrateGlobalStockToBodega();
+  } else {
+    await ensureSingleLocalOwnStore();
+  }
   await runFixExpenseReferenceFk();
   await runFixMultistockOff();
   console.log("✅ Esquema sincronizado:", result.models?.join(", ") || "ok");

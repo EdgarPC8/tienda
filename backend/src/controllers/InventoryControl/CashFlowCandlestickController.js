@@ -12,6 +12,8 @@ import {
   differenceInCalendarDays,
   differenceInCalendarWeeks,
   differenceInCalendarMonths,
+  parseISO,
+  isValid,
 } from "date-fns";
 import { es } from "date-fns/locale";
 import { Op } from "sequelize";
@@ -26,6 +28,12 @@ import {
 } from "../../utils/financeDateUtils.js";
 
 const VALID_GRANULARITY = new Set(["day", "week", "month"]);
+
+function parseDateParam(value) {
+  if (!value) return null;
+  const d = parseISO(String(value).slice(0, 10));
+  return isValid(d) ? d : null;
+}
 
 function round2(n) {
   return Number(Number(n || 0).toFixed(2));
@@ -236,6 +244,8 @@ export const getCashFlowCandles = async (req, res) => {
 
     const limit = Math.min(50, Math.max(5, parseInt(req.query.limit, 10) || 25));
     const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+    const filterStart = parseDateParam(req.query.startDate);
+    const filterEnd = parseDateParam(req.query.endDate);
 
     const [incomeBounds, expenseBounds] = await Promise.all([
       fetchDateBoundsFixed(Income),
@@ -264,8 +274,28 @@ export const getCashFlowCandles = async (req, res) => {
       });
     }
 
-    const firstTs = new Date(Math.min(...candidates.map((d) => d.getTime())));
-    const lastTs = new Date(Math.max(...candidates.map((d) => d.getTime())));
+    let firstTs = new Date(Math.min(...candidates.map((d) => d.getTime())));
+    let lastTs = new Date(Math.max(...candidates.map((d) => d.getTime())));
+
+    if (filterStart) {
+      firstTs = new Date(Math.max(firstTs.getTime(), startOfDay(filterStart).getTime()));
+    }
+    if (filterEnd) {
+      lastTs = new Date(Math.min(lastTs.getTime(), endOfDay(filterEnd).getTime()));
+    }
+
+    if (firstTs > lastTs) {
+      return res.json({
+        granularity,
+        candles: [],
+        openingBalance: 0,
+        totalCandles: 0,
+        hasMore: false,
+        limit,
+        offset,
+        currentBalance,
+      });
+    }
 
     const { buckets: windowBuckets, totalCandles, sliceStart } = buildWindowBuckets(
       granularity,

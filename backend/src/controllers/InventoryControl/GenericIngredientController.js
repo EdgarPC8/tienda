@@ -28,11 +28,56 @@ async function ensurePresentationLinkSchema() {
     );
     if (!Array.isArray(cols) || cols.length === 0) {
       await sequelize.query(
-        "ALTER TABLE `ERP_inventory_products` ADD COLUMN `unitsPerPack` INT NULL AFTER `genericProductId`",
+        "ALTER TABLE `ERP_inventory_products` ADD COLUMN `unitsPerPack` DECIMAL(14,4) NULL AFTER `genericProductId`",
       );
+    } else {
+      const colType = String(cols[0]?.Type || cols[0]?.type || "").toLowerCase();
+      if (colType.includes("int")) {
+        await sequelize.query(
+          "ALTER TABLE `ERP_inventory_products` MODIFY COLUMN `unitsPerPack` DECIMAL(14,4) NULL",
+        );
+      }
     }
   } catch (error) {
     console.warn("ensurePresentationLinkSchema:", error?.message || error);
+  }
+
+  // Unidades de medida para insumos genéricos (peso + volumen).
+  try {
+    const measureSeeds = [
+      { name: "Gramo", abbreviation: "gr", description: "Peso base", factor: 1 },
+      { name: "Kilogramo", abbreviation: "kg", description: "1000 g", factor: 1000 },
+      {
+        name: "Libra",
+        abbreviation: "lb",
+        description: "≈ 453,592 g",
+        factor: 453.592,
+      },
+      {
+        name: "Mililitro",
+        abbreviation: "ml",
+        description: "Volumen base (líquidos)",
+        factor: 1,
+      },
+      {
+        name: "Litro",
+        abbreviation: "l",
+        description: "1000 ml",
+        factor: 1000,
+      },
+    ];
+    for (const seed of measureSeeds) {
+      const existing = await InventoryUnit.findOne({
+        where: { abbreviation: seed.abbreviation },
+      });
+      if (!existing) {
+        await InventoryUnit.create(seed);
+      } else if (!(Number(existing.factor) > 0)) {
+        await existing.update({ factor: seed.factor });
+      }
+    }
+  } catch (error) {
+    console.warn("ensureMeasureUnits:", error?.message || error);
   }
 }
 
@@ -454,6 +499,17 @@ export async function runGenericIngredientsBootstrap() {
 export const getGenericIngredientsWorkbench = async (req, res) => {
   try {
     await ensurePresentationLinkSchema();
+    // Reparar materias primas creadas sin el flag (bug histórico del formulario).
+    await InventoryProduct.update(
+      { isGenericIngredient: true, genericProductId: null },
+      {
+        where: {
+          type: "raw",
+          isGenericIngredient: false,
+          genericProductId: null,
+        },
+      },
+    );
     const generics = await InventoryProduct.findAll({
       where: {
         isGenericIngredient: true,
@@ -785,8 +841,10 @@ export const linkPresentation = async (req, res) => {
     if (target.id === product.id) {
       return res.status(400).json({ message: "Una presentación no puede abrirse sobre sí misma." });
     }
-    if (!Number.isInteger(units) || units < 1) {
-      return res.status(400).json({ message: "Unidades por paca debe ser un número entero mayor o igual a 1." });
+    if (!Number.isFinite(units) || units <= 0) {
+      return res.status(400).json({
+        message: "La cantidad por empaque debe ser un número mayor que 0 (ej. 45360 g, 45.36 kg).",
+      });
     }
     if (target.isGenericIngredient && isAzucarComunGeneric(target) && isAzucarImpalpableProduct(product)) {
       notifyFail("presentation.link_failed", "Azúcar impalpable no se enlaza bajo Azúcar común", {

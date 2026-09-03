@@ -24,6 +24,7 @@ import {
   listProductStoreStocks,
 } from "../../services/storeStockService.js";
 import { getAppSettingsSync } from "../../services/appSettingsService.js";
+import { syncProductIngredientFlags, isGenericStorageAbbr } from "../../utils/productIngredientFlags.js";
 
 const PRODUCT_TYPE_ORDER = literal(
   `CASE \`${InventoryProduct.tableName}\`.\`type\` WHEN 'final' THEN 1 WHEN 'intermediate' THEN 2 ELSE 3 END`,
@@ -126,6 +127,22 @@ function normalizeProductRelationFields(payload) {
   }
 }
 
+/** Insumo genérico: unidad base de peso (g) o volumen (ml/L). */
+async function ensureGenericStoredInGrams(payload, existing = null) {
+  const type = payload.type != null ? String(payload.type) : existing?.type;
+  if (type !== "raw") return;
+  const unitId = "unitId" in payload ? payload.unitId : existing?.unitId;
+  if (unitId) {
+    const u = await InventoryUnit.findByPk(unitId);
+    if (u && isGenericStorageAbbr(u.abbreviation)) return;
+  }
+  const gram = await InventoryUnit.findOne({
+    where: { abbreviation: { [Op.in]: ["gr", "g"] } },
+    order: [["id", "ASC"]],
+  });
+  if (gram) payload.unitId = gram.id;
+}
+
 
 // controllers/ProductController.js (solo createProduct)
 // ✅ Copia y pega tal cual
@@ -176,6 +193,8 @@ export const updateProduct = async (req, res) => {
     applyBarcodeFields(updates);
     normalizeProductNumericFields(updates);
     normalizeProductRelationFields(updates);
+    syncProductIngredientFlags(updates, row);
+    await ensureGenericStoredInGrams(updates, row);
 
     let moved = false;
 
@@ -309,6 +328,8 @@ export const createProduct = async (req, res) => {
     applyBarcodeFields(payload);
     normalizeProductNumericFields(payload, { fillMissing: true });
     normalizeProductRelationFields(payload);
+    syncProductIngredientFlags(payload);
+    await ensureGenericStoredInGrams(payload);
 
     // --- booleanos ---
     if ("isActive" in payload) {

@@ -175,7 +175,7 @@ export const InventoryProduct = sequelize.define('ERP_inventory_products', {
    * Unidades que entrega una presentación al abrirse.
    * El destino puede ser un insumo genérico o un producto final unitario.
    */
-  unitsPerPack: { type: DataTypes.INTEGER, allowNull: true },
+  unitsPerPack: { type: DataTypes.DECIMAL(14, 4), allowNull: true },
   /** Detalle de presentación: "Funda 900ml", "Quintal Pani Plus", etc. */
   purchasePresentation: { type: DataTypes.STRING(200), allowNull: true },
 }, {

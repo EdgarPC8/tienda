@@ -1,3 +1,5 @@
 node_modules
 src/private/sri/*
 !src/private/sri/.gitkeep
+
+scripts/data/goupc-skip.json

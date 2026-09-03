@@ -5,6 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
+    "scripts": "node scripts/menu.js",
     "test": "node --test test/*.test.js",
     "dev": "nodemon index.js",
     "start": "node index.js",
@@ -33,7 +34,15 @@
     "db:fix:raw-to-final:dry": "node scripts/set-raw-products-to-final.js --dry-run",
     "db:fix:pos-customer": "node scripts/fix-pos-consumidor-final.js",
     "db:fix:empleado-role": "node scripts/fix-estudiante-to-empleado-role.js",
-    "demo:toasts": "node scripts/demo-notification-toasts.js"
+    "db:images:clear-missing": "node scripts/clear-missing-product-images.js",
+    "db:images:clear-missing:dry": "node scripts/clear-missing-product-images.js --dry-run",
+    "db:images:enrich-goupc": "node scripts/enrich-product-images-from-goupc.js",
+    "db:images:enrich-goupc:dry": "node scripts/enrich-product-images-from-goupc.js --dry-run",
+    "db:images:report": "node scripts/report-product-barcodes-images.js",
+    "db:images:report:candidates": "node scripts/report-product-barcodes-images.js --list=barcode-no-img",
+    "demo:toasts": "node scripts/demo-notification-toasts.js",
+    "db:images:sync-server": "node scripts/sync-product-images-to-server.js",
+    "db:images:sync-server:dry": "node scripts/sync-product-images-to-server.js --dry-run"
   },
   "keywords": [],
   "author": "",

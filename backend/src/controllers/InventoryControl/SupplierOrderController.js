@@ -13,7 +13,7 @@ import { Expense, SupplierOrderPayment } from "../../models/Finance.js";
 import { getHeaderToken, verifyJWT } from "../../libs/jwt.js";
 import { notifyOk, notifyFail } from "../../services/notifyRaptorSolutions.js";
 import { ensureInventoryBatchesSchema } from "./BatchController.js";
-import { getAppSettingsSync } from "../../services/appSettingsService.js";
+import { isMultiStockEnabled } from "../../services/appSettingsService.js";
 import {
   adjustStoreStock,
   ensureBodegaStore,
@@ -115,10 +115,16 @@ async function ensureSupplierOrderItemLotSchema() {
   supplierItemLotSchemaReady = true;
 }
 
-/** null = stock general (sin multistock). Número = local inventariable. */
+/**
+ * Local donde entra el stock al recibir.
+ * - Sin multistock: siempre el local de operación (Caja lee ERP_store_stocks, no solo product.stock).
+ * - Con multistock: Bodega/sucursal indicada (o default si no es requireExplicit).
+ */
 async function resolveReceiveStoreId(body, { transaction, requireExplicit = false } = {}) {
-  const multi = getAppSettingsSync()?.multiStockEnabled !== false;
-  if (!multi) return null;
+  const multi = isMultiStockEnabled();
+  if (!multi) {
+    return await getDefaultStockStoreId({ transaction });
+  }
 
   let sid =
     body?.storeId != null && body.storeId !== ""
@@ -137,15 +143,17 @@ async function resolveReceiveStoreId(body, { transaction, requireExplicit = fals
   return Number(store.id);
 }
 
+/** Siempre escribe en ERP_store_stocks (+ sincroniza product.stock). */
 async function applyReceiveQty({ product, qty, storeId, transaction }) {
-  if (storeId) {
-    await adjustStoreStock(storeId, product.id, qty, {
-      transaction,
-      allowNegative: qty < 0,
-    });
-    return;
-  }
-  await product.update({ stock: toNum(product.stock) + qty }, { transaction });
+  const sid =
+    storeId != null && Number(storeId) > 0
+      ? Number(storeId)
+      : await getDefaultStockStoreId({ transaction });
+  await adjustStoreStock(sid, product.id, qty, {
+    transaction,
+    allowNegative: qty < 0,
+  });
+  await product.reload({ transaction });
 }
 
 function parseDayOnly(raw) {
@@ -823,7 +831,7 @@ export const markSupplierOrderReceived = async (req, res) => {
     await sequelize.transaction(async (t) => {
       const receiveStoreId = await resolveReceiveStoreId(req.body || {}, {
         transaction: t,
-        requireExplicit: getAppSettingsSync()?.multiStockEnabled !== false,
+        requireExplicit: isMultiStockEnabled(),
       });
       const items = order.ERP_supplier_order_items || [];
 

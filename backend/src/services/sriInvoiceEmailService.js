@@ -282,14 +282,22 @@ export async function maybeSendAuthorizedInvoiceEmail(invoice, opts = {}) {
       ? invoice.payloadJson.items
       : [];
     const demoItems = payloadItems
-      .map((it) => ({
-        name: String(it.description || it.name || "Producto"),
-        qty: Number(it.qty || it.quantity) || 0,
-        total:
+      .map((it) => {
+        const qty = Number(it.qty || it.quantity) || 0;
+        const unitPrice = Number(it.unitPrice || it.price || 0) || 0;
+        const total =
           it.lineBase != null
             ? Number(it.lineBase) + Number(it.lineTax || 0)
-            : Number(it.qty || 0) * Number(it.unitPrice || 0),
-      }))
+            : qty * unitPrice;
+        return {
+          name: String(it.description || it.name || "Producto"),
+          code: String(it.code || it.codigoPrincipal || it.barcode || "").trim(),
+          qty,
+          unitPrice,
+          discount: Number(it.discount || 0) || 0,
+          total,
+        };
+      })
       .filter((it) => it.qty > 0);
 
     await transport.sendMail({
@@ -532,9 +540,9 @@ export async function sendSriTestEmail(toAddress) {
         hasXml: Boolean(sampleXmlPath),
         isTest: true,
         demoItems: [
-          { name: "Pan de sal (demo)", qty: 10, total: 5 },
-          { name: "Café americano (demo)", qty: 2, total: 3 },
-          { name: "Torta porción (demo)", qty: 1, total: 107 },
+          { name: "Pan de sal (demo)", code: "P001", qty: 10, unitPrice: 0.5, discount: 0, total: 5 },
+          { name: "Café americano (demo)", code: "P002", qty: 2, unitPrice: 1.5, discount: 0, total: 3 },
+          { name: "Torta porción (demo)", code: "P003", qty: 1, unitPrice: 107, discount: 0, total: 107 },
         ],
       }),
       attachments,

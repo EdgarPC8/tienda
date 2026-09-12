@@ -90,6 +90,9 @@ async function ensureOccurrencesForTemplates(templates, accountId, t) {
       if (exists) continue;
 
       const dueDate = computeDueDate(template, periodKey);
+      // Defensa: nunca crear cuotas ya vencidas al generar automáticamente.
+      if (daysUntil(dueDate) < 0) continue;
+
       await RecurringExpenseOccurrence.create(
         {
           templateId: template.id,

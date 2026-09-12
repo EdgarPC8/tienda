@@ -77,19 +77,11 @@ function featureIsUnlocked(status) {
 }
 
 /**
- * Side-effects: el gestor BLOQUEA / DESBLOQUEA; no enciende la opción por el cliente.
- * - multi_stock bloqueado → fuerza multiStockEnabled=false
- * - multi_stock desbloqueado → no toca el flag (el cliente lo activa en Configuración)
+ * Side-effects: Store/Tienda no soportan multistock (solo EdDeli vía gestor).
+ * Siempre fuerza multiStockEnabled=false.
  */
-async function applyFeatureSideEffects(features) {
-  if (!Array.isArray(features)) return;
-
-  const multi = features.find((f) => f && f.key === "multi_stock");
-  if (!multi) return;
-
-  if (!featureIsUnlocked(multi.status)) {
-    await updateAppSettings({ multiStockEnabled: false });
-  }
+async function applyFeatureSideEffects(_features) {
+  await updateAppSettings({ multiStockEnabled: false });
 }
 
 export async function getEntitlementResponse() {
@@ -151,16 +143,10 @@ export async function saveEntitlement(rawPayload, source = "gestor_push") {
   return getEntitlementResponse();
 }
 
-/** Al arrancar: reaplica bloqueos del gestor (Store/Tienda = un solo local salvo multi_stock activo). */
+/** Al arrancar: Store/Tienda siempre un solo local. */
 export async function enforceEntitlementSideEffectsOnBoot() {
   try {
-    const row = await AppEntitlement.findByPk(1);
-    const payload = coerceJson(row?.payload) || EMPTY;
-    const features = normalizeFeatures(payload.features);
-    const multi = features.find((f) => f && f.key === "multi_stock");
-    if (!multi || !featureIsUnlocked(multi.status)) {
-      await updateAppSettings({ multiStockEnabled: false });
-    }
+    await updateAppSettings({ multiStockEnabled: false });
   } catch (err) {
     console.error("[entitlement] enforceEntitlementSideEffectsOnBoot:", err?.message || err);
   }

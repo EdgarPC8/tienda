@@ -488,6 +488,120 @@ export async function transferStoreStockBatch({
   return sequelize.transaction(run);
 }
 
+/**
+ * Unifica stock de sucursales y bodegas en un solo local (modo un stock general).
+ * Las vitrinas no participan. Si principalStoreId no se indica, usa el local de operación.
+ */
+export async function unifyStockToSingleLocal({ principalStoreId, transaction } = {}) {
+  const run = async (t) => {
+    let principal = null;
+    if (principalStoreId != null && principalStoreId !== "") {
+      const id = Number(principalStoreId);
+      if (!Number.isFinite(id) || id <= 0) {
+        throw new Error("Local principal inválido.");
+      }
+      principal = await Store.findByPk(id, { transaction: t });
+      if (!principal) throw new Error("Local principal no encontrado.");
+      if (!storeHoldsInventory(principal.locationKind)) {
+        throw new Error(
+          "El local principal debe ser una sucursal o bodega del negocio (no vitrina).",
+        );
+      }
+      if (!principal.isActive) {
+        throw new Error("El local principal debe estar activo.");
+      }
+      if (principal.locationKind !== "propia") {
+        await principal.update(
+          {
+            locationKind: "propia",
+            establishmentCode: principal.establishmentCode || "001",
+            emissionPointCode: principal.emissionPointCode || "001",
+          },
+          { transaction: t },
+        );
+      }
+    } else {
+      principal = await ensureSingleLocalOwnStore({ transaction: t });
+    }
+
+    const inventoryStores = await Store.findAll({
+      where: { locationKind: { [Op.in]: ["propia", "bodega"] } },
+      attributes: ["id"],
+      transaction: t,
+    });
+    const inventoryStoreIds = inventoryStores.map((s) => s.id);
+    if (!inventoryStoreIds.includes(principal.id)) {
+      inventoryStoreIds.push(principal.id);
+    }
+
+    const stockRows = await StoreStock.findAll({
+      where: { storeId: { [Op.in]: inventoryStoreIds } },
+      attributes: ["productId", "storeId", "quantity"],
+      transaction: t,
+    });
+
+    const totalsByProduct = new Map();
+    for (const row of stockRows) {
+      const pid = Number(row.productId);
+      totalsByProduct.set(pid, (totalsByProduct.get(pid) || 0) + numStock(row.quantity));
+    }
+
+    const productsWithGlobal = await InventoryProduct.findAll({
+      where: { stock: { [Op.gt]: 0 } },
+      attributes: ["id", "stock"],
+      transaction: t,
+    });
+    for (const p of productsWithGlobal) {
+      if (!totalsByProduct.has(p.id)) {
+        totalsByProduct.set(p.id, numStock(p.stock));
+      }
+    }
+
+    let productsUnified = 0;
+    for (const [productId, total] of totalsByProduct) {
+      await setStoreStockAbsolute(principal.id, productId, total, {
+        transaction: t,
+        allowNegative: false,
+      });
+      for (const sid of inventoryStoreIds) {
+        if (Number(sid) === Number(principal.id)) continue;
+        await setStoreStockAbsolute(sid, productId, 0, {
+          transaction: t,
+          allowNegative: true,
+        });
+      }
+      await syncProductStockFromStores(productId, { transaction: t });
+      productsUnified += 1;
+    }
+
+    try {
+      const otherStoreIds = inventoryStoreIds.filter((id) => Number(id) !== Number(principal.id));
+      const batchWhere = {
+        status: { [Op.ne]: "depleted" },
+        [Op.or]: [{ storeId: null }],
+      };
+      if (otherStoreIds.length) {
+        batchWhere[Op.or].push({ storeId: { [Op.in]: otherStoreIds } });
+      }
+      await InventoryBatch.update({ storeId: principal.id }, { where: batchWhere, transaction: t });
+    } catch (err) {
+      console.warn("[storeStock] unifyStockToSingleLocal batches:", err?.message || err);
+    }
+
+    console.log(
+      `[storeStock] Stock unificado → «${principal.name}» (#${principal.id}), ${productsUnified} productos.`,
+    );
+    return {
+      principalStoreId: principal.id,
+      principalName: principal.name,
+      productsUnified,
+    };
+  };
+
+  if (transaction) return run(transaction);
+  return sequelize.transaction(run);
+}
+
 /** Mapa productId → qty para un local (útil en POS). */
 export async function mapStoreStockByProduct(storeId) {
   const rows = await StoreStock.findAll({
@@ -497,4 +611,70 @@ export async function mapStoreStockByProduct(storeId) {
   const map = {};
   for (const r of rows) map[r.productId] = numStock(r.quantity);
   return map;
+}
+
+function padSriCode(value, fallback = "001") {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  if (!digits) return fallback;
+  return digits.padStart(3, "0").slice(-3);
+}
+
+/**
+ * Vincula un local a facturación SRI: lo deja como propia/activo y copia
+ * establecimiento + punto de emisión hacia (o desde) la config SRI.
+ */
+export async function linkStoreToSriBilling(storeId, { syncDirection = "store_to_sri" } = {}) {
+  const id = Number(storeId);
+  if (!Number.isFinite(id) || id <= 0) {
+    throw Object.assign(new Error("Local inválido"), { status: 400 });
+  }
+  const store = await Store.findByPk(id);
+  if (!store) {
+    throw Object.assign(new Error("Local no encontrado"), { status: 404 });
+  }
+
+  const { updateSriBillingSettings, loadSriBillingSettings, toPublicSriSettings } =
+    await import("./sriBillingService.js");
+
+  if (syncDirection === "sri_to_store") {
+    const sri = toPublicSriSettings(await loadSriBillingSettings());
+    const est = padSriCode(sri.establishmentCode, "001");
+    const emi = padSriCode(sri.emissionPointCode, "001");
+    await store.update({
+      locationKind: "propia",
+      isActive: true,
+      establishmentCode: est,
+      emissionPointCode: emi,
+    });
+    return {
+      storeId: store.id,
+      storeName: store.name,
+      establishmentCode: est,
+      emissionPointCode: emi,
+      direction: "sri_to_store",
+    };
+  }
+
+  // store_to_sri (default): códigos del local → SRI
+  if (normalizeStoreKind(store.locationKind) !== "propia") {
+    await store.update({ locationKind: "propia", isActive: true });
+  } else if (!store.isActive) {
+    await store.update({ isActive: true });
+  }
+  const est = padSriCode(store.establishmentCode, "001");
+  const emi = padSriCode(store.emissionPointCode, "001");
+  if (store.establishmentCode !== est || store.emissionPointCode !== emi) {
+    await store.update({ establishmentCode: est, emissionPointCode: emi });
+  }
+  await updateSriBillingSettings({
+    establishmentCode: est,
+    emissionPointCode: emi,
+  });
+  return {
+    storeId: store.id,
+    storeName: store.name,
+    establishmentCode: est,
+    emissionPointCode: emi,
+    direction: "store_to_sri",
+  };
 }

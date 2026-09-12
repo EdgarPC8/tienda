@@ -1,0 +1,1 @@
+import{ar as t,bk as a}from"./index-fQYeFid-.js";const n=()=>t.get("/notification-programs",a()),s=o=>t.post("/notification-programs",o,a()),c=(o,i)=>t.put(`/notification-programs/${o}`,i,a()),e=o=>t.delete(`/notification-programs/${o}`,a()),g=o=>t.post(`/notification-programs/${o}/send`,null,a());export{s as c,e as d,n as g,g as s,c as u};

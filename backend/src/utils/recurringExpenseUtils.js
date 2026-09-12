@@ -85,19 +85,37 @@ export function computeDueDate(template, periodKey) {
 }
 
 export function periodKeysToEnsure(template, refDate = nowBusiness()) {
-  const keys = new Set();
-  keys.add(buildPeriodKey(template.frequency, refDate));
+  const keys = [];
+  const cursor = new Date(refDate);
 
-  const next = new Date(refDate);
-  if (template.frequency === "monthly") {
-    next.setMonth(next.getMonth() + 1);
-  } else if (template.frequency === "quarterly") {
-    next.setMonth(next.getMonth() + 3);
-  } else {
-    next.setFullYear(next.getFullYear() + 1);
+  // Si el día de cobro del período actual ya pasó, arrancar desde el siguiente
+  // (ej. hoy 12 y vence el 5 → no generar el 5 de este mes como “vencido”).
+  for (let guard = 0; guard < 24; guard += 1) {
+    const key = buildPeriodKey(template.frequency, cursor);
+    const due = computeDueDate(template, key);
+    if (daysUntil(due, refDate) >= 0) {
+      keys.push(key);
+      const next = new Date(cursor);
+      if (template.frequency === "monthly") {
+        next.setMonth(next.getMonth() + 1);
+      } else if (template.frequency === "quarterly") {
+        next.setMonth(next.getMonth() + 3);
+      } else {
+        next.setFullYear(next.getFullYear() + 1);
+      }
+      keys.push(buildPeriodKey(template.frequency, next));
+      break;
+    }
+    if (template.frequency === "monthly") {
+      cursor.setMonth(cursor.getMonth() + 1);
+    } else if (template.frequency === "quarterly") {
+      cursor.setMonth(cursor.getMonth() + 3);
+    } else {
+      cursor.setFullYear(cursor.getFullYear() + 1);
+    }
   }
-  keys.add(buildPeriodKey(template.frequency, next));
-  return [...keys];
+
+  return [...new Set(keys)];
 }
 
 export function daysUntil(dueDate, refDate = nowBusiness()) {

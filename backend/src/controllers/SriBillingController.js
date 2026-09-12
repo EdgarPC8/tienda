@@ -104,7 +104,20 @@ export async function postLookupPurchaseInvoice(req, res) {
 
 export async function putSriBillingSettings(req, res) {
   try {
-    const row = await updateSriBillingSettings(req.body || {});
+    const body = req.body || {};
+    const row = await updateSriBillingSettings(body);
+    if (body.establishmentCode != null || body.emissionPointCode != null) {
+      try {
+        const { getAppSettingsSync } = await import("../services/appSettingsService.js");
+        const { linkStoreToSriBilling } = await import("../services/storeStockService.js");
+        const pid = getAppSettingsSync()?.principalStoreId;
+        if (pid) {
+          await linkStoreToSriBilling(pid, { syncDirection: "sri_to_store" });
+        }
+      } catch (syncErr) {
+        console.warn("[sri] sync codes → local:", syncErr?.message || syncErr);
+      }
+    }
     notifyOk("sri.settings_updated", "Configuración SRI actualizada", {
       settings: toPublicSriSettings(row),
     });

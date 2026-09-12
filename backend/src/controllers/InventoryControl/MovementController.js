@@ -27,6 +27,10 @@ import {
   getStoreStockQty,
 } from "../../services/storeStockService.js";
 import { consumeBatchesFefo } from "../../services/batchStockService.js";
+import {
+  validatePurchasePriceTotal,
+  assertNotBuyingGenericWhenPacksExist,
+} from "../../utils/purchasePriceGuards.js";
 
 // helpers
 const startOfDay = (d) => {
@@ -1048,6 +1052,31 @@ async function applyMovementRecord(
     : parseFloat(product.stock) || 0;
   const reasonParaDb = normalizeMovementReason(type, reason, stockAntes, qty);
 
+  if (type === "entrada" && reasonParaDb === "ENTRADA_COMPRA") {
+    const genericBlock = await assertNotBuyingGenericWhenPacksExist(
+      InventoryProduct,
+      product,
+      reasonParaDb,
+      transaction,
+    );
+    if (genericBlock) {
+      const err = new Error(genericBlock);
+      err.statusCode = 400;
+      throw err;
+    }
+    const priceErr = validatePurchasePriceTotal({
+      quantity: qty,
+      priceTotal: price,
+      product,
+      reason: reasonParaDb,
+    });
+    if (priceErr) {
+      const err = new Error(priceErr);
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
   if (type === "entrada") {
     await applyMovementEntrada(product, qty, transaction, stockStoreId);
   } else if (type === "produccion") {
@@ -1268,6 +1297,39 @@ export const updateMovement = async (req, res) => {
           stockAntes,
           nextQty
         );
+      }
+
+      const nextPrice =
+        nextType === "ajuste"
+          ? null
+          : price !== undefined
+            ? price == null
+              ? null
+              : Number(price)
+            : movement.price != null
+              ? Number(movement.price)
+              : null;
+
+      if (nextType === "entrada" && nextReason === "ENTRADA_COMPRA") {
+        const product = await InventoryProduct.findByPk(productId, { transaction: t });
+        const genericBlock = await assertNotBuyingGenericWhenPacksExist(
+          InventoryProduct,
+          product,
+          nextReason,
+          t,
+        );
+        if (genericBlock) {
+          return { status: 400, body: { message: genericBlock } };
+        }
+        const priceErr = validatePurchasePriceTotal({
+          quantity: nextQty,
+          priceTotal: nextPrice,
+          product,
+          reason: nextReason,
+        });
+        if (priceErr) {
+          return { status: 400, body: { message: priceErr } };
+        }
       }
 
       if (movementDateInput != null) {

@@ -7,7 +7,7 @@ import {
 } from "../services/appSettingsService.js";
 import { getTimeStatus } from "../services/timeStatusService.js";
 import { notifyOk, notifyFail } from "../services/notifyRaptorSolutions.js";
-import { getFeatureGate } from "../services/entitlementService.js";
+import { unifyStockToSingleLocal, linkStoreToSriBilling } from "../services/storeStockService.js";
 
 const IANA_TIMEZONE_RE = /^[A-Za-z_]+\/[A-Za-z_]+(?:\/[A-Za-z_]+)?$/;
 
@@ -56,6 +56,7 @@ export async function putAppSettings(req, res) {
       "showPublicStoresPropia",
       "showPublicStoresVitrina",
       "multiStockEnabled",
+      "principalStoreId",
       "showProductCostInSelect",
       "moneyDisplayDecimals",
       "moneyRoundingMode",
@@ -99,54 +100,83 @@ export async function putAppSettings(req, res) {
     }
 
     if ("multiStockEnabled" in patch) {
+      // Store/Tienda: un solo local. Multistock solo aplica en EdDeli (gestor).
       const wantOn = asBool(patch.multiStockEnabled, false);
       const currentOn = asBool(getAppSettingsSync()?.multiStockEnabled, false);
-      const isProgrammer = req.user?.loginRol === "Programador";
 
-      if (wantOn && !currentOn) {
-        const gate = await getFeatureGate("multi_stock");
-        if (gate.present) {
-          const ok =
-            gate.status === "active" ||
-            (gate.status === "developer" && isProgrammer);
-          if (!ok) {
-            notifyFail(
-              "app.settings_update_failed",
-              "Multistock no desbloqueado por el gestor",
-              {
-                req,
-                httpStatus: 403,
-                extra: { reason: "multi_stock_locked", status: gate.status },
-              },
-            );
-            return res.status(403).json({
-              message:
-                "Multistock / varios locales aún no está desbloqueado para esta instalación.",
-            });
-          }
-        }
-      }
-
-      if (!wantOn && currentOn && !isProgrammer) {
+      if (wantOn) {
         notifyFail(
           "app.settings_update_failed",
-          "No se puede desactivar multistock una vez activado",
+          "Multistock no disponible en esta instalación",
           {
             req,
             httpStatus: 403,
-            extra: { reason: "multi_stock_irreversible" },
+            extra: { reason: "multi_stock_not_supported" },
           },
         );
         return res.status(403).json({
           message:
-            "Una vez activado el multistock no se puede volver a un solo local. Contactá soporte si necesitás ayuda.",
+            "Esta instalación opera con un solo local. Varios locales (multistock) no está disponible.",
         });
       }
 
-      patch.multiStockEnabled = wantOn;
+      if (!wantOn && currentOn) {
+        const principalRaw = b.principalStoreId;
+        const principalStoreId =
+          principalRaw != null && principalRaw !== ""
+            ? Number(principalRaw)
+            : null;
+        try {
+          const unified = await unifyStockToSingleLocal({
+            principalStoreId:
+              Number.isFinite(principalStoreId) && principalStoreId > 0
+                ? principalStoreId
+                : undefined,
+          });
+          if (unified?.principalStoreId) {
+            patch.principalStoreId = unified.principalStoreId;
+          }
+          notifyOk("app.multistock_unified", "Stock unificado en un solo local", {
+            req,
+            extra: unified,
+          });
+        } catch (err) {
+          console.error("unifyStockToSingleLocal", err);
+          notifyFail("app.settings_update_failed", "No se pudo unificar el stock", {
+            error: err,
+            req,
+            httpStatus: 400,
+            extra: { reason: "multi_stock_unify_failed" },
+          });
+          return res.status(400).json({
+            message: err.message || "No se pudo unificar el stock en un solo local.",
+          });
+        }
+      }
+
+      patch.multiStockEnabled = false;
+    }
+
+    if ("principalStoreId" in b && patch.principalStoreId == null) {
+      const rawId = b.principalStoreId;
+      const sid =
+        rawId != null && rawId !== "" ? Number(rawId) : null;
+      patch.principalStoreId =
+        Number.isFinite(sid) && sid > 0 ? Math.floor(sid) : null;
     }
 
     const data = await updateAppSettings(patch);
+
+    if (patch.principalStoreId) {
+      try {
+        await linkStoreToSriBilling(patch.principalStoreId, {
+          syncDirection: "store_to_sri",
+        });
+      } catch (err) {
+        console.warn("[appSettings] linkStoreToSriBilling:", err?.message || err);
+      }
+    }
+
     notifyOk("app.settings_updated", "Configuración app actualizada", {
       settings: toPublicSettings(data),
     });

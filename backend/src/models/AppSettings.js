@@ -66,6 +66,15 @@ export const AppSettings = sequelize.define(
       allowNull: false,
       defaultValue: false,
     },
+    /**
+     * Local vinculado a facturación SRI (establecimiento / punto de emisión).
+     * En modo un solo local es el local de operación.
+     */
+    principalStoreId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: null,
+    },
     /** En selects de producto: mostrar chip de costo (precio proveedor del catálogo). */
     showProductCostInSelect: {
       type: DataTypes.BOOLEAN,

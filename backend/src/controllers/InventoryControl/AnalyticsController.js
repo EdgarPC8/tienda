@@ -15,13 +15,60 @@ import { buildFinanceDateWhere, buildFinanceDateColumnWhere } from "../../utils/
 export const getExpensesForChart = async (req, res) => {
   try {
     const { startDate, endDate, referenceId, category, insumosOnly } = req.query;
+    const onlyInsumos = insumosOnly === "1" || insumosOnly === "true";
+
+    // Compras: movimientos ENTRADA_COMPRA de cualquier producto
+    // (genéricos, presentaciones/quintales, finales, intermedios, etc.).
+    if (onlyInsumos) {
+      const andClauses = [{ reason: "ENTRADA_COMPRA" }, { type: "entrada" }];
+      const dateClause = buildFinanceDateColumnWhere(startDate, endDate);
+      if (dateClause) andClauses.push(dateClause);
+
+      const rows = await InventoryMovement.findAll({
+        where: { [Op.and]: andClauses },
+        attributes: ["id", "date", "quantity", "price", "productId", "createdBy", "description"],
+        include: [
+          {
+            model: InventoryProduct,
+            attributes: ["id", "name", "type", "isGenericIngredient", "genericProductId"],
+            required: true,
+          },
+        ],
+        order: [["date", "ASC"]],
+      });
+
+      const shaped = rows.map((m) => {
+        const plain = typeof m.toJSON === "function" ? m.toJSON() : m;
+        const product =
+          plain.ERP_inventory_product ||
+          plain.InventoryProduct ||
+          plain.ERP_inventory_products ||
+          null;
+        const lineTotal = Number(plain.price ?? 0);
+        return {
+          id: plain.id,
+          date: plain.date,
+          amount: Number.isFinite(lineTotal) ? lineTotal : 0,
+          concept:
+            plain.description || (product ? `Compra de ${product.name}` : "Compra"),
+          category: "Compras",
+          createdBy: plain.createdBy ?? null,
+          referenceId: plain.productId,
+          referenceType: "inventory_entry",
+          productName: product?.name || `Producto #${plain.productId}`,
+          productType: product?.type ?? null,
+          isGenericIngredient: Boolean(product?.isGenericIngredient),
+          genericProductId: product?.genericProductId ?? null,
+          quantity: Number(plain.quantity ?? 0),
+        };
+      });
+
+      return res.json(shaped);
+    }
 
     const andClauses = [];
     const dateClause = buildFinanceDateColumnWhere(startDate, endDate);
     if (dateClause) andClauses.push(dateClause);
-
-    const onlyInsumos = insumosOnly === "1" || insumosOnly === "true";
-
     if (referenceId) andClauses.push({ referenceId: Number(referenceId) });
     if (category) andClauses.push({ category });
 
@@ -39,25 +86,33 @@ export const getExpensesForChart = async (req, res) => {
         "referenceId",
         "referenceType",
       ],
-      include: [
-        {
-          model: InventoryProduct,
-          attributes: ["name", "type", "isGenericIngredient", "genericProductId"],
-          required: onlyInsumos,
-          ...(onlyInsumos
-            ? {
-                where: {
-                  type: { [Op.in]: ["raw", "intermediate"] },
-                },
-              }
-            : {}),
-        },
-      ],
       order: [["date", "ASC"]],
     });
 
+    const productIds = [
+      ...new Set(
+        expenses
+          .filter(
+            (e) =>
+              e.referenceId != null &&
+              ["inventory_entry", "inventory_product", "product"].includes(
+                String(e.referenceType || ""),
+              ),
+          )
+          .map((e) => Number(e.referenceId)),
+      ),
+    ].filter((id) => Number.isFinite(id) && id > 0);
+
+    const products =
+      productIds.length > 0
+        ? await InventoryProduct.findAll({
+            where: { id: { [Op.in]: productIds } },
+            attributes: ["id", "name", "type", "isGenericIngredient", "genericProductId"],
+          })
+        : [];
+    const productById = new Map(products.map((p) => [p.id, p]));
+
     const shaped = expenses.map((e) => {
-      const product = e.ERP_inventory_product;
       const item = {
         id: e.id,
         date: e.date,
@@ -70,10 +125,15 @@ export const getExpensesForChart = async (req, res) => {
       if (e.referenceId) {
         item.referenceId = e.referenceId;
         item.referenceType = e.referenceType ?? null;
-        item.productName = product?.name || `Producto #${e.referenceId}`;
-        item.productType = product?.type ?? null;
-        item.isGenericIngredient = Boolean(product?.isGenericIngredient);
-        item.genericProductId = product?.genericProductId ?? null;
+        const product = productById.get(Number(e.referenceId));
+        if (product) {
+          item.productName = product.name;
+          item.productType = product.type ?? null;
+          item.isGenericIngredient = Boolean(product.isGenericIngredient);
+          item.genericProductId = product.genericProductId ?? null;
+        } else {
+          item.productName = e.concept || `Ref #${e.referenceId}`;
+        }
       }
       return item;
     });

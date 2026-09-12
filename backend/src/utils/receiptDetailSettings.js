@@ -9,6 +9,9 @@ export const DEFAULT_RECEIPT_DETAIL_SETTINGS = {
   collapseSpaces: true,
   applyToFactura: true,
   applyToNotaVenta: true,
+  showTaxRegime: true,
+  showAccountingRequired: true,
+  showSpecialTaxpayer: true,
   defaultPrintFormat: "a4",
   tableLayouts: {},
 };
@@ -189,6 +192,11 @@ export function normalizeReceiptDetailSettings(raw) {
     applyToFactura: src.applyToFactura !== false && src.applyToFactura !== "false",
     applyToNotaVenta:
       src.applyToNotaVenta !== false && src.applyToNotaVenta !== "false",
+    showTaxRegime: src.showTaxRegime !== false && src.showTaxRegime !== "false",
+    showAccountingRequired:
+      src.showAccountingRequired !== false && src.showAccountingRequired !== "false",
+    showSpecialTaxpayer:
+      src.showSpecialTaxpayer !== false && src.showSpecialTaxpayer !== "false",
     defaultPrintFormat: PRINT_FORMATS.has(String(src.defaultPrintFormat || ""))
       ? String(src.defaultPrintFormat)
       : "a4",

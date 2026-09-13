@@ -1,5 +1,5 @@
 // controllers/ProductController.js
-import { Op, literal } from "sequelize";
+import { Op, literal, fn, col } from "sequelize";
 import fs from "fs";
 import { join } from "path";
 const { __dirname } = fileDirName(import.meta);
@@ -13,6 +13,7 @@ import {
   // HomeProduct,
   // ProductPlacement,
 } from "../../models/Inventory.js";
+import { Order, OrderItem } from "../../models/Orders.js";
 import fileDirName from "../../libs/file-dirname.js";
 import { normalizePackageTiersStrict } from "../../utils/productPricingUtils.js";
 import { toStorageMoney } from "../../utils/moneyPrecision.js";
@@ -678,5 +679,75 @@ export const deleteProduct = async (req, res) => {
       httpStatus: 500,
     });
     res.status(500).json({ message: "Error al eliminar producto", error });
+  }
+};
+
+export const getProductSalesSummary = async (req, res) => {
+  try {
+    const daysRaw = req.query.days;
+    const days =
+      daysRaw === undefined || daysRaw === "" || daysRaw === "all" || Number(daysRaw) === 0
+        ? 0
+        : Math.max(1, Math.min(3650, Number(daysRaw) || 365));
+
+    const include = [];
+    if (days > 0) {
+      const from = new Date();
+      from.setHours(0, 0, 0, 0);
+      from.setDate(from.getDate() - days);
+      include.push({
+        model: Order,
+        as: "ERP_order",
+        attributes: [],
+        required: true,
+        where: { date: { [Op.gte]: from } },
+      });
+    }
+
+    const rows = await OrderItem.findAll({
+      attributes: [
+        "productId",
+        [
+          fn(
+            "SUM",
+            literal(
+              "CASE WHEN COALESCE(`ERP_order_items`.`soldQty`, 0) > 0 THEN `ERP_order_items`.`soldQty` ELSE `ERP_order_items`.`quantity` END",
+            ),
+          ),
+          "soldQty",
+        ],
+        [
+          fn(
+            "SUM",
+            literal(
+              "(CASE WHEN COALESCE(`ERP_order_items`.`soldQty`, 0) > 0 THEN `ERP_order_items`.`soldQty` ELSE `ERP_order_items`.`quantity` END) * COALESCE(`ERP_order_items`.`price`, 0)",
+            ),
+          ),
+          "revenue",
+        ],
+      ],
+      include,
+      where: { productId: { [Op.ne]: null } },
+      group: ["productId"],
+      raw: true,
+    });
+
+    const byProductId = {};
+    for (const row of rows) {
+      const id = Number(row.productId);
+      if (!Number.isFinite(id) || id <= 0) continue;
+      byProductId[id] = {
+        soldQty: Number(row.soldQty || 0),
+        revenue: Number(row.revenue || 0),
+      };
+    }
+
+    return res.json({ days, byProductId });
+  } catch (error) {
+    console.error("getProductSalesSummary:", error);
+    return res.status(500).json({
+      message: "Error al obtener resumen de ventas por producto",
+      error: error.message,
+    });
   }
 };

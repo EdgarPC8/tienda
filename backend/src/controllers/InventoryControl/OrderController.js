@@ -1804,8 +1804,16 @@ export const updateOrder = async (req, res) => {
       );
     }
 
+    const orderWithItems = await Order.findByPk(id, {
+      include: [{ model: OrderItem, as: "ERP_order_items" }],
+    });
+
     notifyOk("order.updated", `Pedido #${id}`, { orderId: Number(id) });
-    return res.json({ message: "Pedido actualizado correctamente", order });
+    return res.json({
+      message: "Pedido actualizado correctamente",
+      order: orderWithItems || order,
+      items: orderWithItems?.ERP_order_items || [],
+    });
   } catch (error) {
     console.error('Error al actualizar pedido:', error);
     notifyFail("order.update_failed", "Error al actualizar pedido", { error, req, httpStatus: 500 });

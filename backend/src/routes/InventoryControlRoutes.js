@@ -10,6 +10,7 @@ import {
   deleteProduct,
   patchProductStock,
   getProductStoreStocks,
+  getProductSalesSummary,
 } from '../controllers/InventoryControl/ProductController.js';
 
 import {
@@ -264,6 +265,7 @@ router.delete('/suppliers/:id', isAuthenticated, deleteSupplier);
 // ----------------------------------
 router.post('/products', isAuthenticated, edDeliUploadSingle, createProduct);            // Crear producto
 router.get('/products', isAuthenticated, getAllProducts);           // Obtener todos los productos
+router.get('/products-sales-summary', isAuthenticated, getProductSalesSummary);
 router.patch('/products/:id/stock', isAuthenticated, requireProgrammer, patchProductStock);
 router.get('/products/:id/store-stocks', isAuthenticated, getProductStoreStocks);
 router.put('/products/:id', isAuthenticated, edDeliUploadSingle, updateProduct);        // Editar producto

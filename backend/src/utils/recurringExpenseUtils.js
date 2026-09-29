@@ -4,7 +4,7 @@ const CATEGORY_EXPENSE = {
   arriendo: "Arriendo",
   servicios: "Servicios públicos",
   permisos: "Permisos y licencias",
-  otros: "Gastos fijos",
+  otros: "Egresos fijos",
 };
 
 export const CATEGORY_LABELS = {

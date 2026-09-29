@@ -303,12 +303,12 @@ export const createExpense = async (req, res) => {
       referenceType,
       createdBy,
     });
-    notifyOk("expense.created", "Gasto creado", { expense });
+    notifyOk("expense.created", "Egreso creado", { expense });
     res.status(201).json(expense);
   } catch (error) {
-    console.error("Error al crear gasto:", error);
-    notifyFail("expense.create_failed", "Error interno al crear gasto", { error, req, httpStatus: 500 });
-    res.status(500).json({ message: "Error interno al crear gasto" });
+    console.error("Error al crear egreso:", error);
+    notifyFail("expense.create_failed", "Error interno al crear egreso", { error, req, httpStatus: 500 });
+    res.status(500).json({ message: "Error interno al crear egreso" });
   }
 };
 
@@ -342,8 +342,8 @@ export const getAllExpenses = async (req, res) => {
     });
     res.json(expenses);
   } catch (error) {
-    console.error("Error al obtener gastos:", error);
-    res.status(500).json({ message: "Error interno al obtener gastos" });
+    console.error("Error al obtener egresos:", error);
+    res.status(500).json({ message: "Error interno al obtener egresos" });
   }
 };
 
@@ -383,8 +383,8 @@ export const updateExpense = async (req, res) => {
     const { date, amount, concept, category, referenceId, referenceType } = req.body;
     const expense = await Expense.findByPk(id);
     if (!expense) {
-      notifyFail("expense.update_failed", `Gasto #${id} no encontrado`, { req, httpStatus: 404 });
-      return res.status(404).json({ message: "Gasto no encontrado" });
+      notifyFail("expense.update_failed", `Egreso #${id} no encontrado`, { req, httpStatus: 404 });
+      return res.status(404).json({ message: "Egreso no encontrado" });
     }
 
     await expense.update({
@@ -395,12 +395,12 @@ export const updateExpense = async (req, res) => {
       referenceId,
       referenceType,
     });
-    notifyOk("expense.updated", `Gasto #${id}`, { expense });
+    notifyOk("expense.updated", `Egreso #${id}`, { expense });
     res.json(expense);
   } catch (error) {
-    console.error("Error al editar gasto:", error);
-    notifyFail("expense.update_failed", `Error al editar gasto #${req.params.id}`, { error, req, httpStatus: 500 });
-    res.status(500).json({ message: "Error interno al editar gasto" });
+    console.error("Error al editar egreso:", error);
+    notifyFail("expense.update_failed", `Error al editar egreso #${req.params.id}`, { error, req, httpStatus: 500 });
+    res.status(500).json({ message: "Error interno al editar egreso" });
   }
 };
 
@@ -430,16 +430,16 @@ export const deleteExpense = async (req, res) => {
     const { id } = req.params;
     const expense = await Expense.findByPk(id);
     if (!expense) {
-      notifyFail("expense.delete_failed", `Gasto #${id} no encontrado`, { req, httpStatus: 404 });
-      return res.status(404).json({ message: "Gasto no encontrado" });
+      notifyFail("expense.delete_failed", `Egreso #${id} no encontrado`, { req, httpStatus: 404 });
+      return res.status(404).json({ message: "Egreso no encontrado" });
     }
 
     await expense.destroy();
-    notifyOk("expense.deleted", `Gasto #${id}`, { expenseId: id });
-    res.json({ message: "Gasto eliminado" });
+    notifyOk("expense.deleted", `Egreso #${id}`, { expenseId: id });
+    res.json({ message: "Egreso eliminado" });
   } catch (error) {
-    console.error("Error al eliminar gasto:", error);
-    notifyFail("expense.delete_failed", `Error al eliminar gasto #${req.params.id}`, { error, req, httpStatus: 500 });
-    res.status(500).json({ message: "Error interno al eliminar gasto" });
+    console.error("Error al eliminar egreso:", error);
+    notifyFail("expense.delete_failed", `Error al eliminar egreso #${req.params.id}`, { error, req, httpStatus: 500 });
+    res.status(500).json({ message: "Error interno al eliminar egreso" });
   }
 };

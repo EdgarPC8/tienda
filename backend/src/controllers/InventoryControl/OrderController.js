@@ -20,6 +20,7 @@ import {
 } from "../../services/storeStockService.js";
 import { getAppSettingsSync } from "../../services/appSettingsService.js";
 import { consumeBatchesFefo } from "../../services/batchStockService.js";
+import { autoOpenPacksToCoverProduct } from "../../services/presentationOpenService.js";
 import {
   ensurePaymentScheduleSchema,
   replaceCustomerInstallments,
@@ -303,8 +304,26 @@ export const posCheckout = async (req, res) => {
             "El turno no tiene local asignado. Cierra y abre turno en una sucursal propia para vender con stock.",
           );
         }
-        const available = await getStoreStockQty(stockStoreId, productId, { transaction: t });
+        const available0 = await getStoreStockQty(stockStoreId, productId, { transaction: t });
+        let available = available0;
         const autoFill = getAppSettingsSync()?.ordersAllowDeliverStockAdjust !== false;
+        if (available < qty) {
+          const deficit = qty - available;
+          try {
+            await autoOpenPacksToCoverProduct({
+              productId,
+              deficitQty: deficit,
+              storeId: stockStoreId,
+              accountId,
+              transaction: t,
+              referenceType: "order",
+              referenceId: order.id,
+            });
+            available = await getStoreStockQty(stockStoreId, productId, { transaction: t });
+          } catch (openErr) {
+            console.warn("posCheckout auto-open:", openErr?.message || openErr);
+          }
+        }
         if (available < qty) {
           if (!autoFill) {
             throw new Error(

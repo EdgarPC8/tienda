@@ -27,7 +27,7 @@ const RESOURCE_LABELS = {
   shifts: "turno",
   finance: "finanzas",
   incomes: "ingreso",
-  expenses: "gasto",
+  expenses: "egreso",
   obligations: "obligación",
   notifications: "notificación",
   "notification-programs": "programa de notificación",

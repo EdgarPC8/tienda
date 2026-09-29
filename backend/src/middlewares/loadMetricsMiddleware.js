@@ -2,14 +2,16 @@ import { loadMetricsEnabled, reportLoadSample } from "../services/loadMetricsRep
 
 const SKIP_PREFIXES = ["/socket.io"];
 const MAX_LATENCIES = 2000;
+/** Ventana de agregación (default 60s). Solo se reporta si hubo tráfico real. */
 const SAMPLE_SECONDS = Math.max(
-  10,
-  Math.min(300, Number(process.env.RAPTOR_LOAD_METRICS_INTERVAL_SECONDS || 10) || 10),
+  30,
+  Math.min(300, Number(process.env.RAPTOR_LOAD_METRICS_INTERVAL_SECONDS || 60) || 60),
 );
 const SAMPLE_MS = SAMPLE_SECONDS * 1000;
 
 const buckets = new Map();
 let flushTimer = null;
+let flushScheduled = null;
 
 const MAX_ERROR_ROWS = 25;
 
@@ -217,6 +219,11 @@ async function flushClosedSamples(forceAll = false) {
   const currentKey = sampleStart().toISOString();
   for (const [key, bucket] of [...buckets.entries()]) {
     if (!forceAll && key === currentKey) continue;
+    // No mandar ni guardar ventanas vacías
+    if (!(bucket.requests > 0)) {
+      buckets.delete(key);
+      continue;
+    }
     await reportLoadSample({
       interval_start: bucket.interval_start,
       requests: bucket.requests,
@@ -233,9 +240,21 @@ async function flushClosedSamples(forceAll = false) {
   }
 }
 
+/** Solo programa flush tras tráfico real (no timer vacío permanente). */
+function scheduleFlushAfterTraffic() {
+  if (flushScheduled) return;
+  flushScheduled = setTimeout(() => {
+    flushScheduled = null;
+    void flushClosedSamples(false);
+  }, Math.min(SAMPLE_MS, 15_000));
+  flushScheduled.unref?.();
+}
+
 function ensureTimer() {
   if (flushTimer) return;
+  // Red de seguridad: solo cierra buckets viejos; no genera filas vacías.
   flushTimer = setInterval(() => {
+    if (buckets.size === 0) return;
     void flushClosedSamples(false);
   }, SAMPLE_MS);
   flushTimer.unref?.();
@@ -294,6 +313,8 @@ export function loadMetricsMiddleware(req, res, next) {
     if (bucket.latencies.length < MAX_LATENCIES) {
       bucket.latencies.push(Date.now() - started);
     }
+    // Tras una petición real: avisar al gestor cuando cierre la ventana
+    scheduleFlushAfterTraffic();
   });
 
   next();

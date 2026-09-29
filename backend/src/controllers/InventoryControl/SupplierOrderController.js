@@ -733,7 +733,7 @@ export const deleteSupplierOrder = async (req, res) => {
     notifyOk("supplier_order.deleted", `Pedido proveedor #${req.params.id}`, {
       supplierOrderId: Number(req.params.id),
     });
-    res.json({ message: "Pedido a proveedor eliminado (gastos/abonos vinculados eliminados si existían)" });
+    res.json({ message: "Pedido a proveedor eliminado (egresos/abonos vinculados eliminados si existían)" });
   } catch (error) {
     console.error("deleteSupplierOrder:", error);
     notifyFail("supplier_order.delete_failed", `Error al eliminar pedido #${req.params.id}`, {
@@ -928,6 +928,7 @@ export const markSupplierOrderReceived = async (req, res) => {
           { inventoryBatchId: batch.id },
           { where: { id: { [Op.in]: g.itemIds } }, transaction: t },
         );
+        // Precio del genérico se confirma en Recetas (alerta / modal), no al recibir.
       }
 
       for (const item of plainItems) {
@@ -958,6 +959,8 @@ export const markSupplierOrderReceived = async (req, res) => {
           },
           { transaction: t },
         );
+
+        // Precio del genérico se confirma en Recetas (alerta / modal), no al recibir.
       }
 
       order.receivedAt = receivedAt;

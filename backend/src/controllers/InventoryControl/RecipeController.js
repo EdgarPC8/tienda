@@ -1,6 +1,11 @@
 import { Op } from "sequelize";
 import { InventoryRecipe, InventoryProduct } from "../../models/Inventory.js";
 import { notifyOk, notifyFail } from "../../services/notifyRaptorSolutions.js";
+import {
+  resolveIngredientUnitCost,
+  collectRecipeIngredientPriceAlerts,
+  applyIngredientPriceAlerts,
+} from "../../services/genericIngredientCostService.js";
 
 const safeDiv = (a, b) => (b > 0 ? a / b : 0);
 
@@ -235,9 +240,13 @@ export const getRecipeCosting = async (req, res) => {
         if (!(await isComposedProduct(raw))) {
           if (isMaterial) {
             const unidadesUsadas = baseQty;
+            const resolved = await resolveIngredientUnitCost(raw);
+            const precioPorUnidad =
+              resolved.unitCost > 0
+                ? resolved.unitCost
+                : safeDiv(Number(raw.price || 0), Number(raw.netWeight || 0));
             const precioNeto = Number(raw.price || 0);
             const unidadesPorEmpaque = Number(raw.netWeight || 0);
-            const precioPorUnidad = safeDiv(precioNeto, unidadesPorEmpaque);
             const valor = precioPorUnidad * unidadesUsadas;
 
             node.cost.subtotalMateriales += valor;
@@ -255,6 +264,7 @@ export const getRecipeCosting = async (req, res) => {
               pesoEnMasa: unidadesUsadas,
               precioUnitBase: precioPorUnidad,
               valor: Number(valor.toFixed(6)),
+              costSource: resolved.source,
             });
 
             node.rows.push({
@@ -268,7 +278,46 @@ export const getRecipeCosting = async (req, res) => {
               cantidadUsada: unidadesUsadas,
               precioUnitBase: precioPorUnidad,
               valor: Number(valor.toFixed(6)),
-              notas: "Material: price/netWeight * unidades",
+              notas: `Material · ${resolved.source || "price/netWeight"}`,
+            });
+          } else if (Number(raw.unitId) === 1 && !isGr) {
+            // Insumo por unidad (ej. huevo): costo desde empaque enlazado o supplierPrice
+            const unidadesUsadas = baseQty;
+            const resolved = await resolveIngredientUnitCost(raw);
+            const precioPorUnidad = resolved.unitCost;
+            const valor = precioPorUnidad * unidadesUsadas;
+
+            node.cost.subtotalInsumos += valor;
+            node.directSubtotal.totalUnidadesMaterial += unidadesUsadas;
+            node.directSubtotal.totalValor += valor;
+
+            node.directItems.push({
+              nombre,
+              tipo: "insumo",
+              unidadBase: "unidad",
+              consumo: unidadesUsadas,
+              precioNeto: precioPorUnidad,
+              pesoNeto: 1,
+              pesoEnMasa: unidadesUsadas,
+              precioUnitBase: precioPorUnidad,
+              valor: Number(valor.toFixed(6)),
+              isQuantityInGrams: false,
+              costSource: resolved.source,
+            });
+
+            node.rows.push({
+              path: [...path, p.name, nombre].join(" > "),
+              productoFinalId: p.id,
+              nombreProductoFinal: p.name,
+              nombreInsumo: nombre,
+              tipo: "insumo",
+              precioNeto: precioPorUnidad,
+              pesoNeto: 1,
+              cantidadUsada: unidadesUsadas,
+              precioUnitBase: precioPorUnidad,
+              valor: Number(valor.toFixed(6)),
+              isQuantityInGrams: false,
+              notas: `Insumo/u · ${resolved.source || "supplierPrice"}`,
             });
           } else {
             let gramosUsados = 0;
@@ -279,9 +328,13 @@ export const getRecipeCosting = async (req, res) => {
               gramosUsados = baseQty * std;
             }
 
+            const resolved = await resolveIngredientUnitCost(raw);
+            const precioPorGramo =
+              resolved.unitCost > 0
+                ? resolved.unitCost
+                : safeDiv(Number(raw.price || 0), Number(raw.netWeight || 0));
             const precioNeto = Number(raw.price || 0);
             const pesoNetoGramos = Number(raw.netWeight || 0);
-            const precioPorGramo = safeDiv(precioNeto, pesoNetoGramos);
             const valor = precioPorGramo * gramosUsados;
 
             node.cost.subtotalInsumos += valor;
@@ -301,6 +354,7 @@ export const getRecipeCosting = async (req, res) => {
               valor: Number(valor.toFixed(6)),
               isQuantityInGrams: isGr,
               standardWeightGrams: Number(raw.standardWeightGrams || 0),
+              costSource: resolved.source,
             });
 
             node.rows.push({
@@ -316,7 +370,9 @@ export const getRecipeCosting = async (req, res) => {
               valor: Number(valor.toFixed(6)),
               isQuantityInGrams: isGr,
               standardWeightGrams: Number(raw.standardWeightGrams || 0),
-              notas: isGr ? "Cantidad en gramos" : "Unidades → gramos (stdWeight)",
+              notas: isGr
+                ? `Cantidad en g/ml · ${resolved.source || "cost"}`
+                : `Unidades → g · ${resolved.source || "cost"}`,
             });
           }
           continue;
@@ -531,11 +587,78 @@ export const getRecipeCosting = async (req, res) => {
         "Extras = % de INSUMOS; Mano de obra = % de (INSUMOS + EXTRAS). Materiales no entran en esa base. Cant. lote en 0 = automático (1 u. o suma de insumos en gramos).",
     };
 
-    return res.json({ tree, rows, summary });
+    let ingredientPriceAlerts = [];
+    let ingredientPriceComparisons = [];
+    try {
+      const priceInfo =
+        await collectRecipeIngredientPriceAlerts(productFinalId);
+      ingredientPriceAlerts = priceInfo.alerts || [];
+      ingredientPriceComparisons = priceInfo.comparisons || [];
+    } catch (alertErr) {
+      console.warn("ingredientPriceAlerts:", alertErr?.message || alertErr);
+    }
+
+    return res.json({
+      tree,
+      rows,
+      summary,
+      ingredientPriceAlerts,
+      ingredientPriceComparisons,
+    });
   } catch (error) {
     console.error("getRecipeCosting error:", error);
     return res.status(500).json({
       message: "Error al calcular costeo en árbol",
+      detail: String(error?.message || error),
+    });
+  }
+};
+
+/** Alertas de precio: genérico desactualizado vs última compra de empaque. */
+export const getIngredientPriceAlerts = async (req, res) => {
+  try {
+    const productFinalId = Number(req.params.productFinalId);
+    if (!Number.isFinite(productFinalId) || productFinalId <= 0) {
+      return res.status(400).json({ message: "productFinalId inválido" });
+    }
+    const result = await collectRecipeIngredientPriceAlerts(productFinalId);
+    return res.json(result);
+  } catch (error) {
+    console.error("getIngredientPriceAlerts error:", error);
+    return res.status(500).json({
+      message: "Error al obtener alertas de precio",
+      detail: String(error?.message || error),
+    });
+  }
+};
+
+/** Aplica actualización de supplierPrice en genéricos seleccionados. */
+export const applyIngredientPriceAlertsController = async (req, res) => {
+  try {
+    const genericIds = Array.isArray(req.body?.genericIds)
+      ? req.body.genericIds
+      : [];
+    if (!genericIds.length) {
+      return res.status(400).json({ message: "genericIds requerido" });
+    }
+    const applied = await applyIngredientPriceAlerts(genericIds);
+    notifyOk(
+      "recipe.ingredient_prices_updated",
+      `Precios actualizados: ${applied.length}`,
+      { count: applied.length, ids: applied.map((a) => a.genericId) },
+    );
+    return res.json({
+      message: `${applied.length} insumo(s) actualizado(s)`,
+      applied,
+    });
+  } catch (error) {
+    notifyFail("recipe.ingredient_prices_failed", "Error al actualizar precios", {
+      error,
+      req,
+      httpStatus: 500,
+    });
+    return res.status(500).json({
+      message: "Error al actualizar precios de insumos",
       detail: String(error?.message || error),
     });
   }

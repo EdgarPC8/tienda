@@ -29,6 +29,8 @@ import {
   updateRecipe,
   deleteRecipe,
   getRecipeCosting,
+  getIngredientPriceAlerts,
+  applyIngredientPriceAlertsController,
 } from '../controllers/InventoryControl/RecipeController.js';
 
 // Category Controllers
@@ -306,9 +308,13 @@ router.post("/registerProductionFinalFromPayload", isAuthenticated,registerProdu
 // ----------------------------------
 
 
+// Costeo y alertas de precio (antes de :productFinalId)
+router.get('/recipes/getRecipeCosting/:productFinalId', isAuthenticated, getRecipeCosting);
+router.get('/recipes/ingredient-price-alerts/:productFinalId', isAuthenticated, getIngredientPriceAlerts);
+router.post('/recipes/ingredient-price-alerts/apply', isAuthenticated, applyIngredientPriceAlertsController);
+
 // Obtener receta de un producto final
 router.get('/recipes/:productFinalId', isAuthenticated, getRecipe);
-router.get('/recipes/getRecipeCosting/:productFinalId', isAuthenticated, getRecipeCosting);
 
 // Crear receta completa (uno o varios insumos)
 router.post('/recipes', isAuthenticated, createRecipe);

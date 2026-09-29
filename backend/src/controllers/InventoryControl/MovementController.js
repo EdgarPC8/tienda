@@ -28,6 +28,10 @@ import {
 } from "../../services/storeStockService.js";
 import { consumeBatchesFefo } from "../../services/batchStockService.js";
 import {
+  executeOpenPresentation,
+  PRESENTATION_OPEN_REF,
+} from "../../services/presentationOpenService.js";
+import {
   validatePurchasePriceTotal,
   assertNotBuyingGenericWhenPacksExist,
 } from "../../utils/purchasePriceGuards.js";
@@ -787,7 +791,7 @@ async function syncProductStockFromMovements(productId, transaction) {
   return stock;
 }
 
-const PRESENTATION_OPEN_REF = "presentation_open";
+const PRESENTATION_OPEN_REF_LEGACY = "presentation_open";
 
 function gramsToProductStockUnits(product, unit, grams) {
   const g = num(grams);
@@ -802,7 +806,7 @@ function gramsToProductStockUnits(product, unit, grams) {
 
 /**
  * POST /inventory/movements/open-presentation
- * Abre presentación(es) y transfiere stock a su destino (genérico o final), sin precio.
+ * Abre presentación(es) y transfiere stock a su destino (genérico, final o surtido multi).
  */
 export const openPresentationMovement = async (req, res) => {
   try {
@@ -831,136 +835,20 @@ export const openPresentationMovement = async (req, res) => {
     }
 
     const result = await sequelize.transaction(async (t) => {
-      const presentation = await InventoryProduct.findByPk(presentationId, {
-        include: [{ model: InventoryUnit }],
+      const movementDate =
+        movementDateInput != null && movementDateInput !== ""
+          ? resolveMovementDate(movementDateInput, user)
+          : null;
+      return executeOpenPresentation({
+        presentationId,
+        packsToOpen: packs,
+        storeId: storeIdInput,
+        accountId: user.accountId,
+        description,
+        date: movementDate,
         transaction: t,
-        lock: t.LOCK.UPDATE,
+        referenceType: PRESENTATION_OPEN_REF || PRESENTATION_OPEN_REF_LEGACY,
       });
-
-      if (!presentation) {
-        const err = new Error("Presentación no encontrada");
-        err.statusCode = 404;
-        throw err;
-      }
-      if (!presentation.genericProductId) {
-        const err = new Error("Este producto no tiene un destino configurado para apertura.");
-        err.statusCode = 400;
-        throw err;
-      }
-      if (presentation.isGenericIngredient) {
-        const err = new Error("Un insumo genérico no se abre como presentación.");
-        err.statusCode = 400;
-        throw err;
-      }
-
-      const target = await InventoryProduct.findByPk(presentation.genericProductId, {
-        include: [{ model: InventoryUnit }],
-        transaction: t,
-        lock: t.LOCK.UPDATE,
-      });
-
-      if (
-        !target ||
-        (target.type !== "final" && !(target.isGenericIngredient && target.type === "raw"))
-      ) {
-        const err = new Error("El destino configurado para apertura no es válido.");
-        err.statusCode = 400;
-        throw err;
-      }
-
-      const stockStoreId =
-        storeIdInput != null && storeIdInput !== ""
-          ? Number(storeIdInput)
-          : await getDefaultStockStoreId({ transaction: t });
-      const presStock = await getStoreStockQty(stockStoreId, presentation.id, { transaction: t });
-      if (presStock < packs) {
-        const err = new Error(
-          `Stock insuficiente en el local seleccionado (hay ${presStock}, se pidieron ${packs}).`,
-        );
-        err.statusCode = 400;
-        throw err;
-      }
-
-      const gramsPerPack = productStockToGrams(
-        { ...presentation.toJSON(), stock: 1 },
-        presentation.InventoryUnit,
-      );
-      const totalGrams = round2(gramsPerPack * packs);
-      const configuredUnits = Number(presentation.unitsPerPack);
-      const targetQty = Number.isFinite(configuredUnits) && configuredUnits > 0
-        ? configuredUnits * packs
-        : round2(gramsToProductStockUnits(target, target.InventoryUnit, totalGrams));
-
-      if (targetQty <= 0) {
-        const err = new Error(
-          "No se pudo calcular la cantidad a transferir. Configura Unidades por paca en el enlace.",
-        );
-        err.statusCode = 400;
-        throw err;
-      }
-
-      await applyMovementSalida(presentation, packs, t, stockStoreId);
-      await applyMovementEntrada(target, targetQty, t, stockStoreId);
-
-      const presLabel =
-        presentation.purchasePresentation || presentation.name;
-      const desc =
-        description?.trim() ||
-        `Apertura: ${packs} × ${presLabel} → ${target.name} (+${targetQty} ${target.InventoryUnit?.abbreviation || "u"})`;
-
-      const movementDate = resolveMovementDate(movementDateInput, user);
-      const batchRef = createBatchReferenceId();
-
-      const salida = await createInventoryMovementRow(
-        {
-          productId: presentation.id,
-          type: "salida",
-          reason: "SALIDA_OTRA",
-          quantity: packs,
-          description: desc,
-          price: null,
-          referenceType: PRESENTATION_OPEN_REF,
-          referenceId: batchRef,
-          createdBy: user.accountId,
-          date: movementDate,
-        },
-        t,
-      );
-
-      const entrada = await createInventoryMovementRow(
-        {
-          productId: target.id,
-          type: "entrada",
-          reason: "ENTRADA_OTRA",
-          quantity: targetQty,
-          description: desc,
-          price: null,
-          referenceType: PRESENTATION_OPEN_REF,
-          referenceId: batchRef,
-          createdBy: user.accountId,
-          date: movementDate,
-        },
-        t,
-      );
-
-      return {
-        presentation: {
-          id: presentation.id,
-          name: presentation.name,
-          stockAfter: round2(num(presentation.stock)),
-        },
-        target: {
-          id: target.id,
-          name: target.name,
-          type: target.isGenericIngredient ? "generic" : "final",
-          stockAfter: round2(num(target.stock)),
-          addedGrams: totalGrams,
-          addedInUnit: targetQty,
-          unitAbbrev: target.InventoryUnit?.abbreviation ?? "—",
-        },
-        packsOpened: packs,
-        movementIds: [salida.id, entrada.id],
-      };
     });
 
     notifyOk("movement.presentation_opened", "Presentación abierta", {
@@ -1115,6 +1003,10 @@ async function applyMovementRecord(
     },
     transaction,
   );
+
+  if (type === "entrada" && reasonParaDb === "ENTRADA_COMPRA" && priceParaDb != null) {
+    // Ya no se actualiza el genérico aquí: en Recetas el usuario confirma el nuevo costo.
+  }
 
   onInventoryStockChanged(productId).catch((err) => {
     console.warn("onInventoryStockChanged:", err?.message || err);

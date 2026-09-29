@@ -40,3 +40,6 @@ backend/src/img/products/
 *.log
 *.bak
 node_modules/
+
+# graphify
+graphify-out/

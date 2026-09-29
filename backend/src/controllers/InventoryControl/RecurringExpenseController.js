@@ -62,7 +62,7 @@ function mapOccurrenceRow(row) {
   return {
     ...o,
     template: tpl,
-    displayName: tpl?.name || "Gasto recurrente",
+    displayName: tpl?.name || "Egreso recurrente",
     storeName: tpl?.storeName || "General",
     categoryLabel: tpl?.categoryLabel || "",
     amountType: tpl?.amountType,
@@ -310,7 +310,12 @@ export const getRecurringWorkbench = async (req, res) => {
         order: [["isActive", "DESC"], ["name", "ASC"]],
       }),
       RecurringExpenseOccurrence.findAll({
-        where: { dueDate: { [Op.between]: [mStart, mEnd] } },
+        where: {
+          [Op.or]: [
+            { dueDate: { [Op.between]: [mStart, mEnd] } },
+            { status: "paid", paidDate: { [Op.between]: [mStart, mEnd] } },
+          ],
+        },
         include: [
           {
             model: RecurringExpenseTemplate,
@@ -344,7 +349,7 @@ export const getRecurringWorkbench = async (req, res) => {
     });
   } catch (err) {
     console.error("getRecurringWorkbench error:", err);
-    res.status(500).json({ message: "Error al cargar gastos recurrentes" });
+    res.status(500).json({ message: "Error al cargar egresos recurrentes" });
   }
 };
 
@@ -564,15 +569,6 @@ export const payRecurringOccurrence = async (req, res) => {
       });
       return res.status(400).json({ message: "Ya está pagada" });
     }
-    if (occ.status === "skipped") {
-      notifyFail("recurring_occurrence.pay_failed", "Cuota omitida", {
-        req,
-        httpStatus: 400,
-        extra: { occurrenceId: occ.id },
-      });
-      return res.status(400).json({ message: "Cuota omitida" });
-    }
-
     const tpl = occ.template;
     if (!tpl) {
       notifyFail("recurring_occurrence.pay_failed", "Plantilla no encontrada", {
@@ -699,6 +695,91 @@ export const skipRecurringOccurrence = async (req, res) => {
       extra: { occurrenceId: req.params.id },
     });
     res.status(500).json({ message: "Error al omitir cuota" });
+  }
+};
+
+export const deleteRecurringTemplate = async (req, res) => {
+  try {
+    const token = getHeaderToken(req);
+    await verifyJWT(token);
+
+    const template = await RecurringExpenseTemplate.findByPk(req.params.id);
+    if (!template) {
+      notifyFail("recurring_template.delete_failed", `Plantilla #${req.params.id} no encontrada`, {
+        req,
+        httpStatus: 404,
+      });
+      return res.status(404).json({ message: "Plantilla no encontrada" });
+    }
+
+    const paidCount = await RecurringExpenseOccurrence.count({
+      where: { templateId: template.id, status: "paid" },
+    });
+
+    await sequelize.transaction(async (t) => {
+      await RecurringExpenseOccurrence.destroy({
+        where: { templateId: template.id },
+        transaction: t,
+      });
+      await template.destroy({ transaction: t });
+    });
+
+    notifyOk("recurring_template.deleted", `Plantilla recurrente #${req.params.id} eliminada`, {
+      templateId: Number(req.params.id),
+      paidCount,
+    });
+    res.json({
+      message:
+        paidCount > 0
+          ? "Plantilla eliminada. Los egresos ya registrados en finanzas se conservan."
+          : "Plantilla eliminada",
+    });
+  } catch (err) {
+    console.error("deleteRecurringTemplate error:", err);
+    notifyFail("recurring_template.delete_failed", `Error al eliminar plantilla #${req.params.id}`, {
+      error: err,
+      req,
+      httpStatus: 500,
+    });
+    res.status(500).json({ message: "Error al eliminar plantilla" });
+  }
+};
+
+export const restoreRecurringOccurrence = async (req, res) => {
+  try {
+    const token = getHeaderToken(req);
+    await verifyJWT(token);
+
+    const occ = await RecurringExpenseOccurrence.findByPk(req.params.id);
+    if (!occ) {
+      notifyFail("recurring_occurrence.restore_failed", `Cuota #${req.params.id} no encontrada`, {
+        req,
+        httpStatus: 404,
+      });
+      return res.status(404).json({ message: "Cuota no encontrada" });
+    }
+    if (occ.status === "paid") {
+      return res.status(400).json({ message: "La cuota ya está pagada" });
+    }
+    if (occ.status !== "skipped") {
+      return res.status(400).json({ message: "La cuota no está omitida" });
+    }
+
+    await occ.update({ status: "pending" });
+
+    notifyOk("recurring_occurrence.restored", `Ocurrencia reactivada #${occ.id}`, {
+      occurrenceId: occ.id,
+    });
+    res.json({ message: "Cuota pendiente de nuevo" });
+  } catch (err) {
+    console.error("restoreRecurringOccurrence error:", err);
+    notifyFail("recurring_occurrence.restore_failed", "Error al reactivar cuota", {
+      error: err,
+      req,
+      httpStatus: 500,
+      extra: { occurrenceId: req.params.id },
+    });
+    res.status(500).json({ message: "Error al reactivar cuota" });
   }
 };
 

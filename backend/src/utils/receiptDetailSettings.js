@@ -12,6 +12,7 @@ export const DEFAULT_RECEIPT_DETAIL_SETTINGS = {
   showTaxRegime: true,
   showAccountingRequired: true,
   showSpecialTaxpayer: true,
+  ignoreProductIva: false,
   defaultPrintFormat: "a4",
   tableLayouts: {},
 };
@@ -36,6 +37,7 @@ const DEFAULT_LAYOUTS = {
     { id: "unitPrice", visible: true, widthPct: 15 },
     { id: "discount", visible: true, widthPct: 8 },
     { id: "subtotal", visible: true, widthPct: 17 },
+    { id: "iva", visible: false, widthPct: 10 },
   ],
   factura_ticket80: [
     { id: "qty", visible: true, widthPct: 12 },
@@ -43,6 +45,7 @@ const DEFAULT_LAYOUTS = {
     { id: "unitPrice", visible: true, widthPct: 18 },
     { id: "discount", visible: true, widthPct: 12 },
     { id: "subtotal", visible: true, widthPct: 18 },
+    { id: "iva", visible: false, widthPct: 10 },
   ],
   factura_ticket55: [
     { id: "qty", visible: true, widthPct: 14 },
@@ -50,6 +53,7 @@ const DEFAULT_LAYOUTS = {
     { id: "unitPrice", visible: true, widthPct: 18 },
     { id: "discount", visible: true, widthPct: 12 },
     { id: "subtotal", visible: true, widthPct: 18 },
+    { id: "iva", visible: false, widthPct: 10 },
   ],
   nota_a4: [
     { id: "code", visible: false, widthPct: 14 },
@@ -58,18 +62,21 @@ const DEFAULT_LAYOUTS = {
     { id: "unitPrice", visible: true, widthPct: 14 },
     { id: "discount", visible: false, widthPct: 10 },
     { id: "total", visible: true, widthPct: 14 },
+    { id: "iva", visible: false, widthPct: 10 },
   ],
   nota_ticket80: [
     { id: "description", visible: true, widthPct: 40 },
     { id: "qty", visible: true, widthPct: 12 },
     { id: "unitPrice", visible: true, widthPct: 24 },
     { id: "total", visible: true, widthPct: 24 },
+    { id: "iva", visible: false, widthPct: 10 },
   ],
   nota_ticket55: [
     { id: "description", visible: true, widthPct: 38 },
     { id: "qty", visible: true, widthPct: 14 },
     { id: "unitPrice", visible: true, widthPct: 24 },
     { id: "total", visible: true, widthPct: 24 },
+    { id: "iva", visible: false, widthPct: 10 },
   ],
 };
 
@@ -197,6 +204,8 @@ export function normalizeReceiptDetailSettings(raw) {
       src.showAccountingRequired !== false && src.showAccountingRequired !== "false",
     showSpecialTaxpayer:
       src.showSpecialTaxpayer !== false && src.showSpecialTaxpayer !== "false",
+    ignoreProductIva:
+      src.ignoreProductIva === true || src.ignoreProductIva === "true",
     defaultPrintFormat: PRINT_FORMATS.has(String(src.defaultPrintFormat || ""))
       ? String(src.defaultPrintFormat)
       : "a4",

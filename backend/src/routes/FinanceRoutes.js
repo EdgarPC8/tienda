@@ -29,9 +29,11 @@ import {
   getRecurringWorkbench,
   createRecurringTemplate,
   updateRecurringTemplate,
+  deleteRecurringTemplate,
   updateRecurringOccurrence,
   payRecurringOccurrence,
   skipRecurringOccurrence,
+  restoreRecurringOccurrence,
   generateRecurringOccurrences,
 } from "../controllers/InventoryControl/RecurringExpenseController.js";
 
@@ -87,9 +89,11 @@ router.patch("/obligations/:id/cancel", ...adminOnly, cancelObligation);
 router.get("/recurring/workbench", ...adminOnly, getRecurringWorkbench);
 router.post("/recurring/templates", ...adminOnly, createRecurringTemplate);
 router.put("/recurring/templates/:id", ...adminOnly, updateRecurringTemplate);
+router.delete("/recurring/templates/:id", ...adminOnly, deleteRecurringTemplate);
 router.post("/recurring/generate", ...adminOnly, generateRecurringOccurrences);
 router.patch("/recurring/occurrences/:id", ...adminOnly, updateRecurringOccurrence);
 router.post("/recurring/occurrences/:id/pay", ...adminOnly, payRecurringOccurrence);
 router.patch("/recurring/occurrences/:id/skip", ...adminOnly, skipRecurringOccurrence);
+router.patch("/recurring/occurrences/:id/restore", ...adminOnly, restoreRecurringOccurrence);
 
 export default router;

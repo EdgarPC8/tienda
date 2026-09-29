@@ -26,6 +26,10 @@ import {
 } from "../../services/storeStockService.js";
 import { getAppSettingsSync } from "../../services/appSettingsService.js";
 import { syncProductIngredientFlags, isGenericStorageAbbr } from "../../utils/productIngredientFlags.js";
+import {
+  ensureProductRoleFlagsSchema,
+  syncProductRoleFlags,
+} from "../../utils/productRoleFlags.js";
 
 const PRODUCT_TYPE_ORDER = literal(
   `CASE \`${InventoryProduct.tableName}\`.\`type\` WHEN 'final' THEN 1 WHEN 'intermediate' THEN 2 ELSE 3 END`,
@@ -178,6 +182,7 @@ const normalize = (p = "") =>
 
 export const updateProduct = async (req, res) => {
   try {
+    await ensureProductRoleFlagsSchema();
     const { id } = req.params;
     const row = await InventoryProduct.findByPk(id);
     if (!row) {
@@ -194,6 +199,7 @@ export const updateProduct = async (req, res) => {
     applyBarcodeFields(updates);
     normalizeProductNumericFields(updates);
     normalizeProductRelationFields(updates);
+    syncProductRoleFlags(updates, row);
     syncProductIngredientFlags(updates, row);
     await ensureGenericStoredInGrams(updates, row);
 
@@ -325,10 +331,12 @@ export const updateProduct = async (req, res) => {
 export const createProduct = async (req, res) => {
   let tempRelPath = null; // ✅ para rollback si falla
   try {
+    await ensureProductRoleFlagsSchema();
     const payload = { ...req.body };
     applyBarcodeFields(payload);
     normalizeProductNumericFields(payload, { fillMissing: true });
     normalizeProductRelationFields(payload);
+    syncProductRoleFlags(payload);
     syncProductIngredientFlags(payload);
     await ensureGenericStoredInGrams(payload);
 
@@ -569,6 +577,7 @@ export const getProductStoreStocks = async (req, res) => {
 // Obtener productos con categoría y unidad (paginado por defecto; ?all=true para lista completa)
 export const getAllProducts = async (req, res) => {
   try {
+    await ensureProductRoleFlagsSchema();
     const pagination = parsePagination(req);
     const include = [
       PRODUCT_CATEGORY_INCLUDE,

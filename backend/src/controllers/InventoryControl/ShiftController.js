@@ -33,7 +33,7 @@ const IN_CATEGORIES = new Set(["entrada", "otro"]);
 const EXPENSE_CATEGORIES = new Set(["gasto_operativo", "compra_mercancia"]);
 
 const CATEGORY_EXPENSE_LABEL = {
-  gasto_operativo: "Gastos operativos",
+  gasto_operativo: "Egresos operativos",
   compra_mercancia: "Compras",
 };
 
@@ -269,7 +269,7 @@ async function registerExpenseForMovement({
       date: toAppDateTime(date) || nowApp(),
       amount,
       concept,
-      category: CATEGORY_EXPENSE_LABEL[category] || "Gastos",
+      category: CATEGORY_EXPENSE_LABEL[category] || "Egresos",
       referenceId: referenceId ?? null,
       referenceType: referenceType ?? "cash_shift_movement",
       status: "paid",

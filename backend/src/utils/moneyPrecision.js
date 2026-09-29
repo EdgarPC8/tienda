@@ -1,7 +1,7 @@
 /** Precisión de dinero: BD hasta 6 decimales; pantalla según config. */
 
 export const MONEY_STORAGE_DECIMALS = 6;
-export const MONEY_INPUT_MAX_DECIMALS = 5;
+export const MONEY_INPUT_MAX_DECIMALS = 6;
 
 const toNum = (v) => {
   const n = Number(v);

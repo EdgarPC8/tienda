@@ -14,6 +14,11 @@ import {
   resolveGramFactor,
 } from "../../utils/genericIngredientUtils.js";
 import { notifyOk, notifyFail } from "../../services/notifyRaptorSolutions.js";
+import {
+  normalizePackContents,
+  legacyFieldsFromPackContents,
+  resolvePackOpenLines,
+} from "../../utils/packContentsUtils.js";
 
 const productInclude = [
   { model: InventoryCategory, attributes: ["id", "name"] },
@@ -37,6 +42,27 @@ async function ensurePresentationLinkSchema() {
           "ALTER TABLE `ERP_inventory_products` MODIFY COLUMN `unitsPerPack` DECIMAL(14,4) NULL",
         );
       }
+    }
+
+    const [packCols] = await sequelize.query(
+      "SHOW COLUMNS FROM `ERP_inventory_products` LIKE 'packContents'",
+    );
+    if (!Array.isArray(packCols) || packCols.length === 0) {
+      await sequelize.query(
+        "ALTER TABLE `ERP_inventory_products` ADD COLUMN `packContents` JSON NULL AFTER `unitsPerPack`",
+      );
+    }
+
+    // Backfill legado → packContents (solo filas sin desglose).
+    const legacy = await InventoryProduct.findAll({
+      where: { genericProductId: { [Op.ne]: null } },
+      attributes: ["id", "genericProductId", "unitsPerPack", "packContents"],
+    });
+    for (const row of legacy) {
+      if (normalizePackContents(row.packContents).length) continue;
+      const lines = resolvePackOpenLines(row);
+      if (!lines.length) continue;
+      await row.update({ packContents: lines });
     }
   } catch (error) {
     console.warn("ensurePresentationLinkSchema:", error?.message || error);
@@ -101,6 +127,7 @@ function shapeProductRow(row) {
     isGenericIngredient: !!row.isGenericIngredient,
     genericProductId: row.genericProductId,
     unitsPerPack: row.unitsPerPack == null ? null : Number(row.unitsPerPack),
+    packContents: resolvePackOpenLines(row),
     stockGrams: round2(stockGrams),
     isCountUnit: isCountUnit(unit),
   };
@@ -692,6 +719,7 @@ export const createGenericIngredient = async (req, res) => {
  */
 export const createPresentation = async (req, res) => {
   try {
+    await ensurePresentationLinkSchema();
     const genericId = Number(req.params.genericId);
     const generic = await InventoryProduct.findByPk(genericId);
     if (!generic?.isGenericIngredient) {
@@ -708,6 +736,7 @@ export const createPresentation = async (req, res) => {
       minStock,
       price,
       existingProductId,
+      unitsPerPack,
     } = req.body;
 
     if (existingProductId) {
@@ -747,6 +776,10 @@ export const createPresentation = async (req, res) => {
 
       await existing.update({
         genericProductId: genericId,
+        unitsPerPack:
+          Number.isInteger(Number(unitsPerPack)) && Number(unitsPerPack) > 0
+            ? Number(unitsPerPack)
+            : existing.unitsPerPack,
         isGenericIngredient: false,
         type: "final",
         name: name?.trim() || existing.name,
@@ -781,6 +814,10 @@ export const createPresentation = async (req, res) => {
       price: Number(price ?? 0),
       isGenericIngredient: false,
       genericProductId: genericId,
+      unitsPerPack:
+        Number.isInteger(Number(unitsPerPack)) && Number(unitsPerPack) > 0
+          ? Number(unitsPerPack)
+          : null,
     });
 
     const full = await InventoryProduct.findByPk(row.id, { include: productInclude });
@@ -805,15 +842,31 @@ export const linkPresentation = async (req, res) => {
   try {
     await ensurePresentationLinkSchema();
     const productId = Number(req.params.productId);
-    const { genericProductId, targetProductId, purchasePresentation, unitsPerPack } = req.body;
-    const targetId = Number(targetProductId ?? genericProductId);
-    const units = Number(unitsPerPack);
+    const {
+      genericProductId,
+      targetProductId,
+      purchasePresentation,
+      unitsPerPack,
+      packContents: packContentsBody,
+    } = req.body;
 
-    const [product, target] = await Promise.all([
-      InventoryProduct.findByPk(productId),
-      InventoryProduct.findByPk(targetId),
-    ]);
+    let lines = normalizePackContents(packContentsBody);
+    if (!lines.length) {
+      const targetId = Number(targetProductId ?? genericProductId);
+      const units = Number(unitsPerPack);
+      if (Number.isFinite(targetId) && targetId > 0 && Number.isFinite(units) && units > 0) {
+        lines = [{ productId: targetId, qty: units }];
+      }
+    }
 
+    if (!lines.length) {
+      return res.status(400).json({
+        message:
+          "Indicá al menos un destino con cantidad (ej. 4 fresa + 4 mora + 4 durazno, o 1 destino × N).",
+      });
+    }
+
+    const product = await InventoryProduct.findByPk(productId);
     if (!product) {
       notifyFail("presentation.link_failed", "Producto no encontrado", { req, httpStatus: 404 });
       return res.status(404).json({ message: "Producto no encontrado." });
@@ -825,7 +878,6 @@ export const linkPresentation = async (req, res) => {
       });
       return res.status(400).json({ message: "No se puede enlazar un insumo genérico como empaque." });
     }
-    // Nuevo modelo: tipo final. Se acepta raw legado ya existente para no romper datos viejos.
     if (product.type !== "final" && product.type !== "raw") {
       notifyFail("presentation.link_failed", "Solo productos tipo final (o raw legado)", {
         req,
@@ -835,34 +887,41 @@ export const linkPresentation = async (req, res) => {
         message: "Enlaza un producto tipo final (ej. Quintal de harina).",
       });
     }
-    if (!target || (target.type !== "final" && !(target.isGenericIngredient && target.type === "raw"))) {
-      return res.status(400).json({ message: "El destino debe ser un insumo genérico o un producto final." });
-    }
-    if (target.id === product.id) {
-      return res.status(400).json({ message: "Una presentación no puede abrirse sobre sí misma." });
-    }
-    if (!Number.isFinite(units) || units <= 0) {
-      return res.status(400).json({
-        message: "La cantidad por empaque debe ser un número mayor que 0 (ej. 45360 g, 45.36 kg).",
-      });
-    }
-    if (target.isGenericIngredient && isAzucarComunGeneric(target) && isAzucarImpalpableProduct(product)) {
-      notifyFail("presentation.link_failed", "Azúcar impalpable no se enlaza bajo Azúcar común", {
-        req,
-        httpStatus: 400,
-      });
-      return res.status(400).json({
-        message: "Azúcar impalpable es un insumo distinto. No se enlaza bajo Azúcar común.",
-      });
+
+    for (const line of lines) {
+      if (Number(line.productId) === Number(product.id)) {
+        return res.status(400).json({ message: "Una presentación no puede abrirse sobre sí misma." });
+      }
+      const target = await InventoryProduct.findByPk(line.productId);
+      if (
+        !target ||
+        (target.type !== "final" && !(target.isGenericIngredient && target.type === "raw"))
+      ) {
+        notifyFail("presentation.link_failed", "Destino de apertura inválido", {
+          req,
+          httpStatus: 400,
+        });
+        return res.status(400).json({
+          message: `El destino #${line.productId} debe ser un insumo genérico o un producto final.`,
+        });
+      }
+      if (target.isGenericIngredient && isAzucarComunGeneric(target) && isAzucarImpalpableProduct(product)) {
+        notifyFail("presentation.link_failed", "Azúcar impalpable no se enlaza bajo Azúcar común", {
+          req,
+          httpStatus: 400,
+        });
+        return res.status(400).json({
+          message: "Azúcar impalpable es un insumo distinto. No se enlaza bajo Azúcar común.",
+        });
+      }
     }
 
+    const legacy = legacyFieldsFromPackContents(lines);
     const patch = {
-      genericProductId: targetId,
-      unitsPerPack: units,
+      ...legacy,
       isGenericIngredient: false,
       purchasePresentation: purchasePresentation ?? product.purchasePresentation,
     };
-    // Si era raw legado, pásalo a final (empaque de compra).
     if (product.type === "raw") patch.type = "final";
 
     await product.update(patch);
@@ -870,8 +929,7 @@ export const linkPresentation = async (req, res) => {
     const full = await InventoryProduct.findByPk(product.id, { include: productInclude });
     notifyOk("presentation.linked", `Presentación #${productId} vinculada`, {
       productId,
-      targetProductId: targetId,
-      unitsPerPack: units,
+      packContents: legacy.packContents,
     });
     res.json(shapeProductRow(full));
   } catch (error) {
@@ -893,7 +951,7 @@ export const unlinkPresentation = async (req, res) => {
       return res.status(404).json({ message: "Producto no encontrado." });
     }
 
-    await product.update({ genericProductId: null, unitsPerPack: null });
+    await product.update({ genericProductId: null, unitsPerPack: null, packContents: null });
     const full = await InventoryProduct.findByPk(product.id, { include: productInclude });
     notifyOk("presentation.unlinked", `Presentación #${req.params.productId} desvinculada`, {
       productId: req.params.productId,

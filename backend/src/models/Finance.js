@@ -452,7 +452,7 @@ export const RecurringExpenseTemplate = sequelize.define("ERP_finance_recurring_
   storeId: {
     type: DataTypes.INTEGER,
     allowNull: true,
-    comment: "Punto de venta / local (null = gasto general)",
+    comment: "Punto de venta / local (null = egreso general)",
   },
 
   name: {
@@ -575,7 +575,7 @@ export const RecurringExpenseOccurrence = sequelize.define("ERP_finance_recurrin
   expenseId: {
     type: DataTypes.INTEGER,
     allowNull: true,
-    comment: "Gasto contable al pagar",
+    comment: "Egreso contable al pagar",
   },
 
   paidDate: {

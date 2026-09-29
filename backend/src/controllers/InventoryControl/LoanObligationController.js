@@ -509,7 +509,7 @@ export const cancelObligation = async (req, res) => {
         if (!deleted) {
           return {
             status: 400,
-            body: { message: "No se encontró el gasto inicial en finanzas para revertir" },
+            body: { message: "No se encontró el egreso inicial en finanzas para revertir" },
           };
         }
       } else if (obligation.initialFinanceType === "income" && obligation.initialFinanceId) {

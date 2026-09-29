@@ -1,6 +1,6 @@
 /**
- * Materia prima (type=raw) = insumo genérico de recetas / destino de empaques.
- * Final e intermedio nunca son genéricos.
+ * Materia prima (type=raw / isRaw) = insumo genérico de recetas / destino de empaques.
+ * Final e intermedio (sin isRaw) nunca son genéricos.
  * Almacenamiento del genérico:
  * - peso: gramos (gr/g)
  * - volumen: mililitros (ml) o litros (l)
@@ -8,17 +8,24 @@
  */
 export function syncProductIngredientFlags(payload, existing = null) {
   const type = payload.type != null ? String(payload.type) : existing?.type;
-  if (type == null) return;
+  const isRaw =
+    payload.isRaw != null
+      ? Boolean(payload.isRaw)
+      : existing?.isRaw != null
+        ? Boolean(existing.isRaw)
+        : type === "raw" || type === "intermediate";
+
+  if (type == null && payload.isRaw == null && existing?.isRaw == null) return;
 
   const linkedRaw =
     "genericProductId" in payload ? payload.genericProductId : existing?.genericProductId;
   const isLinked =
     linkedRaw != null && linkedRaw !== "" && Number.isFinite(Number(linkedRaw)) && Number(linkedRaw) > 0;
 
-  if (type === "raw" && !isLinked) {
+  if (isRaw && !isLinked) {
     payload.isGenericIngredient = true;
     payload.genericProductId = null;
-  } else if (type === "final" || type === "intermediate") {
+  } else if (!isRaw) {
     payload.isGenericIngredient = false;
   }
 }

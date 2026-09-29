@@ -169,6 +169,12 @@ export const InventoryProduct = sequelize.define('ERP_inventory_products', {
   primaryImageUrl: { type: DataTypes.STRING(500), allowNull: true }, // imagen rápida para listado
   /** Insumo genérico de receta (Harina, Aceite…). No es compra por marca. */
   isGenericIngredient: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  /** Disponible como componente de receta (insumo). */
+  isRaw: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  /** Se fabrica / tiene flujo de producción (intermedio o final elaborado). */
+  isRecipe: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+  /** Se vende en POS / pedidos. */
+  isSellable: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
   /** Si no es null, este producto es presentación/marca del insumo genérico indicado. */
   genericProductId: { type: DataTypes.INTEGER, allowNull: true },
   /**
@@ -176,6 +182,11 @@ export const InventoryProduct = sequelize.define('ERP_inventory_products', {
    * El destino puede ser un insumo genérico o un producto final unitario.
    */
   unitsPerPack: { type: DataTypes.DECIMAL(14, 4), allowNull: true },
+  /**
+   * Desglose al abrir empaque: [{ productId, qty }, ...].
+   * Si está vacío, se usa genericProductId + unitsPerPack (legado).
+   */
+  packContents: defineJsonField("packContents"),
   /** Detalle de presentación: "Funda 900ml", "Quintal Pani Plus", etc. */
   purchasePresentation: { type: DataTypes.STRING(200), allowNull: true },
 }, {

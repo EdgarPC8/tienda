@@ -200,7 +200,7 @@ export const getCashFlowMirror = async (req, res) => {
   } catch (error) {
     console.error("getCashFlowMirror:", error);
     return res.status(500).json({
-      message: "Error al obtener flujo de ingresos y gastos",
+      message: "Error al obtener flujo de ingresos y egresos",
       error: error.message,
     });
   }

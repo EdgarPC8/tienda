@@ -142,7 +142,7 @@ export const getExpensesForChart = async (req, res) => {
   } catch (error) {
     console.error("getExpensesForChart error:", error);
     return res.status(500).json({
-      message: "Error al obtener gastos para gráfico",
+      message: "Error al obtener egresos para gráfico",
       error: error.message,
     });
   }
@@ -437,7 +437,7 @@ export const getIncomeExpenseBreakdown = async (req, res) => {
     // --- Plataformas crudas (NO porcentaje)
     const platforms = [
       { label: "Ingresos", value: totalIncome }, // value = monto crudo
-      { label: "Gastos", value: totalExpense },  // value = monto crudo
+      { label: "Egresos", value: totalExpense },  // value = monto crudo
     ];
 
     // --- Payload crudo para que el frontend calcule % según necesite
@@ -501,7 +501,7 @@ export const getIncomeExpenseBreakdown = async (req, res) => {
   } catch (error) {
     console.error("Error en getIncomeExpenseBreakdown:", error);
     return res.status(500).json({
-      message: "Error al obtener desglose de Ingresos/Gastos por categoría",
+      message: "Error al obtener desglose de Ingresos/Egresos por categoría",
       error,
     });
   }

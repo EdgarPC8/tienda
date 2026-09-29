@@ -195,7 +195,6 @@ export const InventoryProduct = sequelize.define('ERP_inventory_products', {
     { fields: ['categoryId'] },
     { fields: ['type'] },
     { fields: ['isActive'] },
-    { unique: true, fields: ['sku'] },
   ],
 });
 

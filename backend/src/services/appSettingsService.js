@@ -56,6 +56,7 @@ export const DEFAULT_APP_SETTINGS = {
   ordersAllowDeliverStockAdjust: true,
   financeAllowAdminCorrections: true,
   suggestOpenPackOnPosShortage: false,
+  productionOpenPackaging: false,
   cajaAllowCreateProductFromSelect: false,
   cajaAllowCreateProductFromScan: false,
   cajaAllowEditProductFromCart: false,
@@ -67,6 +68,7 @@ export const DEFAULT_APP_SETTINGS = {
   notificationsToastExpiry: false,
   notificationsCreditEnabled: true,
   notificationsExpiryEnabled: false,
+  toastPosition: "bottom-right",
   receiptDetailSettings: { ...DEFAULT_RECEIPT_DETAIL_SETTINGS },
   themePalette: normalizeThemePalette(DEFAULT_THEME_PALETTE),
 };
@@ -76,6 +78,20 @@ let cache = { ...DEFAULT_APP_SETTINGS };
 function asPrincipalStoreId(value) {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+}
+
+const TOAST_POSITIONS = new Set([
+  "bottom-right",
+  "top-right",
+  "bottom-left",
+  "top-left",
+  "bottom-center",
+  "top-center",
+]);
+
+function normalizeToastPosition(value) {
+  const v = String(value || "").trim();
+  return TOAST_POSITIONS.has(v) ? v : "bottom-right";
 }
 
 export function getAppSettingsSync() {
@@ -197,6 +213,7 @@ async function ensureAppSettingsSchema() {
     ["ordersAllowDeliverStockAdjust", true],
     ["financeAllowAdminCorrections", true],
     ["suggestOpenPackOnPosShortage", false],
+    ["productionOpenPackaging", false],
     ["cajaAllowCreateProductFromSelect", false],
     ["cajaAllowCreateProductFromScan", false],
     ["cajaAllowEditProductFromCart", false],
@@ -217,6 +234,13 @@ async function ensureAppSettingsSchema() {
         defaultValue: def,
       });
     }
+  }
+  if (!table.toastPosition) {
+    await qi.addColumn("app_settings", "toastPosition", {
+      type: DataTypes.STRING(32),
+      allowNull: false,
+      defaultValue: "bottom-right",
+    });
   }
   if (!table.moneyDisplayDecimals) {
     await qi.addColumn("app_settings", "moneyDisplayDecimals", {
@@ -350,6 +374,7 @@ export async function loadAppSettings() {
     ordersAllowDeliverStockAdjust: asBool(raw.ordersAllowDeliverStockAdjust, true),
     financeAllowAdminCorrections: asBool(raw.financeAllowAdminCorrections, true),
     suggestOpenPackOnPosShortage: asBool(raw.suggestOpenPackOnPosShortage, false),
+    productionOpenPackaging: asBool(raw.productionOpenPackaging, false),
     cajaAllowCreateProductFromSelect: asBool(raw.cajaAllowCreateProductFromSelect, false),
     cajaAllowCreateProductFromScan: asBool(raw.cajaAllowCreateProductFromScan, false),
     cajaAllowEditProductFromCart: asBool(raw.cajaAllowEditProductFromCart, false),
@@ -361,6 +386,7 @@ export async function loadAppSettings() {
     notificationsToastExpiry: asBool(raw.notificationsToastExpiry, false),
     notificationsCreditEnabled: asBool(raw.notificationsCreditEnabled, true),
     notificationsExpiryEnabled: asBool(raw.notificationsExpiryEnabled, false),
+    toastPosition: normalizeToastPosition(raw.toastPosition),
     moneyDisplayDecimals: normalizeMoneyDisplayDecimals(raw.moneyDisplayDecimals, 2),
     moneyRoundingMode: normalizeMoneyRoundingMode(raw.moneyRoundingMode, "up"),
     receiptDetailSettings: normalizeReceiptDetailSettings(raw.receiptDetailSettings),
@@ -403,6 +429,9 @@ export async function updateAppSettings(payload) {
       patch.suggestOpenPackOnPosShortage,
       false,
     );
+  }
+  if ("productionOpenPackaging" in patch) {
+    patch.productionOpenPackaging = asBool(patch.productionOpenPackaging, false);
   }
   if ("cajaAllowCreateProductFromSelect" in patch) {
     patch.cajaAllowCreateProductFromSelect = asBool(
@@ -452,6 +481,9 @@ export async function updateAppSettings(payload) {
   if ("notificationsExpiryEnabled" in patch) {
     patch.notificationsExpiryEnabled = asBool(patch.notificationsExpiryEnabled, false);
   }
+  if ("toastPosition" in patch) {
+    patch.toastPosition = normalizeToastPosition(patch.toastPosition);
+  }
   if ("moneyDisplayDecimals" in patch) {
     patch.moneyDisplayDecimals = normalizeMoneyDisplayDecimals(
       patch.moneyDisplayDecimals,
@@ -497,6 +529,7 @@ export async function updateAppSettings(payload) {
     ordersAllowDeliverStockAdjust: asBool(raw.ordersAllowDeliverStockAdjust, true),
     financeAllowAdminCorrections: asBool(raw.financeAllowAdminCorrections, true),
     suggestOpenPackOnPosShortage: asBool(raw.suggestOpenPackOnPosShortage, false),
+    productionOpenPackaging: asBool(raw.productionOpenPackaging, false),
     cajaAllowCreateProductFromSelect: asBool(raw.cajaAllowCreateProductFromSelect, false),
     cajaAllowCreateProductFromScan: asBool(raw.cajaAllowCreateProductFromScan, false),
     cajaAllowEditProductFromCart: asBool(raw.cajaAllowEditProductFromCart, false),
@@ -508,6 +541,7 @@ export async function updateAppSettings(payload) {
     notificationsToastExpiry: asBool(raw.notificationsToastExpiry, false),
     notificationsCreditEnabled: asBool(raw.notificationsCreditEnabled, true),
     notificationsExpiryEnabled: asBool(raw.notificationsExpiryEnabled, false),
+    toastPosition: normalizeToastPosition(raw.toastPosition),
     moneyDisplayDecimals: normalizeMoneyDisplayDecimals(raw.moneyDisplayDecimals, 2),
     moneyRoundingMode: normalizeMoneyRoundingMode(raw.moneyRoundingMode, "up"),
     receiptDetailSettings: normalizeReceiptDetailSettings(raw.receiptDetailSettings),
@@ -550,6 +584,7 @@ export function toPublicSettings(data = cache) {
     ordersAllowDeliverStockAdjust: asBool(data.ordersAllowDeliverStockAdjust, true),
     financeAllowAdminCorrections: asBool(data.financeAllowAdminCorrections, true),
     suggestOpenPackOnPosShortage: asBool(data.suggestOpenPackOnPosShortage, false),
+    productionOpenPackaging: asBool(data.productionOpenPackaging, false),
     cajaAllowCreateProductFromSelect: asBool(data.cajaAllowCreateProductFromSelect, false),
     cajaAllowCreateProductFromScan: asBool(data.cajaAllowCreateProductFromScan, false),
     cajaAllowEditProductFromCart: asBool(data.cajaAllowEditProductFromCart, false),
@@ -561,6 +596,7 @@ export function toPublicSettings(data = cache) {
     notificationsToastExpiry: asBool(data.notificationsToastExpiry, false),
     notificationsCreditEnabled: asBool(data.notificationsCreditEnabled, true),
     notificationsExpiryEnabled: asBool(data.notificationsExpiryEnabled, false),
+    toastPosition: normalizeToastPosition(data.toastPosition),
     moneyDisplayDecimals: normalizeMoneyDisplayDecimals(data.moneyDisplayDecimals, 2),
     moneyRoundingMode: normalizeMoneyRoundingMode(data.moneyRoundingMode, "up"),
     receiptDetailSettings: normalizeReceiptDetailSettings(data.receiptDetailSettings),

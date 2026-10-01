@@ -27,10 +27,8 @@ async function wouldCreateCycle(productFinalId, productRawId) {
     });
 
     for (const line of lines) {
-      const raw = await InventoryProduct.findByPk(line.productRawId, {
-        attributes: ["id", "type"],
-      });
-      if (raw?.type === "intermediate") stack.push(raw.id);
+      const rawId = Number(line.productRawId);
+      if (Number.isFinite(rawId)) stack.push(rawId);
     }
   }
 
@@ -69,16 +67,11 @@ async function validateRecipeLine({
     attributes: ["id", "type"],
   });
   if (!raw) return "Componente no encontrado";
-  if (raw.type === "final") {
-    const subRecipeCount = await InventoryRecipe.count({
-      where: { productFinalId: productRawId },
-    });
-    if (!subRecipeCount) {
-      return "No se puede usar un producto final como componente";
-    }
+  if (!["raw", "intermediate", "final"].includes(raw.type)) {
+    return "El componente debe ser insumo, intermedio o producto final";
   }
-  if (raw.type === "intermediate" && itemType === "material") {
-    return "Un intermedio no puede registrarse como material";
+  if ((raw.type === "intermediate" || raw.type === "final") && itemType === "material") {
+    return "Un intermedio o producto final no puede registrarse como material";
   }
 
   if (await wouldCreateCycle(productFinalId, productRawId)) {

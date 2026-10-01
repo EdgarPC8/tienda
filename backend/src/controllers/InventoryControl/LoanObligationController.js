@@ -1,5 +1,6 @@
 /**
- * Préstamos y deudas (sin pedido): obligaciones + abonos vía Income/Expense.
+ * Préstamos (sin pedido): obligaciones + plazos + abonos vía Income/Expense.
+ * receivable = préstamo que das; payable = préstamo que recibes.
  */
 import { Op } from "sequelize";
 import { sequelize } from "../../database/connection.js";
@@ -22,12 +23,118 @@ const toNum = (v, def = 0) => {
 const roundMoney = (x) => Number(Number(x || 0).toFixed(2));
 const EPS = 0.0001;
 
-const isoDateOnly = (d) => {
-  if (!d) return new Date().toISOString().slice(0, 10);
-  const dt = new Date(d);
-  if (Number.isNaN(dt.getTime())) return new Date().toISOString().slice(0, 10);
-  return dt.toISOString().slice(0, 10);
+const toDateOnlySafe = (v) => {
+  if (!v) return null;
+  if (v instanceof Date && !Number.isNaN(v.getTime())) {
+    const y = v.getFullYear();
+    const m = String(v.getMonth() + 1).padStart(2, "0");
+    const d = String(v.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  const s = String(v).trim();
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : null;
 };
+
+let scheduleColumnReady = false;
+
+async function ensureObligationScheduleColumn() {
+  if (scheduleColumnReady) return;
+  try {
+    const [found] = await sequelize.query(
+      "SHOW COLUMNS FROM `ERP_finance_obligations` LIKE 'schedule'",
+    );
+    if (!Array.isArray(found) || !found.length) {
+      await sequelize.query(
+        "ALTER TABLE `ERP_finance_obligations` ADD COLUMN `schedule` JSON NULL",
+      );
+    }
+    scheduleColumnReady = true;
+  } catch (err) {
+    const code = err?.parent?.code || err?.original?.code;
+    if (code === "ER_DUP_FIELDNAME") {
+      scheduleColumnReady = true;
+      return;
+    }
+    throw err;
+  }
+}
+
+function parseStoredSchedule(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+/** Reparte lo abonado de la más antigua a la más nueva. */
+function projectInstallments(obligation, paid) {
+  const stored = parseStoredSchedule(obligation.schedule);
+  let rows = stored
+    .map((r, i) => ({
+      sequence: Number(r.sequence) || i + 1,
+      dueDate: toDateOnlySafe(r.dueDate),
+      amount: roundMoney(r.amount),
+    }))
+    .filter((r) => r.dueDate && r.amount > 0);
+
+  if (!rows.length) {
+    const due = toDateOnlySafe(obligation.dueDate) || toDateOnlySafe(obligation.openDate);
+    if (due) {
+      rows = [{ sequence: 1, dueDate: due, amount: roundMoney(obligation.originalAmount) }];
+    }
+  }
+
+  let pool = roundMoney(paid);
+  return rows.map((r) => {
+    const cover = roundMoney(Math.min(r.amount, Math.max(0, pool)));
+    pool = roundMoney(pool - cover);
+    const remainingAmount = roundMoney(Math.max(0, r.amount - cover));
+    return {
+      sequence: r.sequence,
+      dueDate: r.dueDate,
+      amount: r.amount,
+      paidAmount: cover,
+      remainingAmount,
+      isPaid: remainingAmount <= EPS,
+    };
+  });
+}
+
+function normalizeIncomingSchedule(installments, total, fallbackDate) {
+  const fallback = toDateOnlySafe(fallbackDate);
+  if (!Array.isArray(installments) || installments.length === 0) {
+    if (!fallback) return { error: "Indica la fecha del plazo" };
+    return {
+      rows: [{ sequence: 1, dueDate: fallback, amount: total }],
+      lastDue: fallback,
+    };
+  }
+  if (installments.length > 36) return { error: "Máximo 36 plazos" };
+  const rows = [];
+  for (let i = 0; i < installments.length; i += 1) {
+    const due = toDateOnlySafe(installments[i]?.dueDate);
+    const amount = roundMoney(installments[i]?.amount);
+    if (!due || amount <= 0) {
+      return { error: `El plazo ${i + 1} necesita fecha y monto` };
+    }
+    rows.push({ sequence: i + 1, dueDate: due, amount });
+  }
+  const sum = roundMoney(rows.reduce((acc, r) => acc + r.amount, 0));
+  if (Math.abs(sum - total) > 0.02) {
+    return {
+      error: `La suma de plazos ($${sum.toFixed(2)}) no coincide con el monto ($${total.toFixed(2)})`,
+    };
+  }
+  return { rows, lastDue: rows[rows.length - 1].dueDate };
+}
 
 const partyTypeLabel = {
   customer: "Cliente",
@@ -37,8 +144,8 @@ const partyTypeLabel = {
 };
 
 const directionLabel = {
-  receivable: "Por cobrar (prestaste)",
-  payable: "Por pagar (debes)",
+  receivable: "Préstamo que das",
+  payable: "Préstamo que recibes",
 };
 
 async function getObligationFinancials(obligationId, t, excludePaymentId = null) {
@@ -77,11 +184,13 @@ function mapObligationRow(row, fin) {
     remaining,
     isSettled: remaining <= EPS,
     customer: o.customer || null,
+    installments: projectInstallments(o, paid),
   };
 }
 
 /** Resumen para dashboard (misma lógica que workbench, sin filtros). */
 export async function computeObligationsDashboardData() {
+  await ensureObligationScheduleColumn();
   const obligations = await FinancialObligation.findAll({
     include: [
       { model: Customer, as: "customer", attributes: ["id", "name"], required: false },
@@ -128,6 +237,7 @@ export async function computeObligationsDashboardData() {
 
 export const getObligationsWorkbench = async (req, res) => {
   try {
+    await ensureObligationScheduleColumn();
     const { direction, status, q } = req.query;
     const where = {};
     if (direction === "receivable" || direction === "payable") where.direction = direction;
@@ -177,12 +287,13 @@ export const getObligationsWorkbench = async (req, res) => {
     });
   } catch (err) {
     console.error("getObligationsWorkbench error:", err);
-    res.status(500).json({ message: "Error al cargar préstamos y deudas" });
+    res.status(500).json({ message: "Error al cargar préstamos" });
   }
 };
 
 export const getObligationById = async (req, res) => {
   try {
+    await ensureObligationScheduleColumn();
     const obligation = await FinancialObligation.findByPk(req.params.id, {
       include: [
         { model: Customer, as: "customer", attributes: ["id", "name", "phone"], required: false },
@@ -218,6 +329,7 @@ export const createObligation = async (req, res) => {
       openDate,
       dueDate,
       note,
+      installments,
     } = req.body || {};
 
     if (!["receivable", "payable"].includes(direction)) {
@@ -255,8 +367,15 @@ export const createObligation = async (req, res) => {
 
     const conceptText =
       String(concept || "").trim() ||
-      (direction === "receivable" ? "Préstamo otorgado" : "Deuda registrada");
+      (direction === "receivable" ? "Préstamo otorgado" : "Préstamo recibido");
     const dateOnly = toFinanceDateTime(openDate);
+    const schedule = normalizeIncomingSchedule(installments, amt, dueDate || openDate);
+    if (schedule.error) {
+      notifyFail("obligation.create_failed", schedule.error, { req, httpStatus: 400 });
+      return res.status(400).json({ message: schedule.error });
+    }
+
+    await ensureObligationScheduleColumn();
 
     const result = await sequelize.transaction(async (t) => {
       const obligation = await FinancialObligation.create(
@@ -268,7 +387,8 @@ export const createObligation = async (req, res) => {
           concept: conceptText,
           originalAmount: amt,
           openDate: dateOnly,
-          dueDate: dueDate ? toFinanceDateTime(dueDate) : null,
+          dueDate: toFinanceDateTime(schedule.lastDue),
+          schedule: schedule.rows,
           status: "open",
           note: note || null,
           createdBy: user.accountId,
@@ -302,7 +422,7 @@ export const createObligation = async (req, res) => {
           {
             date: dateOnly,
             amount: amt,
-            concept: `Préstamo/deuda de ${counterparty}: ${conceptText}`,
+            concept: `Préstamo recibido de ${counterparty}: ${conceptText}`,
             category: "Préstamo recibido",
             status: "paid",
             referenceType: "obligation_open",
@@ -328,17 +448,18 @@ export const createObligation = async (req, res) => {
     res.status(201).json(result);
   } catch (err) {
     console.error("createObligation error:", err);
-    notifyFail("obligation.create_failed", "Error al registrar préstamo/deuda", {
+    notifyFail("obligation.create_failed", "Error al registrar el préstamo", {
       error: err,
       req,
       httpStatus: 500,
     });
-    res.status(500).json({ message: "Error al registrar préstamo/deuda" });
+    res.status(500).json({ message: "Error al registrar el préstamo" });
   }
 };
 
 export const payObligation = async (req, res) => {
   try {
+    await ensureObligationScheduleColumn();
     const token = getHeaderToken(req);
     const user = await verifyJWT(token);
     const { id } = req.params;
@@ -398,9 +519,9 @@ export const payObligation = async (req, res) => {
             date: paymentDate,
             amount: payAmount,
             concept: isFull
-              ? `Pago total deuda: ${counterparty} — ${obligation.concept}`
-              : `Abono deuda: ${counterparty} — $${payAmount.toFixed(2)} (pend. $${newRemaining.toFixed(2)})`,
-            category: "Pago de deuda",
+              ? `Pago total préstamo: ${counterparty} — ${obligation.concept}`
+              : `Abono préstamo recibido: ${counterparty} — $${payAmount.toFixed(2)} (pend. $${newRemaining.toFixed(2)})`,
+            category: "Pago de préstamo",
             status: "paid",
             referenceType: "obligation_payment",
             referenceId: null,
@@ -482,6 +603,7 @@ export const payObligation = async (req, res) => {
 
 export const cancelObligation = async (req, res) => {
   try {
+    await ensureObligationScheduleColumn();
     const token = getHeaderToken(req);
     await verifyJWT(token);
 

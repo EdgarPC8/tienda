@@ -372,6 +372,12 @@ export const FinancialObligation = sequelize.define("ERP_finance_obligations", {
     allowNull: true,
   },
 
+  /** Cuotas [{ sequence, dueDate, amount }]. El avance se proyecta FIFO sobre los abonos. */
+  schedule: {
+    type: DataTypes.JSON,
+    allowNull: true,
+  },
+
   status: {
     type: DataTypes.ENUM("open", "closed", "cancelled"),
     allowNull: false,

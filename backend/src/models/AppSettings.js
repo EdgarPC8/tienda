@@ -123,6 +123,16 @@ export const AppSettings = sequelize.define(
       allowNull: false,
       defaultValue: false,
     },
+    /**
+     * Producción: permitir abrir un empaque hacia el insumo genérico,
+     * registrar merma y autocompletar. Apagado por defecto.
+     * Solo Administrador y Programador.
+     */
+    productionOpenPackaging: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
     /** Caja: botón + al lado del buscador para crear producto (formulario completo). */
     cajaAllowCreateProductFromSelect: {
       type: DataTypes.BOOLEAN,
@@ -188,6 +198,12 @@ export const AppSettings = sequelize.define(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,
+    },
+    /** bottom-right | top-right | bottom-left | top-left | bottom-center | top-center */
+    toastPosition: {
+      type: DataTypes.STRING(32),
+      allowNull: false,
+      defaultValue: "bottom-right",
     },
     /**
      * Formato del detalle de productos en factura / nota de venta (JSON).

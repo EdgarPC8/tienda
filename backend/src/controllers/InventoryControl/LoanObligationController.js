@@ -476,7 +476,7 @@ export const payObligation = async (req, res) => {
     const result = await sequelize.transaction(async (t) => {
       const fin = await getObligationFinancials(id, t);
       if (!fin) return { status: 404, body: { message: "Obligación no encontrada" } };
-      const { obligation, remaining } = fin;
+      const { obligation, remaining, paid } = fin;
 
       if (obligation.status !== "open") {
         return { status: 400, body: { message: "La obligación no está abierta" } };
@@ -492,6 +492,11 @@ export const payObligation = async (req, res) => {
       const newRemaining = roundMoney(remaining - payAmount);
       const isFull = newRemaining <= EPS;
       const counterparty = obligation.partyName;
+      const nextCuota = projectInstallments(obligation, paid).find((row) => !row.isPaid);
+      const cuotaBit = nextCuota
+        ? `cuota ${nextCuota.sequence} (${nextCuota.dueDate})`
+        : "abono";
+      const pendBit = isFull ? "saldo en cero" : `pend. $${newRemaining.toFixed(2)}`;
 
       let financeType;
       let financeId;
@@ -501,9 +506,7 @@ export const payObligation = async (req, res) => {
           {
             date: paymentDate,
             amount: payAmount,
-            concept: isFull
-              ? `Cobro total préstamo: ${counterparty} — ${obligation.concept}`
-              : `Abono préstamo: ${counterparty} — $${payAmount.toFixed(2)} (pend. $${newRemaining.toFixed(2)})`,
+            concept: `Cobro ${cuotaBit}: ${counterparty} — $${payAmount.toFixed(2)} (${pendBit})`,
             category: "Cobro de préstamo",
             status: "paid",
             referenceType: "obligation_payment",
@@ -520,9 +523,7 @@ export const payObligation = async (req, res) => {
           {
             date: paymentDate,
             amount: payAmount,
-            concept: isFull
-              ? `Pago total préstamo: ${counterparty} — ${obligation.concept}`
-              : `Abono préstamo recibido: ${counterparty} — $${payAmount.toFixed(2)} (pend. $${newRemaining.toFixed(2)})`,
+            concept: `Pago ${cuotaBit}: ${counterparty} — $${payAmount.toFixed(2)} (${pendBit})`,
             category: "Pago de préstamo",
             status: "paid",
             referenceType: "obligation_payment",

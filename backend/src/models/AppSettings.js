@@ -205,6 +205,21 @@ export const AppSettings = sequelize.define(
       allowNull: false,
       defaultValue: "bottom-right",
     },
+    passwordPolicyEnabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    loginAttemptLimitEnabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    maxInstallments: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 200,
+    },
     /**
      * Formato del detalle de productos en factura / nota de venta (JSON).
      * Ej: mayúsculas, código, número de línea, etc.

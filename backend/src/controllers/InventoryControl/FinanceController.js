@@ -264,6 +264,9 @@ export const getFinanceSummary = async (req, res) => {
 export const createIncome = async (req, res) => {
   try {
     const { date, amount, concept, category, referenceId, referenceType } = req.body;
+    if (amount != null && amount !== "" && (!Number.isFinite(Number(amount)) || Number(amount) < 0)) {
+      return res.status(400).json({ message: "El monto no puede ser negativo" });
+    }
 
         const token = getHeaderToken(req);
       const user = await verifyJWT(token); // para createdBy
@@ -290,6 +293,9 @@ export const createIncome = async (req, res) => {
 export const createExpense = async (req, res) => {
   try {
     const { date, amount, concept, category, referenceId, referenceType } = req.body;
+    if (amount != null && amount !== "" && (!Number.isFinite(Number(amount)) || Number(amount) < 0)) {
+      return res.status(400).json({ message: "El monto no puede ser negativo" });
+    }
       const token = getHeaderToken(req);
       const user = await verifyJWT(token); // para createdBy
     const createdBy = user.accountId;
@@ -317,7 +323,7 @@ export const getAllIncomes = async (req, res) => {
   try {
     await stripOrderItemIncomesWhenGroupAlreadyPaid();
     const incomes = await Income.findAll({
-      include: [{ model: Account }],
+      include: [{ model: Account, attributes: { exclude: ["password"] } }],
       order: [
         ["date", "DESC"],
         ["id", "DESC"],
@@ -334,7 +340,7 @@ export const getAllIncomes = async (req, res) => {
 export const getAllExpenses = async (req, res) => {
   try {
     const expenses = await Expense.findAll({
-      include: [{ model: Account }],
+      include: [{ model: Account, attributes: { exclude: ["password"] } }],
       order: [
         ["date", "DESC"],
         ["id", "DESC"],
@@ -353,6 +359,9 @@ export const updateIncome = async (req, res) => {
   try {
     const { id } = req.params;
     const { date, amount, concept, category, referenceId, referenceType } = req.body;
+    if (amount != null && amount !== "" && (!Number.isFinite(Number(amount)) || Number(amount) < 0)) {
+      return res.status(400).json({ message: "El monto no puede ser negativo" });
+    }
     const income = await Income.findByPk(id);
     if (!income) {
       notifyFail("income.update_failed", `Ingreso #${id} no encontrado`, { req, httpStatus: 404 });
@@ -381,6 +390,9 @@ export const updateExpense = async (req, res) => {
   try {
     const { id } = req.params;
     const { date, amount, concept, category, referenceId, referenceType } = req.body;
+    if (amount != null && amount !== "" && (!Number.isFinite(Number(amount)) || Number(amount) < 0)) {
+      return res.status(400).json({ message: "El monto no puede ser negativo" });
+    }
     const expense = await Expense.findByPk(id);
     if (!expense) {
       notifyFail("expense.update_failed", `Egreso #${id} no encontrado`, { req, httpStatus: 404 });

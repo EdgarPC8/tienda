@@ -69,6 +69,9 @@ export const DEFAULT_APP_SETTINGS = {
   notificationsCreditEnabled: true,
   notificationsExpiryEnabled: false,
   toastPosition: "bottom-right",
+  passwordPolicyEnabled: false,
+  loginAttemptLimitEnabled: false,
+  maxInstallments: 200,
   receiptDetailSettings: { ...DEFAULT_RECEIPT_DETAIL_SETTINGS },
   themePalette: normalizeThemePalette(DEFAULT_THEME_PALETTE),
 };
@@ -92,6 +95,12 @@ const TOAST_POSITIONS = new Set([
 function normalizeToastPosition(value) {
   const v = String(value || "").trim();
   return TOAST_POSITIONS.has(v) ? v : "bottom-right";
+}
+
+export function normalizeMaxInstallments(value) {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n) || n < 1) return 200;
+  return Math.min(5000, n);
 }
 
 export function getAppSettingsSync() {
@@ -225,6 +234,8 @@ async function ensureAppSettingsSchema() {
     ["notificationsToastExpiry", false],
     ["notificationsCreditEnabled", true],
     ["notificationsExpiryEnabled", false],
+    ["passwordPolicyEnabled", false],
+    ["loginAttemptLimitEnabled", false],
   ];
   for (const [col, def] of boolCols) {
     if (!table[col]) {
@@ -240,6 +251,13 @@ async function ensureAppSettingsSchema() {
       type: DataTypes.STRING(32),
       allowNull: false,
       defaultValue: "bottom-right",
+    });
+  }
+  if (!table.maxInstallments) {
+    await qi.addColumn("app_settings", "maxInstallments", {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 200,
     });
   }
   if (!table.moneyDisplayDecimals) {
@@ -386,6 +404,9 @@ export async function loadAppSettings() {
     notificationsToastExpiry: asBool(raw.notificationsToastExpiry, false),
     notificationsCreditEnabled: asBool(raw.notificationsCreditEnabled, true),
     notificationsExpiryEnabled: asBool(raw.notificationsExpiryEnabled, false),
+    passwordPolicyEnabled: asBool(raw.passwordPolicyEnabled, false),
+    loginAttemptLimitEnabled: asBool(raw.loginAttemptLimitEnabled, false),
+    maxInstallments: normalizeMaxInstallments(raw.maxInstallments),
     toastPosition: normalizeToastPosition(raw.toastPosition),
     moneyDisplayDecimals: normalizeMoneyDisplayDecimals(raw.moneyDisplayDecimals, 2),
     moneyRoundingMode: normalizeMoneyRoundingMode(raw.moneyRoundingMode, "up"),
@@ -481,6 +502,15 @@ export async function updateAppSettings(payload) {
   if ("notificationsExpiryEnabled" in patch) {
     patch.notificationsExpiryEnabled = asBool(patch.notificationsExpiryEnabled, false);
   }
+  if ("passwordPolicyEnabled" in patch) {
+    patch.passwordPolicyEnabled = asBool(patch.passwordPolicyEnabled, false);
+  }
+  if ("loginAttemptLimitEnabled" in patch) {
+    patch.loginAttemptLimitEnabled = asBool(patch.loginAttemptLimitEnabled, false);
+  }
+  if ("maxInstallments" in patch) {
+    patch.maxInstallments = normalizeMaxInstallments(patch.maxInstallments);
+  }
   if ("toastPosition" in patch) {
     patch.toastPosition = normalizeToastPosition(patch.toastPosition);
   }
@@ -541,6 +571,9 @@ export async function updateAppSettings(payload) {
     notificationsToastExpiry: asBool(raw.notificationsToastExpiry, false),
     notificationsCreditEnabled: asBool(raw.notificationsCreditEnabled, true),
     notificationsExpiryEnabled: asBool(raw.notificationsExpiryEnabled, false),
+    passwordPolicyEnabled: asBool(raw.passwordPolicyEnabled, false),
+    loginAttemptLimitEnabled: asBool(raw.loginAttemptLimitEnabled, false),
+    maxInstallments: normalizeMaxInstallments(raw.maxInstallments),
     toastPosition: normalizeToastPosition(raw.toastPosition),
     moneyDisplayDecimals: normalizeMoneyDisplayDecimals(raw.moneyDisplayDecimals, 2),
     moneyRoundingMode: normalizeMoneyRoundingMode(raw.moneyRoundingMode, "up"),
@@ -596,6 +629,9 @@ export function toPublicSettings(data = cache) {
     notificationsToastExpiry: asBool(data.notificationsToastExpiry, false),
     notificationsCreditEnabled: asBool(data.notificationsCreditEnabled, true),
     notificationsExpiryEnabled: asBool(data.notificationsExpiryEnabled, false),
+    passwordPolicyEnabled: asBool(data.passwordPolicyEnabled, false),
+    loginAttemptLimitEnabled: asBool(data.loginAttemptLimitEnabled, false),
+    maxInstallments: normalizeMaxInstallments(data.maxInstallments),
     toastPosition: normalizeToastPosition(data.toastPosition),
     moneyDisplayDecimals: normalizeMoneyDisplayDecimals(data.moneyDisplayDecimals, 2),
     moneyRoundingMode: normalizeMoneyRoundingMode(data.moneyRoundingMode, "up"),

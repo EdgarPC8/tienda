@@ -4,6 +4,7 @@ import { Roles } from "../models/Roles.js";
 import { Users } from "../models/Users.js";
 import bcrypt from "bcryptjs";
 import { notifyOk, notifyFail } from "../services/notifyRaptorSolutions.js";
+import { passwordPolicyError, temporaryPassword } from "../services/passwordPolicy.js";
 
 /** Quita el rol Programador de un listado de IDs si quien pide no es Programador. */
 async function sanitizeRoleIdsForRequester(roleIds, loginRol) {
@@ -45,6 +46,10 @@ export const addAccount = async (req, res) => {
         extra: { reason: "missing_password" },
       });
       return res.status(400).json({ message: "La contraseña es obligatoria" });
+    }
+    const policyError = passwordPolicyError(newPassword);
+    if (policyError) {
+      return res.status(400).json({ message: policyError });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
@@ -190,6 +195,10 @@ export const updateAccountUser = async (req, res) => {
         });
         return res.status(401).json({ message: "La contraseña anterior es incorrecta" });
       }
+      const policyError = passwordPolicyError(data.newPassword);
+      if (policyError) {
+        return res.status(400).json({ message: policyError });
+      }
 
       const hashed = await bcrypt.hash(data.newPassword, 10);
       cuenta.password = hashed;
@@ -276,8 +285,10 @@ export const getAccounts = async (req, res) => {
         ]
       });
       
+      const plain = data.toJSON();
+      delete plain.password;
       res.json({
-        ...data.toJSON(),
+        ...plain,
         roles: data.roles.map(r => r.id)
       });
       
@@ -366,7 +377,8 @@ export const getAccounts = async (req, res) => {
   
     try {
 
-      const passgenerate = await bcrypt.hash("12345678", 10);
+      const plain = temporaryPassword();
+      const passgenerate = await bcrypt.hash(plain, 10);
 
      await Account.update({
       password:passgenerate,
@@ -380,7 +392,7 @@ export const getAccounts = async (req, res) => {
       notifyOk("account.password_reset", `Reset contraseña cuenta #${idAccount}`, {
         accountId: idAccount,
       });
-      res.json({ message: "Password Reseteda a 12345678 con éxito" });
+      res.json({ message: `Contraseña reiniciada a ${plain}` });
     } catch (error) {
       notifyFail("account.password_reset_failed", `Error al resetear contraseña cuenta #${idAccount}`, {
         error,

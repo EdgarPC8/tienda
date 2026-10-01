@@ -1,4 +1,4 @@
-import { Customer } from "../../models/Orders.js";
+import { Customer, Order } from "../../models/Orders.js";
 import {
   composeCustomerFullName,
   normalizeCustomerPayload,
@@ -42,6 +42,18 @@ export const createCustomer = async (req, res) => {
           extra: { reason: "duplicate_phone" },
         });
         return res.status(409).json({ message: "Ya existe un cliente con ese teléfono" });
+      }
+    }
+    if (payload.email) {
+      const existing = await Customer.findOne({ where: { email: payload.email } });
+      if (existing) {
+        return res.status(409).json({ message: "Ya existe un cliente con ese correo" });
+      }
+    }
+    if (payload.cedula) {
+      const existing = await Customer.findOne({ where: { cedula: payload.cedula } });
+      if (existing) {
+        return res.status(409).json({ message: "Ya existe un cliente con esa cédula o RUC" });
       }
     }
 
@@ -99,14 +111,20 @@ export const updateCustomer = async (req, res) => {
 
 export const deleteCustomer = async (req, res) => {
   try {
-    const deleted = await Customer.destroy({ where: { id: req.params.id } });
-    if (!deleted) {
+    const customer = await Customer.findByPk(req.params.id);
+    if (!customer) {
       notifyFail("customer.delete_failed", `Cliente #${req.params.id} no encontrado`, {
         req,
         httpStatus: 404,
       });
       return res.status(404).json({ message: "Cliente no encontrado" });
     }
+    const orders = await Order.count({ where: { customerId: customer.id } });
+    if (orders > 0) {
+      await customer.update({ isActive: false });
+      return res.json({ message: "El cliente tiene pedidos. Quedó inactivo para no borrar el historial." });
+    }
+    await customer.destroy();
     notifyOk("customer.deleted", `Cliente #${req.params.id}`, { customerId: Number(req.params.id) });
     res.json({ message: "Cliente eliminado correctamente" });
   } catch (error) {

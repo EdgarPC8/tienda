@@ -9,6 +9,7 @@ import { Customer, Order, OrderItem, Supplier, SupplierOrder, SupplierOrderItem 
 import { ItemGroupItem, Payment, SupplierOrderPayment } from "../models/Finance.js";
 import { createAndPushNotification, resolveAdminUserIds } from "./notificationService.js";
 import { getAppTimezone, getZonedParts, nowApp } from "../utils/appDateTime.js";
+import { getAppSettingsSync, normalizeMaxInstallments } from "./appSettingsService.js";
 
 const money2 = (n) => Number(Number(n || 0).toFixed(2));
 const BILLABLE_EPSILON = 0.009;
@@ -119,6 +120,12 @@ function toDateOnly(v) {
 /** Normaliza filas del body. */
 export function normalizeInstallmentInput(rows) {
   if (!Array.isArray(rows)) return [];
+  const maxCuotas = normalizeMaxInstallments(getAppSettingsSync()?.maxInstallments);
+  if (rows.length > maxCuotas) {
+    const err = new Error(`Máximo ${maxCuotas} cuotas`);
+    err.statusCode = 400;
+    throw err;
+  }
   return rows
     .map((r, i) => {
       const dueDate = toDateOnly(r?.dueDate || r?.date);
@@ -147,7 +154,7 @@ export function normalizeInstallmentInput(rows) {
  * count=1 → solo endDate con total.
  */
 export function buildEqualInstallments({ startDate, endDate, count, total }) {
-  const n = Math.max(1, Math.min(36, Math.floor(Number(count) || 1)));
+  const n = Math.max(1, Math.min(normalizeMaxInstallments(getAppSettingsSync()?.maxInstallments), Math.floor(Number(count) || 1)));
   const start = toDateOnly(startDate);
   const end = toDateOnly(endDate) || start;
   const totalAmt = money2(total);

@@ -7,12 +7,22 @@ import { logger } from "../log/LogActivity.js";
 import { License } from "../models/License.js";
 import { calculateExpirationDate } from "../helpers/functions.js";
 import { notifyOk, notifyFail } from "../services/notifyRaptorSolutions.js";
+import {
+  loginBlockedMessage,
+  noteLoginFail,
+  noteLoginOk,
+} from "../services/passwordPolicy.js";
 
 export const login = async (req, res) => {
   let { username, password, selectedRoleId } = req.body;
   // const system = req.headers['user-agent'];
 
   try {
+    const loginKey = `${req.ip || ""}:${String(username || "").toLowerCase()}`;
+    const blocked = loginBlockedMessage(loginKey);
+    if (blocked) {
+      return res.status(429).json({ message: blocked });
+    }
     const account = await Account.findOne({
       where: { username },
       include: [
@@ -29,6 +39,7 @@ export const login = async (req, res) => {
     });
 
     if (!account) {
+      noteLoginFail(loginKey);
       notifyFail("auth.login_failed", "Datos incorrectos", {
         req,
         httpStatus: 400,
@@ -39,6 +50,7 @@ export const login = async (req, res) => {
 
     const isCorrectPassword = await bcrypt.compare(password, account.password);
     if (!isCorrectPassword) {
+      noteLoginFail(loginKey);
       notifyFail("auth.login_failed", "Datos incorrectos", {
         req,
         httpStatus: 400,
@@ -92,6 +104,7 @@ export const login = async (req, res) => {
       loginRol: selectedRole.name,
     };
 
+    noteLoginOk(loginKey);
     const token = await createAccessToken({ payload });
 
     notifyOk("auth.login", "Inicio de sesión", {

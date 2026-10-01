@@ -62,6 +62,7 @@ import {
   errorMiddleware,
   notFoundMiddleware,
 } from "./src/middlewares/errorMiddleware.js";
+import { restrictEmployee } from "./src/middlewares/employeeAccess.js";
 import { PORT, API_PREFIX } from "./src/config/serverEnv.js";
 
 // ✅ __dirname en ES Modules
@@ -86,6 +87,7 @@ const io = new Server(httpServer, {
 // Middleware
 app.use(express.json());
 app.use(loggerMiddleware);
+app.use(restrictEmployee);
 app.use(loadMetricsMiddleware);
 
 // CORS — localhost, LAN 192.168/10.x y dominio institucional (sin IPs fijas)

@@ -37,7 +37,7 @@ export const TaskItem = sequelize.define(
     priority: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     dueDate: { type: DataTypes.DATEONLY, allowNull: true },
     actionType: {
-      type: DataTypes.ENUM("none", "open_box"),
+      type: DataTypes.ENUM("none", "open_box", "produce"),
       allowNull: false,
       defaultValue: "none",
     },

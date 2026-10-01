@@ -24,6 +24,25 @@ const parseActionPayload = (item) => {
   }
 };
 
+let produceActionReady = null;
+async function ensureProduceActionType() {
+  if (produceActionReady) return produceActionReady;
+  produceActionReady = (async () => {
+    const rawName = TaskItem.getTableName();
+    const table = typeof rawName === "string" ? rawName : rawName.tableName;
+    const [cols] = await sequelize.query(`SHOW COLUMNS FROM \`${table}\` LIKE 'actionType'`);
+    const type = String(cols?.[0]?.Type || "");
+    if (type.includes("produce")) return;
+    await sequelize.query(
+      `ALTER TABLE \`${table}\` MODIFY \`actionType\` ENUM('none','open_box','produce') NOT NULL DEFAULT 'none'`,
+    );
+  })().catch((error) => {
+    produceActionReady = null;
+    throw error;
+  });
+  return produceActionReady;
+}
+
 async function openBoxForTaskPayload(payload, t, taskItemId) {
   const boxProductId = Number(payload?.boxProductId);
   const unitProductId = Number(payload?.unitProductId);
@@ -126,6 +145,7 @@ export const createTaskPlan = async (req, res) => {
     });
     return res.status(400).json({ message: "title, startDate y endDate son requeridos." });
   }
+  await ensureProduceActionType();
   const t = await sequelize.transaction();
   try {
     const normalized = normalizePlanItems(items);
@@ -153,6 +173,15 @@ export const createTaskPlan = async (req, res) => {
   }
 };
 
+function normalizeProducePayload(raw, idx) {
+  const productId = Number(raw?.productId);
+  const quantity = Number(raw?.quantity);
+  if (!Number.isInteger(productId) || productId <= 0 || !Number.isInteger(quantity) || quantity <= 0) {
+    throw new Error(`La tarea #${idx + 1} de producción necesita un producto y una cantidad entera mayor que 0.`);
+  }
+  return { productId, quantity };
+}
+
 function normalizePlanItems(items) {
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error("Debes agregar al menos una tarea.");
@@ -163,6 +192,10 @@ function normalizePlanItems(items) {
       throw new Error(`La tarea #${idx + 1} requiere título y usuario asignado.`);
     }
     const payload = row.actionPayload && typeof row.actionPayload === "object" ? row.actionPayload : null;
+    const actionType = row.actionType === "open_box" || row.actionType === "produce" ? row.actionType : "none";
+    let actionPayload = null;
+    if (actionType === "open_box") actionPayload = payload ? JSON.stringify(payload) : null;
+    if (actionType === "produce") actionPayload = JSON.stringify(normalizeProducePayload(payload, idx));
     return {
       title: row.title.trim(),
       description: row.description?.trim() || null,
@@ -170,8 +203,8 @@ function normalizePlanItems(items) {
       status: "pending",
       priority: Number(row.priority || idx || 0),
       dueDate: row.dueDate || null,
-      actionType: row.actionType === "open_box" ? "open_box" : "none",
-      actionPayload: payload ? JSON.stringify(payload) : null,
+      actionType,
+      actionPayload,
     };
   });
 }
@@ -205,6 +238,7 @@ export const updateTaskPlan = async (req, res) => {
     return res.status(400).json({ message: "title, startDate y endDate son requeridos." });
   }
 
+  await ensureProduceActionType();
   const t = await sequelize.transaction();
   try {
     const normalized = normalizePlanItems(items);
@@ -406,6 +440,11 @@ export const updateTaskItemStatus = async (req, res) => {
   const nextStatus = ["pending", "in_progress", "done", "blocked"].includes(String(status))
     ? String(status)
     : item.status;
+  if (item.actionType === "produce" && nextStatus === "done") {
+    return res.status(400).json({
+      message: "Esta tarea se cumple registrando la producción, no solo con el check.",
+    });
+  }
   await item.update({
     status: nextStatus,
     resultNote: resultNote ?? item.resultNote,

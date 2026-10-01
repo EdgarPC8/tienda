@@ -13,6 +13,12 @@ import { Expense, SupplierOrderPayment } from "../../models/Finance.js";
 import { getHeaderToken, verifyJWT } from "../../libs/jwt.js";
 import { notifyOk, notifyFail } from "../../services/notifyRaptorSolutions.js";
 import { ensureInventoryBatchesSchema } from "./BatchController.js";
+
+function parseCalendarDate(value) {
+  const s = String(value || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(`${s}T12:00:00`);
+  return new Date(value);
+}
 import { isMultiStockEnabled } from "../../services/appSettingsService.js";
 import {
   adjustStoreStock,
@@ -360,7 +366,7 @@ export const createSupplierOrder = async (req, res) => {
       const order = await SupplierOrder.create(
         {
           supplierId: Number(supplierId),
-          date: new Date(date),
+          date: parseCalendarDate(date),
           notes: notes || null,
           invoiceNumber: invoiceNumberClean,
           status: "pendiente",
@@ -525,7 +531,7 @@ export const updateSupplierOrder = async (req, res) => {
         await order.update(
           {
             ...(supplierId != null ? { supplierId: Number(supplierId) } : {}),
-            ...(date ? { date: new Date(date) } : {}),
+            ...(date ? { date: parseCalendarDate(date) } : {}),
             ...(notes !== undefined ? { notes: notes || null } : {}),
             ...(invoiceNumber !== undefined
               ? { invoiceNumber: String(invoiceNumber || "").trim().slice(0, 80) || null }
@@ -559,7 +565,7 @@ export const updateSupplierOrder = async (req, res) => {
       await order.update(
         {
           ...(!isReceived && supplierId != null ? { supplierId: Number(supplierId) } : {}),
-          ...(!isReceived && date ? { date: new Date(date) } : {}),
+          ...(!isReceived && date ? { date: parseCalendarDate(date) } : {}),
           ...(!isReceived && notes !== undefined ? { notes: notes || null } : {}),
           ...(invoiceNumber !== undefined
             ? { invoiceNumber: String(invoiceNumber || "").trim().slice(0, 80) || null }
@@ -710,6 +716,12 @@ export const deleteSupplierOrder = async (req, res) => {
         httpStatus: 404,
       });
       return res.status(404).json({ message: "Pedido no encontrado" });
+    }
+
+    if (order.receivedAt) {
+      return res.status(400).json({
+        message: "Esta compra ya ingresó mercadería. No se puede borrar sin devolver ese stock.",
+      });
     }
 
     const hasFinance = Boolean(order.paidAt || order.receivedAt);

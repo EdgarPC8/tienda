@@ -6,8 +6,17 @@ import {
 } from "../services/notificationService.js";
 import { notifyOk, notifyFail } from "../services/notifyRaptorSolutions.js";
 
+function sameUser(req, userId) {
+  const role = req.user?.loginRol;
+  if (role === "Administrador" || role === "Programador") return true;
+  return Number(req.user?.userId) === Number(userId);
+}
+
 export const getUnreadCountByUser = async (req, res) => {
   const { userId } = req.params;
+  if (!sameUser(req, userId)) {
+    return res.status(403).json({ message: "No podés ver notificaciones de otra persona" });
+  }
 
   try {
     const count = await Notifications.count({
@@ -27,7 +36,9 @@ export const getUnreadCountByUser = async (req, res) => {
 
 export const getNotificationsByUser = async (req, res) => {
   const { userId } = req.params;
-  console.log(userId)
+  if (!sameUser(req, userId)) {
+    return res.status(403).json({ message: "No podés ver notificaciones de otra persona" });
+  }
   try {
     const notifications = await Notifications.findAll({
       where: {
@@ -36,7 +47,7 @@ export const getNotificationsByUser = async (req, res) => {
       },
       order: [['createdAt', 'DESC']]
     });
-    res.status(201).json(notifications);
+    res.json(notifications);
 
     
   } catch (error) {
@@ -46,6 +57,9 @@ export const getNotificationsByUser = async (req, res) => {
 
 export const createNotification = async (req, res) => {
   const { userId, type, title, message, link } = req.body;
+  if (!sameUser(req, userId)) {
+    return res.status(403).json({ message: "No podés crear notificaciones para otra persona" });
+  }
   try {
     const notification = await createAndPushNotification({
       userId,
@@ -100,6 +114,9 @@ export const markAsSeen = async (req, res) => {
       });
       return res.status(404).json({ message: "No encontrada" });
     }
+    if (!sameUser(req, notification.userId)) {
+      return res.status(403).json({ message: "No podés marcar notificaciones de otra persona" });
+    }
     notification.seen = true;
     await notification.save();
     notifyOk("notification.mark_seen", `Notificación leída #${id}`, { notificationId: id });
@@ -126,6 +143,9 @@ export const deleteNotification = async (req, res) => {
       return res.status(404).json({ message: "No encontrada" });
     }
 
+    if (!sameUser(req, notification.userId)) {
+      return res.status(403).json({ message: "No podés borrar notificaciones de otra persona" });
+    }
     notification.deleted = true;
     await notification.save();
     notifyOk("notification.deleted", `Notificación #${id}`, { notificationId: id });
@@ -147,9 +167,13 @@ export const markManyAsSeen = async (req, res) => {
     return res.status(400).json({ message: "Sin ids" });
   }
   try {
+    const where = { id: ids, deleted: false };
+    if (!sameUser(req, req.user?.userId) || (req.user?.loginRol !== "Administrador" && req.user?.loginRol !== "Programador")) {
+      where.userId = req.user?.userId;
+    }
     await Notifications.update(
       { seen: true },
-      { where: { id: ids, deleted: false } }
+      { where }
     );
     notifyOk("notification.mark_bulk_seen", "Notificaciones marcadas leídas", { count: ids.length });
     res.json({ message: "Marcadas como leídas", count: ids.length });
@@ -170,9 +194,13 @@ export const deleteManyNotifications = async (req, res) => {
     return res.status(400).json({ message: "Sin ids" });
   }
   try {
+    const where = { id: ids };
+    if (req.user?.loginRol !== "Administrador" && req.user?.loginRol !== "Programador") {
+      where.userId = req.user?.userId;
+    }
     await Notifications.update(
       { deleted: true },
-      { where: { id: ids } }
+      { where }
     );
     notifyOk("notification.bulk_deleted", "Notificaciones eliminadas", { count: ids.length });
     res.json({ message: "Eliminadas", count: ids.length });
@@ -188,6 +216,9 @@ export const deleteManyNotifications = async (req, res) => {
 
 export const markAllAsSeenByUser = async (req, res) => {
   const { userId } = req.params;
+  if (!sameUser(req, userId)) {
+    return res.status(403).json({ message: "No podés marcar notificaciones de otra persona" });
+  }
   try {
     const [count] = await Notifications.update(
       { seen: true },
@@ -207,6 +238,9 @@ export const markAllAsSeenByUser = async (req, res) => {
 
 export const deleteReadByUser = async (req, res) => {
   const { userId } = req.params;
+  if (!sameUser(req, userId)) {
+    return res.status(403).json({ message: "No podés borrar notificaciones de otra persona" });
+  }
   try {
     const [count] = await Notifications.update(
       { deleted: true },

@@ -281,9 +281,14 @@ export const posCheckout = async (req, res) => {
       for (const row of items) {
         const productId = Number(row.productId);
         const qty = Number(row.quantity);
-        const price = Number(row.price);
         if (!Number.isFinite(productId) || !Number.isFinite(qty) || qty <= 0) {
           throw new Error("Ítem inválido en el carrito.");
+        }
+        const productForPrice = await InventoryProduct.findByPk(productId, { transaction: t });
+        if (!productForPrice) throw new Error(`Producto #${productId} no encontrado.`);
+        let price = Number(row.price);
+        if (user?.loginRol === "Empleado") {
+          price = Number(productForPrice.price);
         }
         if (!Number.isFinite(price) || price < 0) {
           throw new Error("Precio inválido en el carrito.");
@@ -306,7 +311,9 @@ export const posCheckout = async (req, res) => {
         }
         const available0 = await getStoreStockQty(stockStoreId, productId, { transaction: t });
         let available = available0;
-        const autoFill = getAppSettingsSync()?.ordersAllowDeliverStockAdjust !== false;
+        const autoFill =
+          getAppSettingsSync()?.ordersAllowDeliverStockAdjust !== false &&
+          user?.loginRol !== "Empleado";
         if (available < qty) {
           const deficit = qty - available;
           try {
@@ -445,7 +452,7 @@ export const getPosSales = async (req, res) => {
   try {
     await ensureOrderItemPackSchema();
     await ensureOrderSellerSchema();
-    const limit = Math.min(Number(req.query.limit) || 200, 500);
+    const limit = Math.min(Number(req.query.limit) || 200, 5000);
     const orders = await Order.findAll({
       where: {
         [Op.or]: [
@@ -1565,8 +1572,34 @@ export const markOrderAsPaid = async (req, res) => {
       return res.status(400).json({ message: 'El pedido ya está marcado como pagado' });
     }
 
-    order.status = 'pagado';
-    await order.save();
+    const now = new Date();
+    const accountId = req.user?.accountId ?? null;
+    await sequelize.transaction(async (t) => {
+      order.status = "pagado";
+      order.paidAt = order.paidAt || now;
+      await order.save({ transaction: t });
+      const items = await OrderItem.findAll({ where: { orderId: order.id }, transaction: t });
+      for (const item of items) {
+        if (item.paidAt) continue;
+        item.paidAt = now;
+        await item.save({ transaction: t });
+        const total = Number((Number(item.price) * Number(item.quantity || 0)).toFixed(2));
+        if (!(total > 0)) continue;
+        await Income.findOrCreate({
+          where: { referenceType: "order_item", referenceId: item.id },
+          defaults: {
+            date: now,
+            amount: total,
+            concept: `Cobro pedido #${order.id}`,
+            category: "Venta",
+            createdBy: accountId,
+            referenceType: "order_item",
+            referenceId: item.id,
+          },
+          transaction: t,
+        });
+      }
+    });
 
     notifyOk("order.mark_paid", `Pedido pagado #${id}`, { orderId: Number(id) });
     res.json({ message: 'Pedido marcado como pagado', order });

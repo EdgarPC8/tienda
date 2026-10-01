@@ -14,6 +14,7 @@ import {
 import { getHeaderToken, verifyJWT } from "../../libs/jwt.js";
 import { toFinanceDateTime } from "../../utils/financeDateTime.js";
 import { notifyOk, notifyFail } from "../../services/notifyRaptorSolutions.js";
+import { getAppSettingsSync, normalizeMaxInstallments } from "../../services/appSettingsService.js";
 
 const toNum = (v, def = 0) => {
   const n = Number(v ?? def);
@@ -117,7 +118,8 @@ function normalizeIncomingSchedule(installments, total, fallbackDate) {
       lastDue: fallback,
     };
   }
-  if (installments.length > 36) return { error: "Máximo 36 plazos" };
+  const maxPlazos = normalizeMaxInstallments(getAppSettingsSync()?.maxInstallments);
+  if (installments.length > maxPlazos) return { error: `Máximo ${maxPlazos} plazos` };
   const rows = [];
   for (let i = 0; i < installments.length; i += 1) {
     const due = toDateOnlySafe(installments[i]?.dueDate);

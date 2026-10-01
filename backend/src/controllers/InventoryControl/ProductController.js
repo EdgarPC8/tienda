@@ -13,6 +13,7 @@ import {
   // HomeProduct,
   // ProductPlacement,
 } from "../../models/Inventory.js";
+import { StoreStock } from "../../models/StoreStock.js";
 import { Order, OrderItem } from "../../models/Orders.js";
 import fileDirName from "../../libs/file-dirname.js";
 import { normalizePackageTiersStrict } from "../../utils/productPricingUtils.js";
@@ -149,6 +150,8 @@ async function ensureGenericStoredInGrams(payload, existing = null) {
 }
 
 
+
+
 // controllers/ProductController.js (solo createProduct)
 // ✅ Copia y pega tal cual
 
@@ -199,6 +202,15 @@ export const updateProduct = async (req, res) => {
     applyBarcodeFields(updates);
     normalizeProductNumericFields(updates);
     normalizeProductRelationFields(updates);
+    if ("name" in updates && !String(updates.name || "").trim()) {
+      return res.status(400).json({ message: "El nombre del producto es obligatorio" });
+    }
+    if (updates.price != null && Number(updates.price) < 0) {
+      return res.status(400).json({ message: "El precio no puede ser negativo" });
+    }
+    if (updates.stock != null && Number(updates.stock) < 0) {
+      return res.status(400).json({ message: "El stock no puede ser negativo" });
+    }
     syncProductRoleFlags(updates, row);
     syncProductIngredientFlags(updates, row);
     await ensureGenericStoredInGrams(updates, row);
@@ -336,6 +348,15 @@ export const createProduct = async (req, res) => {
     applyBarcodeFields(payload);
     normalizeProductNumericFields(payload, { fillMissing: true });
     normalizeProductRelationFields(payload);
+    if (!String(payload.name || "").trim()) {
+      return res.status(400).json({ message: "El nombre del producto es obligatorio" });
+    }
+    if (payload.price != null && Number(payload.price) < 0) {
+      return res.status(400).json({ message: "El precio no puede ser negativo" });
+    }
+    if (payload.stock != null && Number(payload.stock) < 0) {
+      return res.status(400).json({ message: "El stock no puede ser negativo" });
+    }
     syncProductRoleFlags(payload);
     syncProductIngredientFlags(payload);
     await ensureGenericStoredInGrams(payload);
@@ -678,6 +699,7 @@ export const deleteProduct = async (req, res) => {
       if (!used) safeUnlink(imagePath(row.primaryImageUrl));
     }
 
+    await StoreStock.destroy({ where: { productId: row.id } });
     await row.destroy();
     notifyOk("product.deleted", `Producto #${id}`, { productId: id });
     res.json({ message: "Producto eliminado" });

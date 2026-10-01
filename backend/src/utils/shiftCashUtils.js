@@ -62,11 +62,13 @@ export function resolveCashFromBody(body = {}) {
   if (cashCounts && typeof cashCounts === "object") {
     const counts = normalizeCashCounts(cashCounts);
     const total = computeCashTotal(counts);
-    if (total > 0) return { counts, total };
+    if (total >= 0) return { counts, total };
   }
-  const total = Number(Number(cashTotal || 0).toFixed(2));
-  if (total > 0) {
-    return { counts: normalizeCashCounts(emptyCashCounts()), total };
+  if (cashTotal != null && cashTotal !== "") {
+    const total = Number(Number(cashTotal).toFixed(2));
+    if (Number.isFinite(total) && total >= 0) {
+      return { counts: normalizeCashCounts(emptyCashCounts()), total };
+    }
   }
   return null;
 }

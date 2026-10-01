@@ -5,6 +5,7 @@ import { Roles } from "../models/Roles.js";
 import { UserData } from "../models/UserData.js";
 import { UniqueConstraintError } from "sequelize";
 import { notifyOk, notifyFail } from "../services/notifyRaptorSolutions.js";
+import { passwordPolicyError, temporaryPassword } from "../services/passwordPolicy.js";
 
 const USER_FIELDS = [
   "ci",
@@ -87,7 +88,7 @@ function formatUserRow(user) {
   };
 }
 
-async function upsertUserAccount(userId, { username, password, roles }) {
+async function upsertUserAccount(userId, { username, password, roles }, loginRol) {
   if (!username && !password && !Array.isArray(roles)) return null;
 
   let account = await Account.findOne({ where: { userId } });
@@ -95,10 +96,14 @@ async function upsertUserAccount(userId, { username, password, roles }) {
   if (!account) {
     if (!username) return null;
 
-    const hashedPassword =
-      password && String(password).trim()
-        ? await bcrypt.hash(password, 10)
-        : await bcrypt.hash("12345678", 10);
+    const plain = password && String(password).trim() ? String(password).trim() : temporaryPassword();
+    const policyError = passwordPolicyError(plain);
+    if (policyError) {
+      const err = new Error(policyError);
+      err.statusCode = 400;
+      throw err;
+    }
+    const hashedPassword = await bcrypt.hash(plain, 10);
 
     account = await Account.create({
       username,
@@ -108,13 +113,27 @@ async function upsertUserAccount(userId, { username, password, roles }) {
   } else {
     if (username) account.username = username;
     if (password && String(password).trim()) {
+      const policyError = passwordPolicyError(password);
+      if (policyError) {
+        const err = new Error(policyError);
+        err.statusCode = 400;
+        throw err;
+      }
       account.password = await bcrypt.hash(password, 10);
     }
     await account.save();
   }
 
   if (Array.isArray(roles)) {
-    await account.setRoles(roles);
+    let safeRoles = roles;
+    if (loginRol !== "Programador") {
+      const programmer = await Roles.findOne({ where: { name: "Programador" } });
+      const already = programmer ? await account.hasRole(programmer) : false;
+      if (programmer && !already) {
+        safeRoles = roles.filter((id) => Number(id) !== Number(programmer.id));
+      }
+    }
+    await account.setRoles(safeRoles);
   }
 
   return account;
@@ -141,7 +160,7 @@ export const addUser = async (req, res) => {
     const newUser = await Users.create(userData);
 
     await upsertUserEmail(newUser.id, email);
-    await upsertUserAccount(newUser.id, { username, password, roles });
+    await upsertUserAccount(newUser.id, { username, password, roles }, req.user?.loginRol);
 
     const created = await Users.findByPk(newUser.id, { include: userInclude });
     const userRow = formatUserRow(created);
@@ -153,6 +172,9 @@ export const addUser = async (req, res) => {
       user: userRow,
     });
   } catch (error) {
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     if (error instanceof UniqueConstraintError || error.name === "SequelizeUniqueConstraintError") {
       notifyFail("user.create_failed", "Esa cédula ya existe", {
         error,
@@ -186,7 +208,7 @@ export const updateUserData = async (req, res) => {
     }
 
     await upsertUserEmail(userId, email);
-    await upsertUserAccount(userId, { username, password, roles });
+    await upsertUserAccount(userId, { username, password, roles }, req.user?.loginRol);
 
     const updated = await Users.findByPk(userId, { include: userInclude });
     const userRow = updated ? formatUserRow(updated) : null;
@@ -198,6 +220,9 @@ export const updateUserData = async (req, res) => {
       user: userRow,
     });
   } catch (error) {
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     notifyFail("user.update_failed", `Error al editar usuario #${req.params.userId}`, {
       error,
       req,

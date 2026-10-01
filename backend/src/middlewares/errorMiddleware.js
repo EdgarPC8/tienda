@@ -14,6 +14,9 @@ export function errorMiddleware(err, req, res, next) {
   if (typeof err.message === "string" && err.message.trim()) {
     message = err.message.trim();
   }
+  if (status >= 500 && /sequelize|sql|syntax|ER_|parent/i.test(message)) {
+    message = "Error interno del servidor";
+  }
 
   if (status === 500 && message.startsWith("Origen no permitido")) {
     return res.status(403).json({ message });

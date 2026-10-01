@@ -1,4 +1,4 @@
-import { Supplier } from "../../models/Orders.js";
+import { Supplier, SupplierOrder } from "../../models/Orders.js";
 import { notifyOk, notifyFail } from "../../services/notifyRaptorSolutions.js";
 
 export const getAllSuppliers = async (_req, res) => {
@@ -13,7 +13,14 @@ export const getAllSuppliers = async (_req, res) => {
 
 export const createSupplier = async (req, res) => {
   try {
-    const { name, phone, email, address, notes } = req.body || {};
+    const { name, phone, email, address, notes, identNumber, ruc } = req.body || {};
+    const ident = String(identNumber || ruc || "").trim();
+    if (ident && !/^\d{13}$/.test(ident)) {
+      return res.status(400).json({ message: "El RUC no es válido" });
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) {
+      return res.status(400).json({ message: "El correo no es válido" });
+    }
     if (!name?.trim()) {
       notifyFail("supplier.create_failed", "El nombre del proveedor es obligatorio", {
         req,
@@ -27,6 +34,7 @@ export const createSupplier = async (req, res) => {
       email: email || null,
       address: address || null,
       notes: notes || null,
+      ...(ident ? { identNumber: ident } : {}),
     });
     notifyOk("supplier.created", "Proveedor creado", { supplierId: row.id });
     res.status(201).json(row);
@@ -77,14 +85,21 @@ export const updateSupplier = async (req, res) => {
 
 export const deleteSupplier = async (req, res) => {
   try {
-    const deleted = await Supplier.destroy({ where: { id: req.params.id } });
-    if (!deleted) {
+    const supplier = await Supplier.findByPk(req.params.id);
+    if (!supplier) {
       notifyFail("supplier.delete_failed", `Proveedor #${req.params.id} no encontrado`, {
         req,
         httpStatus: 404,
       });
       return res.status(404).json({ message: "Proveedor no encontrado" });
     }
+    const orders = await SupplierOrder.count({ where: { supplierId: supplier.id } });
+    if (orders > 0) {
+      return res.status(400).json({
+        message: "Este proveedor tiene compras. No se puede borrar sin quitarlas.",
+      });
+    }
+    await supplier.destroy();
     notifyOk("supplier.deleted", `Proveedor #${req.params.id}`, { supplierId: Number(req.params.id) });
     res.json({ message: "Proveedor eliminado" });
   } catch (error) {

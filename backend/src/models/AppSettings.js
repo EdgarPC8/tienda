@@ -213,7 +213,7 @@ export const AppSettings = sequelize.define(
     loginAttemptLimitEnabled: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
-      defaultValue: false,
+      defaultValue: true,
     },
     maxInstallments: {
       type: DataTypes.INTEGER,

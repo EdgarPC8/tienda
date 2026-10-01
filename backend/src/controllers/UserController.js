@@ -3,9 +3,10 @@ import { Users } from "../models/Users.js";
 import { Account } from "../models/Account.js";
 import { Roles } from "../models/Roles.js";
 import { UserData } from "../models/UserData.js";
-import { UniqueConstraintError } from "sequelize";
+import { UniqueConstraintError, Op } from "sequelize";
 import { notifyOk, notifyFail } from "../services/notifyRaptorSolutions.js";
 import { passwordPolicyError, temporaryPassword } from "../services/passwordPolicy.js";
+import { CashShift } from "../models/CashShift.js";
 
 const USER_FIELDS = [
   "ci",
@@ -88,6 +89,32 @@ function formatUserRow(user) {
   };
 }
 
+async function rejectProgrammerAssignment(roles, loginRol) {
+  if (!Array.isArray(roles) || loginRol === "Programador") return;
+  const programmer = await Roles.findOne({ where: { name: "Programador" } });
+  if (programmer && roles.some((id) => Number(id) === Number(programmer.id))) {
+    const err = new Error("No podés asignar el rol Programador");
+    err.statusCode = 403;
+    throw err;
+  }
+}
+
+async function rejectDuplicateUsername(username, userId) {
+  const name = String(username || "").trim();
+  if (!name) return;
+  const taken = await Account.findOne({
+    where: {
+      username: name,
+      ...(userId != null ? { userId: { [Op.ne]: userId } } : {}),
+    },
+  });
+  if (taken) {
+    const err = new Error("Ese nombre de usuario ya existe");
+    err.statusCode = 409;
+    throw err;
+  }
+}
+
 async function upsertUserAccount(userId, { username, password, roles }, loginRol) {
   if (!username && !password && !Array.isArray(roles)) return null;
 
@@ -95,6 +122,8 @@ async function upsertUserAccount(userId, { username, password, roles }, loginRol
 
   if (!account) {
     if (!username) return null;
+    await rejectDuplicateUsername(username, userId);
+    await rejectProgrammerAssignment(roles, loginRol);
 
     const plain = password && String(password).trim() ? String(password).trim() : temporaryPassword();
     const policyError = passwordPolicyError(plain);
@@ -111,7 +140,10 @@ async function upsertUserAccount(userId, { username, password, roles }, loginRol
       userId,
     });
   } else {
-    if (username) account.username = username;
+    if (username) {
+      await rejectDuplicateUsername(username, userId);
+      account.username = username;
+    }
     if (password && String(password).trim()) {
       const policyError = passwordPolicyError(password);
       if (policyError) {
@@ -125,15 +157,8 @@ async function upsertUserAccount(userId, { username, password, roles }, loginRol
   }
 
   if (Array.isArray(roles)) {
-    let safeRoles = roles;
-    if (loginRol !== "Programador") {
-      const programmer = await Roles.findOne({ where: { name: "Programador" } });
-      const already = programmer ? await account.hasRole(programmer) : false;
-      if (programmer && !already) {
-        safeRoles = roles.filter((id) => Number(id) !== Number(programmer.id));
-      }
-    }
-    await account.setRoles(safeRoles);
+    await rejectProgrammerAssignment(roles, loginRol);
+    await account.setRoles(roles);
   }
 
   return account;
@@ -153,9 +178,21 @@ async function upsertUserEmail(userId, email) {
 // ✅ CREATE (addUser) - ignora "photo" que venga en el body
 export const addUser = async (req, res) => {
   try {
-    const { photo, username, password, roles, ...rest } = req.body;
-    const email = resolveEmailFromBody(req.body);
+    const { photo, username, password, roles, ...rest } = req.body || {};
+    const email = resolveEmailFromBody(req.body || {});
     const userData = pickUserFields(rest);
+    if (!String(userData.firstName || userData.firstLastName || "").trim()) {
+      return res.status(400).json({ message: "El nombre es obligatorio" });
+    }
+    if (!String(username || "").trim()) {
+      return res.status(400).json({ message: "El nombre de usuario es obligatorio" });
+    }
+    try {
+      await rejectProgrammerAssignment(roles, req.user?.loginRol);
+    } catch (error) {
+      if (error?.statusCode) return res.status(error.statusCode).json({ message: error.message });
+      throw error;
+    }
 
     const newUser = await Users.create(userData);
 
@@ -190,7 +227,6 @@ export const addUser = async (req, res) => {
     notifyFail("user.create_failed", "Error al crear el usuario", { error, req, httpStatus: 500 });
     return res.status(500).json({
       message: "Error al crear el usuario",
-      error: error.message,
     });
   }
 };
@@ -229,7 +265,7 @@ export const updateUserData = async (req, res) => {
       httpStatus: 500,
     });
     return res.status(500).json({
-      message: error.message,
+      message: "No se pudo editar el usuario",
     });
   }
 };
@@ -271,6 +307,12 @@ export const getOneUser = async (req, res) => {
 export const deleteUser = async (req, res) => {
   try {
     const userId = req.params.userId;
+    const shifts = await CashShift.count({ where: { userId } });
+    if (shifts > 0) {
+      return res.status(400).json({
+        message: "Este usuario tiene turnos. Desactivalo en vez de borrarlo.",
+      });
+    }
     await Users.destroy({
       where: { id: userId },
     });
@@ -285,7 +327,7 @@ export const deleteUser = async (req, res) => {
       httpStatus: 500,
     });
     return res.status(500).json({
-      message: error.message,
+      message: "No se pudo eliminar el usuario",
     });
   }
 };

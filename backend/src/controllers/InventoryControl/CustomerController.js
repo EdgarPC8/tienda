@@ -32,6 +32,12 @@ export const createCustomer = async (req, res) => {
       payload.firstName = payload.name;
     }
     if (!payload.identType) payload.identType = "05";
+    if (payload.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(payload.email).trim())) {
+      return res.status(400).json({ message: "El correo no es válido" });
+    }
+    if (payload.cedula && !/^\d{10}$/.test(String(payload.cedula).replace(/\s/g, "")) && !/^\d{13}$/.test(String(payload.cedula).replace(/\s/g, ""))) {
+      return res.status(400).json({ message: "La cédula o el RUC no es válido" });
+    }
 
     if (payload.phone) {
       const existing = await Customer.findOne({ where: { phone: payload.phone } });

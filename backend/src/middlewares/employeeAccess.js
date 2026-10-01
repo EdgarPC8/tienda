@@ -40,9 +40,22 @@ function employeeMay(method, path, user) {
   if (m === "GET" && /\/orders\/supplier-product-codes/.test(path)) return true;
   if (m === "POST" && /\/orders\/pos\/checkout\/?$/.test(path)) return true;
 
-  if (m === "GET" && /\/sri\/settings\/?$/.test(path)) return true;
-
   return false;
+}
+
+const COST_KEYS = ["supplierPrice", "distributorPrice", "cost", "unitCost", "purchasePrice"];
+
+function stripCost(value, seen = new Set()) {
+  if (!value || typeof value !== "object") return value;
+  if (seen.has(value)) return value;
+  if (Array.isArray(value)) return value.map((item) => stripCost(item, seen));
+  seen.add(value);
+  const out = { ...value };
+  for (const key of COST_KEYS) delete out[key];
+  for (const key of Object.keys(out)) {
+    if (out[key] && typeof out[key] === "object") out[key] = stripCost(out[key], seen);
+  }
+  return out;
 }
 
 export async function restrictEmployee(req, res, next) {
@@ -55,6 +68,10 @@ export async function restrictEmployee(req, res, next) {
     return next();
   }
   if (user?.loginRol !== "Empleado") return next();
+  if (req.method === "GET" && /\/inventory\/products/.test(pathOf(req))) {
+    const orig = res.json.bind(res);
+    res.json = (body) => orig(stripCost(body));
+  }
   if (employeeMay(req.method, pathOf(req), user)) return next();
   return res.status(403).json({ message: "No tenés permiso para esta acción" });
 }

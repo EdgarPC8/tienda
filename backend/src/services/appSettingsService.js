@@ -70,7 +70,7 @@ export const DEFAULT_APP_SETTINGS = {
   notificationsExpiryEnabled: false,
   toastPosition: "bottom-right",
   passwordPolicyEnabled: false,
-  loginAttemptLimitEnabled: false,
+  loginAttemptLimitEnabled: true,
   maxInstallments: 200,
   receiptDetailSettings: { ...DEFAULT_RECEIPT_DETAIL_SETTINGS },
   themePalette: normalizeThemePalette(DEFAULT_THEME_PALETTE),
@@ -235,7 +235,7 @@ async function ensureAppSettingsSchema() {
     ["notificationsCreditEnabled", true],
     ["notificationsExpiryEnabled", false],
     ["passwordPolicyEnabled", false],
-    ["loginAttemptLimitEnabled", false],
+    ["loginAttemptLimitEnabled", true],
   ];
   for (const [col, def] of boolCols) {
     if (!table[col]) {
@@ -259,6 +259,16 @@ async function ensureAppSettingsSchema() {
       allowNull: false,
       defaultValue: 200,
     });
+  }
+  if (!table.securityRevision) {
+    await qi.addColumn("app_settings", "securityRevision", {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1,
+    });
+    await sequelize.query(
+      "UPDATE app_settings SET loginAttemptLimitEnabled = 1, securityRevision = 1 WHERE id = 1",
+    );
   }
   if (!table.moneyDisplayDecimals) {
     await qi.addColumn("app_settings", "moneyDisplayDecimals", {
@@ -405,7 +415,7 @@ export async function loadAppSettings() {
     notificationsCreditEnabled: asBool(raw.notificationsCreditEnabled, true),
     notificationsExpiryEnabled: asBool(raw.notificationsExpiryEnabled, false),
     passwordPolicyEnabled: asBool(raw.passwordPolicyEnabled, false),
-    loginAttemptLimitEnabled: asBool(raw.loginAttemptLimitEnabled, false),
+    loginAttemptLimitEnabled: asBool(raw.loginAttemptLimitEnabled, true),
     maxInstallments: normalizeMaxInstallments(raw.maxInstallments),
     toastPosition: normalizeToastPosition(raw.toastPosition),
     moneyDisplayDecimals: normalizeMoneyDisplayDecimals(raw.moneyDisplayDecimals, 2),
@@ -506,7 +516,7 @@ export async function updateAppSettings(payload) {
     patch.passwordPolicyEnabled = asBool(patch.passwordPolicyEnabled, false);
   }
   if ("loginAttemptLimitEnabled" in patch) {
-    patch.loginAttemptLimitEnabled = asBool(patch.loginAttemptLimitEnabled, false);
+    patch.loginAttemptLimitEnabled = asBool(patch.loginAttemptLimitEnabled, true);
   }
   if ("maxInstallments" in patch) {
     patch.maxInstallments = normalizeMaxInstallments(patch.maxInstallments);
@@ -572,7 +582,7 @@ export async function updateAppSettings(payload) {
     notificationsCreditEnabled: asBool(raw.notificationsCreditEnabled, true),
     notificationsExpiryEnabled: asBool(raw.notificationsExpiryEnabled, false),
     passwordPolicyEnabled: asBool(raw.passwordPolicyEnabled, false),
-    loginAttemptLimitEnabled: asBool(raw.loginAttemptLimitEnabled, false),
+    loginAttemptLimitEnabled: asBool(raw.loginAttemptLimitEnabled, true),
     maxInstallments: normalizeMaxInstallments(raw.maxInstallments),
     toastPosition: normalizeToastPosition(raw.toastPosition),
     moneyDisplayDecimals: normalizeMoneyDisplayDecimals(raw.moneyDisplayDecimals, 2),
@@ -630,7 +640,7 @@ export function toPublicSettings(data = cache) {
     notificationsCreditEnabled: asBool(data.notificationsCreditEnabled, true),
     notificationsExpiryEnabled: asBool(data.notificationsExpiryEnabled, false),
     passwordPolicyEnabled: asBool(data.passwordPolicyEnabled, false),
-    loginAttemptLimitEnabled: asBool(data.loginAttemptLimitEnabled, false),
+    loginAttemptLimitEnabled: asBool(data.loginAttemptLimitEnabled, true),
     maxInstallments: normalizeMaxInstallments(data.maxInstallments),
     toastPosition: normalizeToastPosition(data.toastPosition),
     moneyDisplayDecimals: normalizeMoneyDisplayDecimals(data.moneyDisplayDecimals, 2),

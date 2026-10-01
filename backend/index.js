@@ -61,6 +61,7 @@ import {
 import {
   errorMiddleware,
   notFoundMiddleware,
+  scrubSqlResponses,
 } from "./src/middlewares/errorMiddleware.js";
 import { restrictEmployee } from "./src/middlewares/employeeAccess.js";
 import { PORT, API_PREFIX } from "./src/config/serverEnv.js";
@@ -86,6 +87,14 @@ const io = new Server(httpServer, {
 
 // Middleware
 app.use(express.json());
+app.disable("x-powered-by");
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  next();
+});
+app.use(scrubSqlResponses);
 app.use(loggerMiddleware);
 app.use(restrictEmployee);
 app.use(loadMetricsMiddleware);

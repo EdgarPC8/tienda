@@ -4,12 +4,17 @@ import { notifyOk, notifyFail } from "../../services/notifyRaptorSolutions.js";
   // controllers/inventoryUnitController.js
   export const createUnit = async (req, res) => {
     try {
-      const unit = await InventoryUnit.create(req.body);
+      const name = String(req.body?.name || "").trim();
+      const abbreviation = String(req.body?.abbreviation || "").trim();
+      if (!name || !abbreviation) {
+        return res.status(400).json({ message: "La unidad necesita nombre y abreviatura" });
+      }
+      const unit = await InventoryUnit.create({ ...req.body, name, abbreviation });
       notifyOk("unit.created", `Unidad #${unit.id}`, { unit });
       res.status(201).json(unit);
     } catch (err) {
       notifyFail("unit.create_failed", "Error al crear unidad", { error: err, req, httpStatus: 500 });
-      res.status(500).json({ message: 'Error al crear unidad', error: err });
+      res.status(500).json({ message: "Error al crear unidad" });
     }
   };
   

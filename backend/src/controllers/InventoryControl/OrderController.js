@@ -241,6 +241,10 @@ export const posCheckout = async (req, res) => {
         message: "Abre un turno de caja antes de registrar ventas en el punto de venta.",
       });
     }
+    const customer = await Customer.findByPk(Number(customerId));
+    if (!customer) {
+      return res.status(400).json({ message: "Ese cliente no existe" });
+    }
 
     let resolvedRegisterId = shift.activeCashRegisterId || null;
     if (cashRegisterId != null && cashRegisterId !== "") {
@@ -287,8 +291,12 @@ export const posCheckout = async (req, res) => {
         const productForPrice = await InventoryProduct.findByPk(productId, { transaction: t });
         if (!productForPrice) throw new Error(`Producto #${productId} no encontrado.`);
         let price = Number(row.price);
+        const catalogPrice = Number(productForPrice.price);
         if (user?.loginRol === "Empleado") {
-          price = Number(productForPrice.price);
+          if (Number.isFinite(price) && Math.abs(price - catalogPrice) > 0.009) {
+            throw new Error(`El precio de ${productForPrice.name} no coincide con el catálogo`);
+          }
+          price = catalogPrice;
         }
         if (!Number.isFinite(price) || price < 0) {
           throw new Error("Precio inválido en el carrito.");

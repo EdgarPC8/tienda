@@ -3,14 +3,15 @@ import { getAppSettingsSync } from "./appSettingsService.js";
 
 const fails = new Map();
 const WINDOW_MS = 15 * 60 * 1000;
-const MAX_FAILS = 5;
+const MAX_FAILS = 10;
 
 export function passwordPolicyOn() {
   return getAppSettingsSync()?.passwordPolicyEnabled === true;
 }
 
 export function loginAttemptLimitOn() {
-  return getAppSettingsSync()?.loginAttemptLimitEnabled === true;
+  const enabled = getAppSettingsSync()?.loginAttemptLimitEnabled;
+  return enabled !== false;
 }
 
 export function passwordPolicyError(password) {

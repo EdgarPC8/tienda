@@ -357,6 +357,9 @@ export const createProduct = async (req, res) => {
     if (payload.stock != null && Number(payload.stock) < 0) {
       return res.status(400).json({ message: "El stock no puede ser negativo" });
     }
+    if (!payload.unitId) {
+      return res.status(400).json({ message: "Elegí la unidad del producto" });
+    }
     syncProductRoleFlags(payload);
     syncProductIngredientFlags(payload);
     await ensureGenericStoredInGrams(payload);

@@ -215,6 +215,12 @@ export const AppSettings = sequelize.define(
       allowNull: false,
       defaultValue: true,
     },
+    /** Apagado: no se puede anular un préstamo que ya tiene cuotas pagadas. */
+    allowLoanFinancePurge: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
     maxInstallments: {
       type: DataTypes.INTEGER,
       allowNull: false,

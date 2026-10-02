@@ -641,7 +641,7 @@ export const applyIngredientPriceAlertsController = async (req, res) => {
       { count: applied.length, ids: applied.map((a) => a.genericId) },
     );
     return res.json({
-      message: `${applied.length} insumo(s) actualizado(s)`,
+      message: `${applied.length} insumo(s) actualizado(s). El precio quedó en el insumo genérico.`,
       applied,
     });
   } catch (error) {

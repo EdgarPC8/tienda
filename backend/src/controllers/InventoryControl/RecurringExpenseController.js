@@ -39,6 +39,38 @@ const toNum = (v, def = 0) => {
 
 const roundMoney = (x) => Number(Number(x || 0).toFixed(2));
 const EPS = 0.0001;
+const ALLOWED_FREQ = new Set(["monthly", "quarterly", "annual", "weekly", "bimonthly", "span"]);
+
+function normalizeHex(value) {
+  const raw = String(value || "").trim().toUpperCase();
+  return /^#[0-9A-F]{6}$/.test(raw) ? raw : null;
+}
+
+function dateOnlyOrNull(value) {
+  if (value == null || value === "") return null;
+  const match = String(value).match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : null;
+}
+
+let schemaReady = false;
+async function ensureRecurringColumns() {
+  if (schemaReady) return;
+  await sequelize.query(
+    "ALTER TABLE ERP_finance_recurring_templates MODIFY frequency ENUM('monthly','quarterly','annual','weekly','bimonthly','span') NOT NULL DEFAULT 'monthly'"
+  );
+  const [cols] = await sequelize.query("SHOW COLUMNS FROM ERP_finance_recurring_templates");
+  const names = new Set(cols.map((c) => c.Field));
+  if (!names.has("labelColor")) {
+    await sequelize.query("ALTER TABLE ERP_finance_recurring_templates ADD COLUMN labelColor VARCHAR(7) NULL");
+  }
+  if (!names.has("startDate")) {
+    await sequelize.query("ALTER TABLE ERP_finance_recurring_templates ADD COLUMN startDate DATE NULL");
+  }
+  if (!names.has("endDate")) {
+    await sequelize.query("ALTER TABLE ERP_finance_recurring_templates ADD COLUMN endDate DATE NULL");
+  }
+  schemaReady = true;
+}
 
 function mapTemplateRow(row) {
   const t = row.toJSON ? row.toJSON() : row;
@@ -67,6 +99,7 @@ function mapOccurrenceRow(row) {
     categoryLabel: tpl?.categoryLabel || "",
     amountType: tpl?.amountType,
     daysUntilDue: o.dueDate ? daysUntil(o.dueDate) : null,
+    labelColor: tpl?.labelColor || null,
     displayAmount: amount,
     isOverdue: o.status === "pending" && o.dueDate && daysUntil(o.dueDate) < 0,
     isDueSoon:
@@ -286,18 +319,8 @@ export async function computeRecurringDashboardData(monthIncomeOverride = null) 
 export const getRecurringWorkbench = async (req, res) => {
   try {
     const token = getHeaderToken(req);
-    const user = await verifyJWT(token);
-
-    await sequelize.transaction(async (t) => {
-      const active = await RecurringExpenseTemplate.findAll({
-        where: { isActive: true },
-        transaction: t,
-      });
-      await ensureOccurrencesForTemplates(active, user.accountId, t);
-    });
-
-    await syncRemindersForPending();
-
+    await verifyJWT(token);
+    await ensureRecurringColumns();
     const { month } = req.query;
     const now = new Date();
     const refMonth = month ? new Date(`${month}-01T12:00:00`) : now;
@@ -357,6 +380,7 @@ export const createRecurringTemplate = async (req, res) => {
   try {
     const token = getHeaderToken(req);
     const user = await verifyJWT(token);
+    await ensureRecurringColumns();
     const body = req.body || {};
 
     const name = String(body.name || "").trim();
@@ -371,9 +395,9 @@ export const createRecurringTemplate = async (req, res) => {
       return res.status(400).json({ message: "Monto inválido" });
     }
 
-    const frequency = ["monthly", "quarterly", "annual"].includes(body.frequency)
-      ? body.frequency
-      : "monthly";
+    const frequency = ALLOWED_FREQ.has(body.frequency) ? body.frequency : "monthly";
+    const startDate = dateOnlyOrNull(body.startDate);
+    const endDate = dateOnlyOrNull(body.endDate);
 
     if (frequency === "annual" && !body.dueMonth) {
       notifyFail("recurring_template.create_failed", "Indica el mes de vencimiento anual", {
@@ -394,8 +418,14 @@ export const createRecurringTemplate = async (req, res) => {
           amountType: body.amountType === "variable" ? "variable" : "fixed",
           frequency,
           baseAmount,
-          dueDayOfMonth: Math.min(31, Math.max(1, Number(body.dueDayOfMonth) || 5)),
+          dueDayOfMonth:
+            frequency === "weekly"
+              ? Math.min(7, Math.max(1, Number(body.dueDayOfMonth) || 1))
+              : Math.min(31, Math.max(1, Number(body.dueDayOfMonth) || 5)),
           dueMonth: frequency === "annual" ? Number(body.dueMonth) : null,
+          labelColor: normalizeHex(body.labelColor),
+          startDate,
+          endDate,
           providerName: body.providerName?.trim() || null,
           note: body.note?.trim() || null,
           reminderDaysBefore: Math.max(0, Number(body.reminderDaysBefore) || 7),
@@ -431,7 +461,8 @@ export const createRecurringTemplate = async (req, res) => {
 export const updateRecurringTemplate = async (req, res) => {
   try {
     const token = getHeaderToken(req);
-    await verifyJWT(token);
+    const user = await verifyJWT(token);
+    await ensureRecurringColumns();
 
     const template = await RecurringExpenseTemplate.findByPk(req.params.id);
     if (!template) {
@@ -449,10 +480,19 @@ export const updateRecurringTemplate = async (req, res) => {
     if (body.storeId !== undefined) updates.storeId = body.storeId ? Number(body.storeId) : null;
     if (body.category != null) updates.category = body.category;
     if (body.amountType != null) updates.amountType = body.amountType === "variable" ? "variable" : "fixed";
-    if (body.frequency != null) updates.frequency = body.frequency;
+    if (body.frequency != null) {
+      updates.frequency = ALLOWED_FREQ.has(body.frequency) ? body.frequency : template.frequency;
+    }
+    if (body.labelColor !== undefined) updates.labelColor = normalizeHex(body.labelColor);
+    if (body.startDate !== undefined) updates.startDate = dateOnlyOrNull(body.startDate);
+    if (body.endDate !== undefined) updates.endDate = dateOnlyOrNull(body.endDate);
     if (body.baseAmount != null) updates.baseAmount = roundMoney(body.baseAmount);
     if (body.dueDayOfMonth != null) {
-      updates.dueDayOfMonth = Math.min(31, Math.max(1, Number(body.dueDayOfMonth) || 5));
+      const freq = updates.frequency || template.frequency;
+      updates.dueDayOfMonth =
+        freq === "weekly"
+          ? Math.min(7, Math.max(1, Number(body.dueDayOfMonth) || 1))
+          : Math.min(31, Math.max(1, Number(body.dueDayOfMonth) || 5));
     }
     if (body.dueMonth !== undefined) updates.dueMonth = body.dueMonth ? Number(body.dueMonth) : null;
     if (body.providerName !== undefined) updates.providerName = body.providerName?.trim() || null;
@@ -462,7 +502,18 @@ export const updateRecurringTemplate = async (req, res) => {
     }
     if (body.isActive !== undefined) updates.isActive = Boolean(body.isActive);
 
-    await template.update(updates);
+    const nextStart = updates.startDate !== undefined ? updates.startDate : template.startDate;
+    const nextEnd = updates.endDate !== undefined ? updates.endDate : template.endDate;
+    if (nextStart && nextEnd && String(nextEnd).slice(0, 10) < String(nextStart).slice(0, 10)) {
+      return res.status(400).json({ message: "La fecha final es anterior al inicio" });
+    }
+
+    await sequelize.transaction(async (t) => {
+      await template.update(updates, { transaction: t });
+      if (template.isActive) {
+        await ensureOccurrencesForTemplates([template], user.accountId, t);
+      }
+    });
 
     const full = await RecurringExpenseTemplate.findByPk(template.id, {
       include: [{ model: Store, as: "store", attributes: ["id", "name"], required: false }],
@@ -784,12 +835,7 @@ export const restoreRecurringOccurrence = async (req, res) => {
 };
 
 export async function syncRecurringExpenseReminders() {
-  const templates = await RecurringExpenseTemplate.findAll({ where: { isActive: true } });
-  if (templates.length) {
-    await sequelize.transaction(async (t) => {
-      await ensureOccurrencesForTemplates(templates, templates[0].createdBy, t);
-    });
-  }
+  await ensureRecurringColumns();
   return syncRemindersForPending();
 }
 

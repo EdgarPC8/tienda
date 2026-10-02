@@ -71,6 +71,7 @@ export const DEFAULT_APP_SETTINGS = {
   toastPosition: "bottom-right",
   passwordPolicyEnabled: false,
   loginAttemptLimitEnabled: true,
+  allowLoanFinancePurge: false,
   maxInstallments: 200,
   receiptDetailSettings: { ...DEFAULT_RECEIPT_DETAIL_SETTINGS },
   themePalette: normalizeThemePalette(DEFAULT_THEME_PALETTE),
@@ -236,6 +237,7 @@ async function ensureAppSettingsSchema() {
     ["notificationsExpiryEnabled", false],
     ["passwordPolicyEnabled", false],
     ["loginAttemptLimitEnabled", true],
+    ["allowLoanFinancePurge", false],
   ];
   for (const [col, def] of boolCols) {
     if (!table[col]) {
@@ -416,6 +418,7 @@ export async function loadAppSettings() {
     notificationsExpiryEnabled: asBool(raw.notificationsExpiryEnabled, false),
     passwordPolicyEnabled: asBool(raw.passwordPolicyEnabled, false),
     loginAttemptLimitEnabled: asBool(raw.loginAttemptLimitEnabled, true),
+    allowLoanFinancePurge: asBool(raw.allowLoanFinancePurge, false),
     maxInstallments: normalizeMaxInstallments(raw.maxInstallments),
     toastPosition: normalizeToastPosition(raw.toastPosition),
     moneyDisplayDecimals: normalizeMoneyDisplayDecimals(raw.moneyDisplayDecimals, 2),
@@ -518,6 +521,9 @@ export async function updateAppSettings(payload) {
   if ("loginAttemptLimitEnabled" in patch) {
     patch.loginAttemptLimitEnabled = asBool(patch.loginAttemptLimitEnabled, true);
   }
+  if ("allowLoanFinancePurge" in patch) {
+    patch.allowLoanFinancePurge = asBool(patch.allowLoanFinancePurge, false);
+  }
   if ("maxInstallments" in patch) {
     patch.maxInstallments = normalizeMaxInstallments(patch.maxInstallments);
   }
@@ -583,6 +589,7 @@ export async function updateAppSettings(payload) {
     notificationsExpiryEnabled: asBool(raw.notificationsExpiryEnabled, false),
     passwordPolicyEnabled: asBool(raw.passwordPolicyEnabled, false),
     loginAttemptLimitEnabled: asBool(raw.loginAttemptLimitEnabled, true),
+    allowLoanFinancePurge: asBool(raw.allowLoanFinancePurge, false),
     maxInstallments: normalizeMaxInstallments(raw.maxInstallments),
     toastPosition: normalizeToastPosition(raw.toastPosition),
     moneyDisplayDecimals: normalizeMoneyDisplayDecimals(raw.moneyDisplayDecimals, 2),
@@ -641,6 +648,7 @@ export function toPublicSettings(data = cache) {
     notificationsExpiryEnabled: asBool(data.notificationsExpiryEnabled, false),
     passwordPolicyEnabled: asBool(data.passwordPolicyEnabled, false),
     loginAttemptLimitEnabled: asBool(data.loginAttemptLimitEnabled, true),
+    allowLoanFinancePurge: asBool(data.allowLoanFinancePurge, false),
     maxInstallments: normalizeMaxInstallments(data.maxInstallments),
     toastPosition: normalizeToastPosition(data.toastPosition),
     moneyDisplayDecimals: normalizeMoneyDisplayDecimals(data.moneyDisplayDecimals, 2),

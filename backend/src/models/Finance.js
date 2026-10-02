@@ -377,6 +377,14 @@ export const FinancialObligation = sequelize.define("ERP_finance_obligations", {
     type: DataTypes.JSON,
     allowNull: true,
   },
+  loanTerms: {
+    type: DataTypes.JSON,
+    allowNull: true,
+  },
+  labelColor: {
+    type: DataTypes.STRING(7),
+    allowNull: true,
+  },
 
   status: {
     type: DataTypes.ENUM("open", "closed", "cancelled"),
@@ -480,11 +488,14 @@ export const RecurringExpenseTemplate = sequelize.define("ERP_finance_recurring_
     comment: "fixed=arriendo, variable=luz/agua",
   },
 
-  frequency: {
-    type: DataTypes.ENUM("monthly", "quarterly", "annual"),
-    allowNull: false,
-    defaultValue: "monthly",
-  },
+    frequency: {
+      type: DataTypes.ENUM("monthly", "quarterly", "annual", "weekly", "bimonthly", "span"),
+      allowNull: false,
+      defaultValue: "monthly",
+    },
+    labelColor: { type: DataTypes.STRING(7), allowNull: true },
+    startDate: { type: DataTypes.DATEONLY, allowNull: true },
+    endDate: { type: DataTypes.DATEONLY, allowNull: true },
 
   baseAmount: {
     type: DataTypes.DECIMAL(10, 2),

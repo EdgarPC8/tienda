@@ -309,6 +309,7 @@ export async function proposeGenericCostFromLinkedPurchases(
     presentationName: best.presentationName,
     packUnitPrice: round6(best.packUnitPrice),
     qtyIntoGeneric: best.qtyIntoGeneric,
+    linkedCount: links.length,
     purchaseSource: best.source,
     purchaseAt: best.at ? new Date(best.at).toISOString() : null,
   };
@@ -335,7 +336,7 @@ export async function refreshGenericCostFromLinkedPurchases(
   await generic.update(
     {
       supplierPrice: next,
-      ...(Number(generic.netWeight) > 1 ? {} : { price: next }),
+      price: next,
     },
     { transaction },
   );
@@ -482,6 +483,7 @@ export async function collectRecipeIngredientPriceAlerts(
       presentationName: links[0]?.presentation?.name ?? null,
       packUnitPrice: null,
       qtyIntoGeneric: links[0]?.qtyIntoGeneric ?? null,
+      linkedCount: links.length,
       purchaseSource: null,
       purchaseAt: null,
       status: links.length ? "no_purchase" : "no_link",

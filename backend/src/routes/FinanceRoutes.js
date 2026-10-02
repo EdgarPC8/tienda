@@ -19,6 +19,7 @@ import {
   getObligationsWorkbench,
   getObligationById,
   createObligation,
+  updateObligation,
   payObligation,
   cancelObligation,
 } from "../controllers/InventoryControl/LoanObligationController.js";
@@ -82,6 +83,7 @@ router.get("/cash-flow-candles", ...adminOnly, getCashFlowCandles);
 router.get("/obligations/workbench", ...adminOnly, getObligationsWorkbench);
 router.get("/obligations/:id", ...adminOnly, getObligationById);
 router.post("/obligations", ...adminOnly, createObligation);
+router.put("/obligations/:id", ...adminOnly, updateObligation);
 router.post("/obligations/:id/pay", ...adminOnly, payObligation);
 router.patch("/obligations/:id/cancel", ...adminOnly, cancelObligation);
 

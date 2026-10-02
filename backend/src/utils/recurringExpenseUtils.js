@@ -15,9 +15,12 @@ export const CATEGORY_LABELS = {
 };
 
 export const FREQUENCY_LABELS = {
+  weekly: "Semanal",
   monthly: "Mensual",
+  bimonthly: "Bimestral",
   quarterly: "Trimestral",
   annual: "Anual",
+  span: "Fecha a fecha",
 };
 
 export const AMOUNT_TYPE_LABELS = {
@@ -55,16 +58,71 @@ export function getQuarter(month) {
   return Math.ceil(month / 3);
 }
 
+function dateOnly(value) {
+  if (!value) return null;
+  const match = String(value).match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : null;
+}
+
+function isoWeekParts(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const week = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return { year: d.getUTCFullYear(), week };
+}
+
 export function buildPeriodKey(frequency, date = nowBusiness()) {
   const y = date.getFullYear();
   const m = date.getMonth() + 1;
+  if (frequency === "weekly") {
+    const { year, week } = isoWeekParts(date);
+    return `${year}-W${pad2(week)}`;
+  }
+  if (frequency === "span") return dateOnly(date) || `${y}-${pad2(m)}-${pad2(date.getDate())}`;
+  if (frequency === "bimonthly") return `${y}-B${pad2(m)}`;
   if (frequency === "monthly") return `${y}-${pad2(m)}`;
   if (frequency === "quarterly") return `${y}-Q${getQuarter(m)}`;
   return String(y);
 }
 
+function weekdayOfTemplate(template) {
+  const raw = Number(template.dueDayOfMonth);
+  if (raw >= 1 && raw <= 7) return raw;
+  return 1;
+}
+
 export function computeDueDate(template, periodKey) {
   const day = Number(template.dueDayOfMonth) || 1;
+
+  if (template.frequency === "weekly") {
+    const match = String(periodKey).match(/^(\d{4})-W(\d{2})$/);
+    if (!match) return toDateAtNoon(nowBusiness().getFullYear(), nowBusiness().getMonth() + 1, 1);
+    const year = Number(match[1]);
+    const week = Number(match[2]);
+    const weekday = weekdayOfTemplate(template);
+    const jan4 = new Date(year, 0, 4, 12);
+    const jan4Dow = jan4.getDay() || 7;
+    const monday = new Date(jan4);
+    monday.setDate(jan4.getDate() - (jan4Dow - 1) + (week - 1) * 7);
+    const due = new Date(monday);
+    due.setDate(monday.getDate() + (weekday - 1));
+    return due;
+  }
+
+  if (template.frequency === "span") {
+    const start = dateOnly(template.startDate) || dateOnly(periodKey);
+    if (!start) return toDateAtNoon(nowBusiness().getFullYear(), nowBusiness().getMonth() + 1, day);
+    const [y, m, d] = start.split("-").map(Number);
+    return toDateAtNoon(y, m, d);
+  }
+
+  if (template.frequency === "bimonthly") {
+    const match = String(periodKey).match(/^(\d{4})-B(\d{2})$/);
+    if (!match) return toDateAtNoon(nowBusiness().getFullYear(), nowBusiness().getMonth() + 1, day);
+    return toDateAtNoon(Number(match[1]), Number(match[2]), day);
+  }
 
   if (template.frequency === "monthly") {
     const [y, m] = periodKey.split("-").map(Number);
@@ -84,26 +142,52 @@ export function computeDueDate(template, periodKey) {
   return toDateAtNoon(year, month, day);
 }
 
+const BIMONTHLY_MONTHS = [1, 3, 5, 7, 9, 11];
+const QUARTERLY_MONTHS = [1, 4, 7, 10];
+
 export function periodKeysToEnsure(template, refDate = nowBusiness()) {
-  const keys = [];
-  const cursor = new Date(refDate);
+  const frequency = template.frequency || "monthly";
+  const year = refDate.getFullYear();
+  const month = refDate.getMonth() + 1;
 
-  // Siempre el período actual + el siguiente (aunque el vencimiento de este mes
-  // ya haya pasado). Así una plantilla creada a mitad de mes sí genera cuota
-  // del mes en curso y aparece en «Cuotas del mes».
-  keys.push(buildPeriodKey(template.frequency, cursor));
-
-  const next = new Date(cursor);
-  if (template.frequency === "monthly") {
-    next.setMonth(next.getMonth() + 1);
-  } else if (template.frequency === "quarterly") {
-    next.setMonth(next.getMonth() + 3);
-  } else {
-    next.setFullYear(next.getFullYear() + 1);
+  if (frequency === "weekly") {
+    const weekday = weekdayOfTemplate(template);
+    const keys = [];
+    const cursor = new Date(year, month - 1, 1, 12);
+    const last = new Date(year, month, 0, 12);
+    while (cursor <= last) {
+      const jsDay = cursor.getDay() || 7;
+      if (jsDay === weekday) keys.push(buildPeriodKey("weekly", cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return [...new Set(keys)];
   }
-  keys.push(buildPeriodKey(template.frequency, next));
 
-  return [...new Set(keys)];
+  if (frequency === "monthly") return [buildPeriodKey("monthly", refDate)];
+
+  if (frequency === "bimonthly") {
+    if (!BIMONTHLY_MONTHS.includes(month)) return [];
+    return [buildPeriodKey("bimonthly", refDate)];
+  }
+
+  if (frequency === "quarterly") {
+    if (!QUARTERLY_MONTHS.includes(month)) return [];
+    return [buildPeriodKey("quarterly", refDate)];
+  }
+
+  if (frequency === "annual") {
+    const dueMonth = Number(template.dueMonth) || 1;
+    if (month !== dueMonth) return [];
+    return [String(year)];
+  }
+
+  if (frequency === "span") {
+    const start = dateOnly(template.startDate);
+    if (!start || !start.startsWith(`${year}-${pad2(month)}`)) return [];
+    return [start];
+  }
+
+  return [];
 }
 
 export function daysUntil(dueDate, refDate = nowBusiness()) {

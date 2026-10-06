@@ -9,7 +9,7 @@ import { Notifications } from "../../models/Notifications.js";
 import { sendNotificationToUser } from "../../sockets/notificationSocket.js";
 import { notifyOk, notifyFail } from "../../services/notifyRaptorSolutions.js";
 
-const ADMIN_ROLES = new Set(["Administrador", "Programador"]);
+const ADMIN_ROLES = new Set(["Administrador", "Propietario"]);
 const TASK_STATUS_PRIORITY = { pending: 0, in_progress: 1, blocked: 2, done: 3 };
 
 const isAdminRole = (req) => ADMIN_ROLES.has(String(req?.user?.loginRol || ""));
@@ -145,6 +145,9 @@ export const createTaskPlan = async (req, res) => {
     });
     return res.status(400).json({ message: "title, startDate y endDate son requeridos." });
   }
+  if (String(endDate).slice(0, 10) < String(startDate).slice(0, 10)) {
+    return res.status(400).json({ message: "La fecha de fin no puede ser anterior al inicio." });
+  }
   await ensureProduceActionType();
   const t = await sequelize.transaction();
   try {
@@ -237,6 +240,9 @@ export const updateTaskPlan = async (req, res) => {
     });
     return res.status(400).json({ message: "title, startDate y endDate son requeridos." });
   }
+  if (String(endDate).slice(0, 10) < String(startDate).slice(0, 10)) {
+    return res.status(400).json({ message: "La fecha de fin no puede ser anterior al inicio." });
+  }
 
   await ensureProduceActionType();
   const t = await sequelize.transaction();
@@ -282,19 +288,34 @@ export const deleteTaskPlan = async (req, res) => {
     return res.status(404).json({ message: "Plan no encontrado." });
   }
   if (plan.status === "published") {
-    notifyFail("task_plan.delete_failed", "No se puede eliminar un plan publicado", {
-      req,
-      httpStatus: 400,
-      extra: { planId: id },
-    });
-    return res.status(400).json({
-      message: "No se puede eliminar un plan publicado. Ciérralo primero o deja de usarlo.",
-    });
+    // Permitir borrar planes publicados (p. ej. auditorías / limpieza).
   }
   await TaskItem.destroy({ where: { planId: plan.id } });
   await plan.destroy();
   notifyOk("task_plan.deleted", `Plan tareas #${id}`, { planId: Number(id) });
   res.json({ ok: true, planId: Number(id) });
+};
+
+export const closeTaskPlan = async (req, res) => {
+  if (!isAdminRole(req)) {
+    notifyFail("task_plan.close_failed", "No autorizado", { req, httpStatus: 403 });
+    return res.status(403).json({ message: "No autorizado." });
+  }
+  const { id } = req.params;
+  const plan = await TaskPlan.findByPk(id);
+  if (!plan) {
+    notifyFail("task_plan.close_failed", `Plan #${id} no encontrado`, { req, httpStatus: 404 });
+    return res.status(404).json({ message: "Plan no encontrado." });
+  }
+  if (plan.status === "draft") {
+    return res.status(400).json({ message: "Publicá el plan antes de cerrarlo." });
+  }
+  if (plan.status === "closed") {
+    return res.json({ ok: true, planId: Number(id), status: "closed" });
+  }
+  await plan.update({ status: "closed" });
+  notifyOk("task_plan.closed", `Plan cerrado #${id}`, { planId: Number(id) });
+  res.json({ ok: true, planId: Number(id), status: "closed" });
 };
 
 export const deleteTaskItem = async (req, res) => {
@@ -437,7 +458,11 @@ export const updateTaskItemStatus = async (req, res) => {
     });
     return res.status(403).json({ message: "No autorizado para esta tarea." });
   }
-  const nextStatus = ["pending", "in_progress", "done", "blocked"].includes(String(status))
+  const allowedStatus = ["pending", "in_progress", "done", "blocked"];
+  if (status != null && !allowedStatus.includes(String(status))) {
+    return res.status(400).json({ message: "Estado de tarea inválido" });
+  }
+  const nextStatus = allowedStatus.includes(String(status))
     ? String(status)
     : item.status;
   if (item.actionType === "produce" && nextStatus === "done") {

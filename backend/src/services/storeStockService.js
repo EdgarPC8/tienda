@@ -233,9 +233,11 @@ export async function adjustStoreStock(
         attributes: ["id", "name"],
         transaction: t,
       });
-      throw new Error(
+      const err = new Error(
         `Stock insuficiente en este local para ${product?.name || `#${productId}`}. Disponible: ${before}`,
       );
+      err.statusCode = 400;
+      throw err;
     }
     row.quantity = after;
     await row.save({ transaction: t });

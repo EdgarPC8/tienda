@@ -9,10 +9,11 @@ import { Users } from "../models/Users.js";
 import { Account, AccountRoles } from "../models/Account.js";
 
 const ROLES = [
-  { id: 1, name: "Programador" },
+  { id: 1, name: "Propietario" },
   { id: 2, name: "Administrador" },
   { id: 3, name: "Profesional" },
   { id: 4, name: "Empleado" },
+  { id: 5, name: "Programador" },
 ];
 
 const EDGAR_USER = {

@@ -351,6 +351,25 @@ export async function readBackupFileSummary() {
   };
 }
 
+/** Resumen liviano para el panel: no abre ni interpreta backup.json. */
+export async function getPanelBackupSummaryLight() {
+  let st = null;
+  try {
+    st = await fs.stat(backupFilePath);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  if (!st) return { hasBackup: false, lastBackup: null, mainBackup: null };
+  const file = {
+    filename: "backup.json",
+    modifiedAt: st.mtime.toISOString(),
+    sizeBytes: st.size,
+    totalRows: null,
+    isMainFile: true,
+  };
+  return { hasBackup: true, lastBackup: file, mainBackup: { ...file } };
+}
+
 /** Resumen de la última copia guardada (panel de control). */
 export async function getPanelBackupSummary() {
   const mainRaw = await readBackupFileSummary();
@@ -538,9 +557,10 @@ export async function ensureBackupFileExists() {
 
   const empty = ensureBackupShape({});
   empty.Roles = [
-    { id: 1, name: "Programador" },
+    { id: 1, name: "Propietario" },
     { id: 2, name: "Administrador" },
     { id: 3, name: "Empleado" },
+    { id: 4, name: "Programador" },
   ];
   const payload = JSON.stringify(empty, null, 2);
   await fs.writeFile(backupFilePath, payload, "utf8");

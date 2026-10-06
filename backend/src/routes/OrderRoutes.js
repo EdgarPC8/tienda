@@ -98,7 +98,7 @@ const router = express.Router();
 
 // --------------------
 // CMD — script one-off de mantenimiento (cliente hardcodeado en OrderController.command)
-// En producción NO se expone. En dev: solo Programador autenticado.
+// En producción NO se expone. En dev: solo Propietario autenticado.
 // --------------------
 if (process.env.NODE_ENV !== "production") {
   router.get("/cmd", isAuthenticated, requireProgrammer, command);
@@ -185,8 +185,8 @@ router.post("/suppliers", isAuthenticated, createSupplier);
 router.put("/suppliers/:id", isAuthenticated, updateSupplier);
 router.delete("/suppliers/:id", isAuthenticated, deleteSupplier);
 
-router.get("/supplier-product-codes/all", isAuthenticated, listAllSupplierProductCodes);
 router.get("/supplier-product-codes", isAuthenticated, listSupplierProductCodes);
+router.get("/supplier-product-codes/all", isAuthenticated, listAllSupplierProductCodes);
 router.get("/supplier-product-codes/resolve", isAuthenticated, resolveSupplierProductCode);
 router.post("/supplier-product-codes/upsert", isAuthenticated, upsertSupplierProductCodes);
 router.delete("/supplier-product-codes/:id", isAuthenticated, deleteSupplierProductCode);

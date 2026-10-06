@@ -114,3 +114,44 @@ export function normalizeCustomerPayload(body = {}) {
 
   return payload;
 }
+
+export function ecuadorIdentError(cedula, identType) {
+  const digits = String(cedula || "").replace(/\D/g, "");
+  if (!digits) return null;
+  const type = String(identType || "05");
+  if (type !== "04" && type !== "05" && type !== "07") return null;
+  if (digits.length !== 10 && digits.length !== 13) return "La cédula o el RUC no es válido";
+  if (digits.length === 13 && digits.endsWith("000")) return "El RUC no es válido";
+  const third = Number(digits[2]);
+  if (digits.length === 13 && (third === 6 || third === 9)) return null;
+  if (third > 5) return "La cédula o el RUC no es válido";
+  const province = Number(digits.slice(0, 2));
+  if (province < 1 || province > 24) return "La cédula o el RUC no es válido";
+  const coef = [2, 1, 2, 1, 2, 1, 2, 1, 2];
+  let sum = 0;
+  for (let i = 0; i < 9; i += 1) {
+    let product = Number(digits[i]) * coef[i];
+    if (product >= 10) product -= 9;
+    sum += product;
+  }
+  const check = (10 - (sum % 10)) % 10;
+  if (check !== Number(digits[9])) return "La cédula o el RUC no es válido";
+  return null;
+}
+
+export function emailFormatError(email) {
+  if (email == null || String(email).trim() === "") return null;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) {
+    return "El correo no es válido";
+  }
+  return null;
+}
+
+export function phoneFormatError(phone) {
+  if (phone == null || String(phone).trim() === "") return null;
+  const raw = String(phone).trim();
+  if (!/^[0-9+\-()\s]{7,20}$/.test(raw) || !/\d{7,}/.test(raw.replace(/\D/g, ""))) {
+    return "El teléfono no es válido";
+  }
+  return null;
+}

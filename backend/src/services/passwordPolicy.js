@@ -15,7 +15,6 @@ export function loginAttemptLimitOn() {
 }
 
 export function passwordPolicyError(password) {
-  if (!passwordPolicyOn()) return null;
   if (String(password || "").length < 8) {
     return "La contraseña debe tener al menos 8 caracteres";
   }

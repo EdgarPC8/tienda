@@ -2,6 +2,7 @@ import express from "express";
 import { isAuthenticated } from "../middlewares/authMiddelware.js";
 import {
   createTaskPlan,
+  closeTaskPlan,
   deleteTaskItem,
   deleteTaskPlan,
   executeTaskOpenBox,
@@ -20,6 +21,7 @@ router.get("/plans", isAuthenticated, getTaskPlans);
 router.post("/plans", isAuthenticated, createTaskPlan);
 router.put("/plans/:id", isAuthenticated, updateTaskPlan);
 router.delete("/plans/:id", isAuthenticated, deleteTaskPlan);
+router.post("/plans/:id/close", isAuthenticated, closeTaskPlan);
 router.post("/plans/:id/publish", isAuthenticated, publishTaskPlan);
 router.get("/my-items", isAuthenticated, getMyTaskItems);
 router.put("/items/:id/status", isAuthenticated, updateTaskItemStatus);

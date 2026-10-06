@@ -7,7 +7,7 @@ import {
 } from "../../models/CashRegister.js";
 import { notifyOk, notifyFail } from "../../services/notifyRaptorSolutions.js";
 
-const ADMIN_ROLES = new Set(["Administrador", "Programador"]);
+const ADMIN_ROLES = new Set(["Administrador", "Propietario"]);
 
 function registerToJson(row) {
   if (!row) return null;

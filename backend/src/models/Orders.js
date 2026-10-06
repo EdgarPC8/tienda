@@ -51,6 +51,8 @@ export const Order = sequelize.define("ERP_orders", {
   /** Cuenta del vendedor / cajero que registró la venta POS */
   sellerAccountId: { type: DataTypes.INTEGER, allowNull: true },
   paymentMethod: { type: DataTypes.STRING(40), allowNull: true },
+  /** Efectivo entregado por el cliente en caja (para calcular vuelto). */
+  amountReceived: { type: DataTypes.DECIMAL(14, 2), allowNull: true },
   paidAt: { type: DataTypes.DATE, allowNull: true },
   documentType: {
     type: DataTypes.STRING(30),

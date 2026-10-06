@@ -15,6 +15,7 @@ import {
   writeBackupToDisk,
   getBackupsWorkbench,
   getPanelBackupSummary,
+  getPanelBackupSummaryLight,
   setMainBackupFromStored,
   deleteStoredBackup,
   pruneStoredBackupsAndSaveFresh,
@@ -422,7 +423,7 @@ export const getPanelStatsController = async (_req, res) => {
       InventoryCategory.count({ where: { parentId: { [Op.ne]: null } } }),
       Users.count(),
       Account.count(),
-      getPanelBackupSummary(),
+      getPanelBackupSummaryLight(),
     ]);
 
     res.json({
@@ -443,7 +444,6 @@ export const getPanelStatsController = async (_req, res) => {
     res.status(500).json({
       ok: false,
       message: "Error al obtener estadísticas del sistema",
-      error: error.message,
     });
   }
 };

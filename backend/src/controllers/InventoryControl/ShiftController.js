@@ -24,8 +24,8 @@ import { ensureSingleLocalOwnStore } from "../../services/storeStockService.js";
 
 const CAJA_POS_TAG = "[CAJA_POS]";
 const to2 = (n) => Number(Number(n || 0).toFixed(2));
-const ADMIN_ROLES = new Set(["Administrador", "Programador"]);
-const PROGRAMMER_ROLE = "Programador";
+const ADMIN_ROLES = new Set(["Administrador", "Propietario"]);
+const PROGRAMMER_ROLE = "Propietario";
 const USER_LIST_ATTRS = ["id", "firstName", "firstLastName", "ci"];
 
 const OUT_CATEGORIES = new Set(["gasto_operativo", "compra_mercancia", "retiro", "otro"]);
@@ -1386,7 +1386,7 @@ export async function getDailyShiftReport(req, res) {
   }
 }
 
-/** PATCH /shifts/:id — corrección de turno (solo Programador). */
+/** PATCH /shifts/:id — corrección de turno (solo Propietario). */
 export async function updateShiftProgrammer(req, res) {
   try {
     if (!requireProgrammerRole(req, res)) return;
@@ -1469,7 +1469,7 @@ export async function updateShiftProgrammer(req, res) {
   }
 }
 
-/** PATCH /shifts/:shiftId/movements/:movementId — editar gasto/movimiento (solo Programador). */
+/** PATCH /shifts/:shiftId/movements/:movementId — editar gasto/movimiento (solo Propietario). */
 export async function updateShiftMovementProgrammer(req, res) {
   try {
     if (!requireProgrammerRole(req, res, "shift_movement.update_failed")) return;
@@ -1559,7 +1559,7 @@ export async function updateShiftMovementProgrammer(req, res) {
   }
 }
 
-/** DELETE /shifts/:shiftId/movements/:movementId — eliminar movimiento (solo Programador). */
+/** DELETE /shifts/:shiftId/movements/:movementId — eliminar movimiento (solo Propietario). */
 export async function deleteShiftMovementProgrammer(req, res) {
   try {
     if (!requireProgrammerRole(req, res, "shift_movement.delete_failed")) return;

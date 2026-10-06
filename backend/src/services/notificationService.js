@@ -12,7 +12,7 @@ import { sendNotificationToUser } from "../sockets/notificationSocket.js";
 import { getAppTimezone, getZonedParts, nowApp } from "../utils/appDateTime.js";
 import { getAppSettingsSync } from "./appSettingsService.js";
 
-const ADMIN_ROLE_NAMES = ["Administrador", "Programador"];
+const ADMIN_ROLE_NAMES = ["Administrador", "Propietario"];
 
 function nowInBusinessTz() {
   return nowApp();

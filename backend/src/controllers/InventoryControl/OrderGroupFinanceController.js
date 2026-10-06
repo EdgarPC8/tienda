@@ -88,7 +88,7 @@ const toNum = (v, def = 0) => {
 
   const PROGRAMMER_ONLY_MSG = "No tenés permiso para editar o eliminar abonos";
   const assertProgrammerRole = (user) =>
-    user?.loginRol === "Programador";
+    user?.loginRol === "Propietario";
 
   /**
    * Si el grupo ya tiene abonos (group_payment), esos son la fuente de verdad.

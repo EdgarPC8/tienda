@@ -2,7 +2,7 @@ import { NotificationProgram } from "../models/NotificationProgram.js";
 import { dispatchProgramToUsers } from "../services/notificationService.js";
 import { notifyOk, notifyFail } from "../services/notifyRaptorSolutions.js";
 
-const ADMIN_ROLES = new Set(["Administrador", "Programador"]);
+const ADMIN_ROLES = new Set(["Administrador", "Propietario"]);
 
 function assertAdmin(req, res) {
   if (!ADMIN_ROLES.has(String(req.user?.loginRol || ""))) {
@@ -26,6 +26,11 @@ function normalizePayload(body) {
     out.scheduleIntervalMinutes = Number(out.scheduleIntervalMinutes);
   }
   if (out.active != null) out.active = Boolean(out.active);
+  if (out.targetType != null && !["all_users", "by_role"].includes(String(out.targetType))) {
+    const err = new Error("Tipo de destino inválido");
+    err.statusCode = 400;
+    throw err;
+  }
   return out;
 }
 

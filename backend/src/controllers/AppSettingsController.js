@@ -81,6 +81,7 @@ export async function putAppSettings(req, res) {
       "allowLoanFinancePurge",
       "maxInstallments",
       "receiptDetailSettings",
+      "tableColumnVisibility",
       "themePalette",
       "keyboardShortcuts",
     ];

@@ -5,7 +5,8 @@ import { Roles } from "../models/Roles.js";
 import { UserData } from "../models/UserData.js";
 import { UniqueConstraintError, Op } from "sequelize";
 import { notifyOk, notifyFail } from "../services/notifyRaptorSolutions.js";
-import { passwordPolicyError, temporaryPassword } from "../services/passwordPolicy.js";
+import { passwordPolicyError } from "../services/passwordPolicy.js";
+import { ecuadorIdentError, emailFormatError } from "../services/customerNameService.js";
 import { CashShift } from "../models/CashShift.js";
 
 const USER_FIELDS = [
@@ -90,10 +91,13 @@ function formatUserRow(user) {
 }
 
 async function rejectProgrammerAssignment(roles, loginRol) {
-  if (!Array.isArray(roles) || loginRol === "Programador") return;
-  const programmer = await Roles.findOne({ where: { name: "Programador" } });
-  if (programmer && roles.some((id) => Number(id) === Number(programmer.id))) {
-    const err = new Error("No podés asignar el rol Programador");
+  if (!Array.isArray(roles) || loginRol === "Propietario") return;
+  const hidden = await Roles.findAll({
+    where: { name: ["Propietario", "Programador"] },
+  });
+  const hiddenIds = new Set(hidden.map((role) => Number(role.id)));
+  if (roles.some((id) => hiddenIds.has(Number(id)))) {
+    const err = new Error("No podés asignar ese rol");
     err.statusCode = 403;
     throw err;
   }
@@ -125,7 +129,12 @@ async function upsertUserAccount(userId, { username, password, roles }, loginRol
     await rejectDuplicateUsername(username, userId);
     await rejectProgrammerAssignment(roles, loginRol);
 
-    const plain = password && String(password).trim() ? String(password).trim() : temporaryPassword();
+    if (!password || !String(password).trim()) {
+      const err = new Error("La contraseña es obligatoria");
+      err.statusCode = 400;
+      throw err;
+    }
+    const plain = String(password).trim();
     const policyError = passwordPolicyError(plain);
     if (policyError) {
       const err = new Error(policyError);
@@ -164,6 +173,18 @@ async function upsertUserAccount(userId, { username, password, roles }, loginRol
   return account;
 }
 
+function userIdentError(ci, documentType) {
+  const type = String(documentType || "").toLowerCase();
+  if (/pasaporte|passport/.test(type)) return null;
+  return ecuadorIdentError(ci, /ruc/.test(type) ? "04" : "05");
+}
+
+async function rollbackNewUser(userId) {
+  await Account.destroy({ where: { userId } }).catch(() => {});
+  await UserData.destroy({ where: { idUser: userId } }).catch(() => {});
+  await Users.destroy({ where: { id: userId } }).catch(() => {});
+}
+
 async function upsertUserEmail(userId, email) {
   if (email === undefined) return;
 
@@ -187,6 +208,10 @@ export const addUser = async (req, res) => {
     if (!String(username || "").trim()) {
       return res.status(400).json({ message: "El nombre de usuario es obligatorio" });
     }
+    const identError = userIdentError(userData.ci, userData.documentType);
+    if (identError) return res.status(400).json({ message: identError });
+    const emailError = emailFormatError(email);
+    if (emailError) return res.status(400).json({ message: emailError });
     try {
       await rejectProgrammerAssignment(roles, req.user?.loginRol);
     } catch (error) {
@@ -195,9 +220,13 @@ export const addUser = async (req, res) => {
     }
 
     const newUser = await Users.create(userData);
-
-    await upsertUserEmail(newUser.id, email);
-    await upsertUserAccount(newUser.id, { username, password, roles }, req.user?.loginRol);
+    try {
+      await upsertUserEmail(newUser.id, email);
+      await upsertUserAccount(newUser.id, { username, password, roles }, req.user?.loginRol);
+    } catch (error) {
+      await rollbackNewUser(newUser.id);
+      throw error;
+    }
 
     const created = await Users.findByPk(newUser.id, { include: userInclude });
     const userRow = formatUserRow(created);
@@ -238,6 +267,10 @@ export const updateUserData = async (req, res) => {
     const { photo, username, password, roles, ...rest } = req.body;
     const email = resolveEmailFromBody(req.body);
     const userData = pickUserFields(rest);
+    const identError = userIdentError(userData.ci, userData.documentType);
+    if (identError) return res.status(400).json({ message: identError });
+    const emailError = emailFormatError(email);
+    if (emailError) return res.status(400).json({ message: emailError });
 
     if (Object.keys(userData).length > 0) {
       await Users.update(userData, { where: { id: userId } });

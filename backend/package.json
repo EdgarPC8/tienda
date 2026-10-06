@@ -5,7 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "scripts": "node scripts/menu.js",
+    "scripts": "node ../../gestor-proyectos-negocios/scripts/hub/hub.cjs",
     "test": "node --test test/*.test.js",
     "dev": "nodemon index.js",
     "start": "node index.js",
@@ -34,6 +34,8 @@
     "db:fix:raw-to-final:dry": "node scripts/set-raw-products-to-final.js --dry-run",
     "db:fix:pos-customer": "node scripts/fix-pos-consumidor-final.js",
     "db:fix:empleado-role": "node scripts/fix-estudiante-to-empleado-role.js",
+    "db:fix:owner-roles": "node scripts/fix-owner-programmer-roles.js",
+    "db:fix:owner-roles:dry": "node scripts/fix-owner-programmer-roles.js --dry-run",
     "db:images:clear-missing": "node scripts/clear-missing-product-images.js",
     "db:images:clear-missing:dry": "node scripts/clear-missing-product-images.js --dry-run",
     "db:images:enrich-goupc": "node scripts/enrich-product-images-from-goupc.js",

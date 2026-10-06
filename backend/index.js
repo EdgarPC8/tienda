@@ -14,6 +14,7 @@ import "./src/database/registerEdDeliModels.js";
 import { recreateDatabaseFromBackup } from "./src/database/insertData.js";
 import { loggerMiddleware } from "./src/middlewares/loggerMiddleware.js";
 import { loadMetricsMiddleware } from "./src/middlewares/loadMetricsMiddleware.js";
+import { attachNumericParams } from "./src/middlewares/numericParams.js";
 
 import UsersRoutes from "./src/routes/UsersRoutes.js";
 import AuthRoutes from "./src/routes/AuthRoutes.js";
@@ -37,6 +38,7 @@ import SubscriptionRoutes from "./src/routes/SubscriptionRoutes.js";
 import NewsRoutes from "./src/routes/NewsRoutes.js";
 import SriBillingRoutes from "./src/routes/SriBillingRoutes.js";
 import { loadAppSettings, getAppSettingsSync } from "./src/services/appSettingsService.js";
+import { ensureOwnerAndProgrammerRoles } from "./src/database/ensureRoleNames.js";
 import { loadSriBillingSettings } from "./src/services/sriBillingService.js";
 import { ensureEntitlementTable, enforceEntitlementSideEffectsOnBoot } from "./src/services/entitlementService.js";
 import { ensureAppNewsTable } from "./src/services/appNewsService.js";
@@ -63,7 +65,7 @@ import {
   notFoundMiddleware,
   scrubSqlResponses,
 } from "./src/middlewares/errorMiddleware.js";
-import { restrictEmployee } from "./src/middlewares/employeeAccess.js";
+import { restrictEmployee, restrictProgrammer } from "./src/middlewares/employeeAccess.js";
 import { PORT, API_PREFIX } from "./src/config/serverEnv.js";
 
 // ✅ __dirname en ES Modules
@@ -97,6 +99,7 @@ app.use((req, res, next) => {
 app.use(scrubSqlResponses);
 app.use(loggerMiddleware);
 app.use(restrictEmployee);
+app.use(restrictProgrammer);
 app.use(loadMetricsMiddleware);
 
 // CORS — localhost, LAN 192.168/10.x y dominio institucional (sin IPs fijas)
@@ -108,9 +111,28 @@ app.use(
   }),
 );
 
+attachNumericParams(UsersRoutes);
+attachNumericParams(AccountsRoutes);
+attachNumericParams(InventoryControlRoutes);
+attachNumericParams(OrderRoutes);
+attachNumericParams(FinanceRoutes);
+attachNumericParams(ShiftRoutes);
+attachNumericParams(TaskRoutes);
+attachNumericParams(PublicidadRoutes);
+attachNumericParams(ComandsRoutes);
+attachNumericParams(SriBillingRoutes);
+
 app.use(`/${api}/img`, ImgRoutes);
 
-app.use(`/${api}/img`, express.static(path.resolve(__dirname, "src/img")));
+app.use(`/${api}/img`, express.static(path.resolve(__dirname, "src/img"), { fallthrough: true, index: false }));
+app.use(`/${api}/img`, (_req, res) => {
+  res
+    .status(200)
+    .type("image/svg+xml")
+    .send(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#eceff1"/><circle cx="32" cy="24" r="10" fill="#90a4ae"/><path d="M14 54c3-12 12-16 18-16s15 4 18 16" fill="#90a4ae"/></svg>',
+    );
+});
 app.use(`/${api}/files`, FilesRoutes);
 app.use(`/${api}/documents`, DocumentRoutes);
 
@@ -148,6 +170,7 @@ app.use(errorMiddleware);
 export async function main() {
   try {
     await sequelize.authenticate();
+    await ensureOwnerAndProgrammerRoles();
     await loadAppSettings();
     await loadSriBillingSettings();
     // Sin sync({ alter }) en arranque: el esquema se alinea a mano con `npm run db:sync`.

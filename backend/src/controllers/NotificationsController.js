@@ -8,7 +8,7 @@ import { notifyOk, notifyFail } from "../services/notifyRaptorSolutions.js";
 
 function sameUser(req, userId) {
   const role = req.user?.loginRol;
-  if (role === "Administrador" || role === "Programador") return true;
+  if (role === "Administrador" || role === "Propietario") return true;
   return Number(req.user?.userId) === Number(userId);
 }
 
@@ -168,7 +168,7 @@ export const markManyAsSeen = async (req, res) => {
   }
   try {
     const where = { id: ids, deleted: false };
-    if (!sameUser(req, req.user?.userId) || (req.user?.loginRol !== "Administrador" && req.user?.loginRol !== "Programador")) {
+    if (!sameUser(req, req.user?.userId) || (req.user?.loginRol !== "Administrador" && req.user?.loginRol !== "Propietario")) {
       where.userId = req.user?.userId;
     }
     await Notifications.update(
@@ -195,7 +195,7 @@ export const deleteManyNotifications = async (req, res) => {
   }
   try {
     const where = { id: ids };
-    if (req.user?.loginRol !== "Administrador" && req.user?.loginRol !== "Programador") {
+    if (req.user?.loginRol !== "Administrador" && req.user?.loginRol !== "Propietario") {
       where.userId = req.user?.userId;
     }
     await Notifications.update(

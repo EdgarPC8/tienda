@@ -37,7 +37,7 @@ export async function putEntitlementFromGestor(req, res, next) {
   }
 }
 
-/** POST — Programador: forzar pull desde el gestor (diagnóstico / bootstrap). */
+/** POST — Propietario: forzar pull desde el gestor (diagnóstico / bootstrap). */
 export async function pullSubscription(req, res, next) {
   try {
     const data = await pullEntitlementFromGestor();

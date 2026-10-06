@@ -1010,7 +1010,7 @@ export const cancelObligation = async (req, res) => {
         const rol = user?.loginRol;
         const allowed =
           getAppSettingsSync()?.allowLoanFinancePurge === true &&
-          (rol === "Administrador" || rol === "Programador");
+          (rol === "Administrador" || rol === "Propietario");
         if (!allowed) {
           return { status: 400, body: { message: "No se puede anular: ya tiene abonos registrados" } };
         }

@@ -23,6 +23,9 @@ export const login = async (req, res) => {
     if (blocked) {
       return res.status(429).json({ message: blocked });
     }
+    if (!String(username || "").trim() || password == null || String(password) === "") {
+      return res.status(400).json({ message: "Ingresá usuario y contraseña" });
+    }
     const account = await Account.findOne({
       where: { username },
       include: [

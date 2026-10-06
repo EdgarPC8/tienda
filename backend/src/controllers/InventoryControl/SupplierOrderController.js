@@ -16,8 +16,28 @@ import { ensureInventoryBatchesSchema } from "./BatchController.js";
 
 function parseCalendarDate(value) {
   const s = String(value || "").trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(`${s}T12:00:00`);
-  return new Date(value);
+  if (!s) {
+    const err = new Error("La fecha de la compra no es válida");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const [y, m, d] = s.split("-").map(Number);
+    const dt = new Date(y, m - 1, d, 12, 0, 0);
+    if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) {
+      const err = new Error("La fecha de la compra no es válida");
+      err.statusCode = 400;
+      throw err;
+    }
+    return dt;
+  }
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) {
+    const err = new Error("La fecha de la compra no es válida");
+    err.statusCode = 400;
+    throw err;
+  }
+  return d;
 }
 import { isMultiStockEnabled } from "../../services/appSettingsService.js";
 import {
@@ -191,13 +211,23 @@ function buildItemCreatePayload(orderId, row) {
   const productId = Number(row.productId);
   const quantity = toNum(row.quantity);
   if (!productId || quantity <= 0) throw new Error("Ítem inválido en el pedido");
+  const unitRaw = row.unitPrice ?? row.price ?? 0;
+  if (!Number.isFinite(Number(unitRaw))) throw new Error("Precio unitario inválido");
+  const unitPrice = Number(unitRaw);
+  if (unitPrice < 0) throw new Error("El precio unitario no puede ser negativo");
+  const discountRaw = row.discount ?? 0;
+  if (!Number.isFinite(Number(discountRaw))) throw new Error("Descuento inválido");
+  const discount = Math.max(0, Number(discountRaw));
+  if (discount > quantity * unitPrice + 0.0001) {
+    throw new Error("El descuento no puede superar el subtotal");
+  }
   const lot = itemPackLotFields(row);
   return {
     orderId,
     productId,
     quantity,
-    unitPrice: toNum(row.unitPrice ?? row.price, 0),
-    discount: Math.max(0, toNum(row.discount, 0)),
+    unitPrice,
+    discount,
     taxRate: Math.max(0, toNum(row.taxRate, 0)),
     ...lot,
   };
@@ -418,13 +448,13 @@ export const updateSupplierOrder = async (req, res) => {
     }
 
     const isReceived = Boolean(order.receivedAt);
-    // Corrección manual de fechas (Programador): no re-dispara movimientos de stock.
+    // Corrección manual de fechas (Propietario): no re-dispara movimientos de stock.
     const hasDateOverride = receivedAt !== undefined || paidAt !== undefined;
     const hasPaymentInstallments = paymentInstallments !== undefined;
     const user = await verifyJWT(getHeaderToken(req));
-    const isProgramador = user?.loginRol === "Programador";
+    const isPropietario = user?.loginRol === "Propietario";
     if (hasDateOverride) {
-      if (!isProgramador) {
+      if (!isPropietario) {
         notifyFail("supplier_order.update_failed", "No tenés permiso para editar las fechas de entrega y pago", {
           req,
           httpStatus: 403,
@@ -435,13 +465,13 @@ export const updateSupplierOrder = async (req, res) => {
       }
     }
 
-    /** Programador: editar ítems/precios de pedido recibido con saldo (modal completo). */
+    /** Propietario: editar ítems/precios de pedido recibido con saldo (modal completo). */
     const wantsReceivedItemsEdit =
       isReceived &&
       !hasDateOverride &&
       Array.isArray(items) &&
       items.length > 0 &&
-      isProgramador;
+      isPropietario;
 
     if (isReceived && !hasDateOverride && !wantsReceivedItemsEdit && !hasPaymentInstallments) {
       notifyFail("supplier_order.update_failed", "No se puede editar un pedido ya recibido", {
@@ -626,7 +656,7 @@ export const addSupplierOrderItem = async (req, res) => {
   try {
     const token = getHeaderToken(req);
     const user = await verifyJWT(token);
-    const isPrivileged = ["Administrador", "Programador"].includes(user?.loginRol);
+    const isPrivileged = ["Administrador", "Propietario"].includes(user?.loginRol);
     if (!isPrivileged) {
       notifyFail("supplier_order.item_add_failed", "No tenés permiso para agregar productos al pedido", {
         req,
@@ -731,7 +761,7 @@ export const deleteSupplierOrder = async (req, res) => {
         httpStatus: 403,
       });
       return res.status(403).json({
-        message: "Anule el pago primero o use Admin/Programador con correcciones financieras activas",
+        message: "Anule el pago primero o use Admin/Propietario con correcciones financieras activas",
       });
     }
 
@@ -768,7 +798,7 @@ export const unmarkSupplierOrderPaid = async (req, res) => {
         httpStatus: 403,
       });
       return res.status(403).json({
-        message: "Solo Admin (con config activa) o Programador pueden anular un pago a proveedor",
+        message: "Solo Admin (con config activa) o Propietario pueden anular un pago a proveedor",
       });
     }
 

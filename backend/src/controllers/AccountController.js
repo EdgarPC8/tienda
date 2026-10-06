@@ -6,22 +6,24 @@ import bcrypt from "bcryptjs";
 import { notifyOk, notifyFail } from "../services/notifyRaptorSolutions.js";
 import { passwordPolicyError, temporaryPassword } from "../services/passwordPolicy.js";
 
-/** Quita el rol Programador de un listado de IDs si quien pide no es Programador. */
+/** Quita Propietario y Programador si quien pide no es Propietario. */
 async function sanitizeRoleIdsForRequester(roleIds, loginRol) {
-  if (!Array.isArray(roleIds) || loginRol === "Programador") return roleIds;
-  const programmer = await Roles.findOne({ where: { name: "Programador" } });
-  if (!programmer) return roleIds;
-  return roleIds.filter((id) => Number(id) !== Number(programmer.id));
+  if (!Array.isArray(roleIds) || loginRol === "Propietario") return roleIds;
+  const hidden = await Roles.findAll({
+    where: { name: ["Propietario", "Programador"] },
+  });
+  const hiddenIds = new Set(hidden.map((role) => Number(role.id)));
+  return roleIds.filter((id) => !hiddenIds.has(Number(id)));
 }
 
 export const getRoles = async (req, res) => {
   try {
     const data = await Roles.findAll();
-    // Rol interno: solo visible si la sesión actual es Programador
+    // Rol interno: solo visible si la sesión actual es Propietario
     const roles =
-      req.user?.loginRol === "Programador"
+      req.user?.loginRol === "Propietario"
         ? data
-        : data.filter((r) => r.name !== "Programador");
+        : data.filter((r) => r.name !== "Propietario" && r.name !== "Programador");
     res.json(roles);
   } catch (error) {
     console.error("Error al obtener los roles:", error);

@@ -57,7 +57,7 @@ const PROGRAMMER_ONLY_MSG =
 
 const PRODUCTION_OP_REF_PREFIX = "produccion_op:";
 
-const assertProgrammerRole = (user) => user?.loginRol === "Programador";
+const assertProgrammerRole = (user) => user?.loginRol === "Propietario";
 
 /** ID de operación de producción (PR-… / PF-…) desde referenceType o descripción. */
 export const extractOperationId = (movement) => {
@@ -72,7 +72,7 @@ export const extractOperationId = (movement) => {
 
 const productionReferenceType = (opId) => `${PRODUCTION_OP_REF_PREFIX}${opId}`;
 
-/** Fecha del movimiento: ahora para todos; fecha enviada solo si es Programador. */
+/** Fecha del movimiento: ahora para todos; fecha enviada solo si es Propietario. */
 const resolveMovementDate = (dateInput, user) => {
   if (dateInput != null && dateInput !== "" && assertProgrammerRole(user)) {
     const d = new Date(dateInput);
@@ -693,7 +693,14 @@ function resolveAjusteReasonForDb(reasonIncoming, stockAnterior, stockNuevo) {
 /**
  * Registra gasto en finanzas solo cuando es compra con monto (entrada + ENTRADA_COMPRA).
  */
-async function registerExpenseCompraSiAplica({ product, reason, priceTotal, accountId, transaction }) {
+async function registerExpenseCompraSiAplica({
+  product,
+  reason,
+  priceTotal,
+  accountId,
+  transaction,
+  movementId,
+}) {
   if (reason !== "ENTRADA_COMPRA" || priceTotal == null || Number.isNaN(Number(priceTotal))) {
     return null;
   }
@@ -703,8 +710,8 @@ async function registerExpenseCompraSiAplica({ product, reason, priceTotal, acco
       amount: priceTotal,
       concept: `Compra de ${product.name}`,
       category: "Compras",
-      referenceId: product.id,
-      referenceType: "inventory_entry",
+      referenceId: movementId != null ? Number(movementId) : product.id,
+      referenceType: movementId != null ? "inventory_movement" : "inventory_entry",
       createdBy: accountId,
     },
     { transaction },
@@ -860,7 +867,8 @@ export const openPresentationMovement = async (req, res) => {
       ...result,
     });
   } catch (error) {
-    const status = error?.statusCode || 500;
+    const business = /Stock insuficiente|no puede ser negativa/i.test(error?.message || "");
+    const status = error?.statusCode || (business ? 400 : 500);
     notifyFail("movement.presentation_open_failed", error?.message || "Error al abrir presentación", {
       error,
       req,
@@ -981,15 +989,6 @@ async function applyMovementRecord(
   }
 
   let expenseId = null;
-  if (type === "entrada") {
-    expenseId = await registerExpenseCompraSiAplica({
-      product,
-      reason: reasonParaDb,
-      priceTotal: price,
-      accountId: user.accountId,
-      transaction,
-    });
-  }
 
   const priceParaDb = type === "ajuste" ? null : price ?? null;
 
@@ -1008,6 +1007,17 @@ async function applyMovementRecord(
     },
     transaction,
   );
+
+  if (type === "entrada") {
+    expenseId = await registerExpenseCompraSiAplica({
+      product,
+      reason: reasonParaDb,
+      priceTotal: price,
+      accountId: user.accountId,
+      transaction,
+      movementId: movement.id,
+    });
+  }
 
   if (type === "entrada" && reasonParaDb === "ENTRADA_COMPRA" && priceParaDb != null) {
     // Ya no se actualiza el genérico aquí: en Recetas el usuario confirma el nuevo costo.
@@ -1048,7 +1058,8 @@ export const registerMovement = async (req, res) => {
       expenseIds: expenseId ? [expenseId] : [],
     });
   } catch (error) {
-    const status = error?.statusCode || 500;
+    const business = /Stock insuficiente|no puede ser negativa/i.test(error?.message || "");
+    const status = error?.statusCode || (business ? 400 : 500);
     const message =
       status === 500
         ? error?.message || "Error al registrar movimiento"
@@ -1132,7 +1143,8 @@ export const registerMovementsBatch = async (req, res) => {
       expenseIds: result.expenseIds,
     });
   } catch (error) {
-    const status = error?.statusCode || 500;
+    const business = /Stock insuficiente|no puede ser negativa/i.test(error?.message || "");
+    const status = error?.statusCode || (business ? 400 : 500);
     notifyFail("movement.batch_create_failed", error?.message || "Error al registrar lote de movimientos", {
       error,
       req,
@@ -1145,7 +1157,7 @@ export const registerMovementsBatch = async (req, res) => {
   }
 };
 
-/** PUT /inventory/movements/:movementId — solo Programador */
+/** PUT /inventory/movements/:movementId — solo Propietario */
 export const updateMovement = async (req, res) => {
   try {
     const { movementId } = req.params;
@@ -1366,7 +1378,7 @@ export const updateMovementsDateBatch = async (req, res) => {
   }
 };
 
-/** DELETE /inventory/movements/:movementId — solo Programador */
+/** DELETE /inventory/movements/:movementId — solo Propietario */
 export const deleteMovement = async (req, res) => {
   try {
     const { movementId } = req.params;
@@ -1383,6 +1395,25 @@ export const deleteMovement = async (req, res) => {
       if (!movement) return { status: 404, body: { message: "Movimiento no encontrado" } };
 
       const productId = movement.productId;
+      const movementAmount = movement.price != null ? Number(movement.price) : null;
+      await Expense.destroy({
+        where: {
+          [Op.or]: [
+            { referenceType: "inventory_movement", referenceId: movement.id },
+            ...(movement.reason === "ENTRADA_COMPRA" && movementAmount != null
+              ? [
+                  {
+                    referenceType: "inventory_entry",
+                    referenceId: productId,
+                    amount: movementAmount,
+                    concept: { [Op.like]: "Compra de %" },
+                  },
+                ]
+              : []),
+          ],
+        },
+        transaction: t,
+      });
       await movement.destroy({ transaction: t });
       await syncProductStockFromMovements(productId, t);
 

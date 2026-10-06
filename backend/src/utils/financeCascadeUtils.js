@@ -9,10 +9,10 @@ import {
 import { OrderItem } from "../models/Orders.js";
 import { getAppSettingsSync } from "../services/appSettingsService.js";
 
-/** Admin (si config lo permite) o Programador pueden anular pagos / borrar con cascada financiera. */
+/** Admin (si config lo permite) o Propietario pueden anular pagos / borrar con cascada financiera. */
 export function canFinanceCascadeCorrection(user) {
   const role = user?.loginRol;
-  if (role === "Programador") return true;
+  if (role === "Propietario") return true;
   if (role === "Administrador") {
     return getAppSettingsSync().financeAllowAdminCorrections !== false;
   }

@@ -1,6 +1,6 @@
 /**
  * El empleado opera caja, turno, tareas y su perfil.
- * El resto de la API queda para Administrador y Programador.
+ * El resto de la API queda para Administrador y Propietario.
  */
 import { getHeaderToken, verifyJWT } from "../libs/jwt.js";
 
@@ -18,7 +18,8 @@ function employeeMay(method, path, user) {
   if (/\/users\/me\/data\/?$/.test(path)) return true;
   if (/\/users\/photo\/\d+\/?$/.test(path)) return m === "PUT" || m === "DELETE";
 
-  const ownAccount = path.match(/\/account\/(\d+)\/?$/);
+  // Sesión: /account/:id y /account/:id/:rolId (la UI pide el rol al cambiar/entrar).
+  const ownAccount = path.match(/\/account\/(\d+)(?:\/[^/]+)?\/?$/);
   if (ownAccount && Number(ownAccount[1]) === Number(user?.accountId) && (m === "GET" || m === "PUT")) {
     return true;
   }
@@ -45,12 +46,33 @@ function employeeMay(method, path, user) {
 
 const COST_KEYS = ["supplierPrice", "distributorPrice", "cost", "unitCost", "purchasePrice"];
 
+function toPlain(value) {
+  if (value == null) return value;
+  if (typeof value?.toJSON === "function") {
+    try {
+      return value.toJSON();
+    } catch {
+      /* fall through */
+    }
+  }
+  if (typeof value === "object") {
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}
+
 function stripCost(value, seen = new Set()) {
   if (!value || typeof value !== "object") return value;
-  if (seen.has(value)) return value;
-  if (Array.isArray(value)) return value.map((item) => stripCost(item, seen));
-  seen.add(value);
-  const out = { ...value };
+  const plain = toPlain(value);
+  if (!plain || typeof plain !== "object") return plain;
+  if (seen.has(plain)) return plain;
+  if (Array.isArray(plain)) return plain.map((item) => stripCost(item, seen));
+  seen.add(plain);
+  const out = { ...plain };
   for (const key of COST_KEYS) delete out[key];
   for (const key of Object.keys(out)) {
     if (out[key] && typeof out[key] === "object") out[key] = stripCost(out[key], seen);
@@ -70,8 +92,44 @@ export async function restrictEmployee(req, res, next) {
   if (user?.loginRol !== "Empleado") return next();
   if (req.method === "GET" && /\/inventory\/products/.test(pathOf(req))) {
     const orig = res.json.bind(res);
-    res.json = (body) => orig(stripCost(body));
+    res.json = (body) => {
+      try {
+        return orig(stripCost(body));
+      } catch (err) {
+        console.error("stripCost products:", err?.message || err);
+        return orig(body);
+      }
+    };
   }
   if (employeeMay(req.method, pathOf(req), user)) return next();
+  return res.status(403).json({ message: "No tenés permiso para esta acción" });
+}
+
+function programmerMay(method, path) {
+  const m = String(method || "GET").toUpperCase();
+  if (m === "OPTIONS") return true;
+  if (/\/(login|getSession|changeRole)\/?$/.test(path)) return true;
+  if (m === "GET" && /\/(app\/settings|app\/time-status|subscription)\/?$/.test(path)) return true;
+  if (/\/users\/me\/data\/?$/.test(path)) return true;
+  if (/\/users\/photo\/\d+\/?$/.test(path)) return m === "PUT" || m === "DELETE";
+  // Sesión propia (misma forma que Empleado).
+  if (m === "GET" && /\/account\/\d+(?:\/[^/]+)?\/?$/.test(path)) return true;
+  if (m === "GET" && /\/comands\/getLogs\/?$/.test(path)) return true;
+  if (m === "GET" && /\/notifications\/unreadCount\/\d+\/?$/.test(path)) return true;
+  return false;
+}
+
+/** Rol Programador limitado: inicio, perfil propio y lectura de logs. */
+export async function restrictProgrammer(req, res, next) {
+  const token = getHeaderToken(req);
+  if (!token) return next();
+  let user;
+  try {
+    user = await verifyJWT(token);
+  } catch {
+    return next();
+  }
+  if (user?.loginRol !== "Programador") return next();
+  if (programmerMay(req.method, pathOf(req))) return next();
   return res.status(403).json({ message: "No tenés permiso para esta acción" });
 }

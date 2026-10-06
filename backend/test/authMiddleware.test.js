@@ -21,8 +21,8 @@ function mockRes() {
   return res;
 }
 
-test("requireProgrammer: permite Programador", () => {
-  const req = { user: { loginRol: "Programador" } };
+test("requireProgrammer: permite Propietario", () => {
+  const req = { user: { loginRol: "Propietario" } };
   const res = mockRes();
   let nextCalled = false;
   requireProgrammer(req, res, () => {

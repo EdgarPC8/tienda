@@ -62,6 +62,25 @@ async function ensureOrderSellerSchema() {
   }
 }
 
+let orderAmountReceivedSchemaReady = false;
+/** Monto recibido en efectivo (caja) → ERP_orders.amountReceived */
+async function ensureOrderAmountReceivedSchema() {
+  if (orderAmountReceivedSchemaReady) return;
+  try {
+    const [foundAmt] = await sequelize.query(
+      "SHOW COLUMNS FROM `ERP_orders` LIKE 'amountReceived'",
+    );
+    if (!Array.isArray(foundAmt) || foundAmt.length === 0) {
+      await sequelize.query(
+        "ALTER TABLE `ERP_orders` ADD COLUMN `amountReceived` DECIMAL(14,2) NULL",
+      );
+    }
+    orderAmountReceivedSchemaReady = true;
+  } catch (e) {
+    console.warn("ensureOrderAmountReceivedSchema:", e?.message || e);
+  }
+}
+
 async function ensureOrderItemDeliverSchema() {
   if (orderItemDeliverSchemaReady) return;
   try {
@@ -132,12 +151,34 @@ function itemPackLotFields(row = {}) {
   return { packKey, packName, lotCode, expiresAt, manufacturedAt };
 }
 
+function finiteOrThrow(raw, label) {
+  if (typeof raw === "string" && raw.trim() !== "" && !Number.isFinite(Number(raw.trim()))) {
+    const err = new Error(`${label} inválido`);
+    err.statusCode = 400;
+    throw err;
+  }
+  if (raw != null && raw !== "" && !Number.isFinite(Number(raw))) {
+    const err = new Error(`${label} inválido`);
+    err.statusCode = 400;
+    throw err;
+  }
+  return num(raw);
+}
+
 function buildCustomerItemPayload(orderId, row) {
   const productId = Number(row.productId);
-  const quantity = num(row.quantity);
-  const price = num(row.price ?? row.unitPrice);
-  if (!productId || quantity <= 0) throw new Error("Ítem inválido en el pedido");
-  if (!Number.isFinite(price) || price < 0) throw new Error("Precio inválido en el pedido");
+  const quantity = finiteOrThrow(row.quantity, "Cantidad");
+  const price = finiteOrThrow(row.price ?? row.unitPrice, "Precio");
+  if (!productId || quantity <= 0) {
+    const err = new Error("Ítem inválido en el pedido");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (price < 0) {
+    const err = new Error("Precio inválido en el pedido");
+    err.statusCode = 400;
+    throw err;
+  }
   return {
     orderId,
     productId,
@@ -147,10 +188,62 @@ function buildCustomerItemPayload(orderId, row) {
   };
 }
 
-/** null = stock general; número = local inventariable. */
+function storeIdFromMovementDescription(description) {
+  const match = /local #(\d+)/.exec(String(description || ""));
+  return match ? Number(match[1]) : null;
+}
+
+/** Devuelve la salida de una venta y quita el ajuste que la caja inventó. */
+async function restoreSaleStock(refs, transaction) {
+  if (!refs.length) return;
+  const movements = await InventoryMovement.findAll({
+    where: { [Op.or]: refs },
+    transaction,
+  });
+  const fallbackStore = await getDefaultStockStoreId({ transaction });
+  for (const movement of movements) {
+    const qty = Number(movement.quantity) || 0;
+    if (!(qty > 0)) {
+      await movement.destroy({ transaction });
+      continue;
+    }
+    const describedStore = storeIdFromMovementDescription(movement.description);
+    const storeId = describedStore || fallbackStore;
+    if (movement.type === "salida" || movement.reason === "SALIDA_VENTA") {
+      if (describedStore) {
+        await adjustStoreStock(describedStore, movement.productId, qty, {
+          transaction,
+          allowNegative: true,
+        });
+      } else {
+        const product = await InventoryProduct.findByPk(movement.productId, { transaction });
+        if (product) {
+          await product.update(
+            { stock: num(product.stock) + qty },
+            { transaction },
+          );
+        }
+      }
+    } else if (
+      movement.reason === "AJUSTE_ENTRADA" &&
+      (movement.referenceType === "order" || movement.referenceType === "order_item")
+    ) {
+      await adjustStoreStock(storeId, movement.productId, -qty, {
+        transaction,
+        allowNegative: true,
+      });
+    }
+    await movement.destroy({ transaction });
+  }
+}
+
+/** Con un solo local, la entrega mueve ese local y el producto juntos. */
 async function resolveDeliverStoreId(body, { transaction, requireExplicit = false } = {}) {
   const multi = getAppSettingsSync()?.multiStockEnabled !== false;
-  if (!multi) return null;
+  if (!multi) {
+    const sid = await getDefaultStockStoreId({ transaction });
+    return sid ? Number(sid) : null;
+  }
   let sid =
     body?.storeId != null && body.storeId !== "" ? Number(body.storeId) : null;
   if (!Number.isFinite(sid) || sid <= 0) {
@@ -196,6 +289,7 @@ export const posCheckout = async (req, res) => {
   try {
     await ensureOrderItemPackSchema();
     await ensureOrderSellerSchema();
+    await ensureOrderAmountReceivedSchema();
     const token = getHeaderToken(req);
     const user = await verifyJWT(token);
     const { accountId } = user;
@@ -209,6 +303,7 @@ export const posCheckout = async (req, res) => {
       documentType,
       cashRegisterId,
       paymentInstallments,
+      amountReceived: amountReceivedBody,
     } = req.body;
     if (!customerId || !Array.isArray(items) || items.length === 0) {
       notifyFail("order.pos_checkout_failed", "Faltan customerId o items.", { req, httpStatus: 400 });
@@ -225,10 +320,26 @@ export const posCheckout = async (req, res) => {
     }
 
     const isCredit = saleType === "credito";
+    const POS_PAYMENTS = new Set(["efectivo", "transferencia", "tarjeta", "credito"]);
+    const pay = String(paymentMethod || "efectivo").trim().toLowerCase();
+    if (!POS_PAYMENTS.has(isCredit ? "credito" : pay)) {
+      return res.status(400).json({ message: "Método de pago inválido" });
+    }
+    /** Solo contado + efectivo: monto que entregó el cliente (para vuelto). */
+    let amountReceived = null;
+    if (!isCredit && pay === "efectivo" && amountReceivedBody != null && amountReceivedBody !== "") {
+      const n = Number(String(amountReceivedBody).replace(",", "."));
+      if (!Number.isFinite(n) || n < 0) {
+        return res.status(400).json({ message: "Monto recibido inválido" });
+      }
+      amountReceived = Number(n.toFixed(2));
+    }
+    const DOC_TYPES = new Set(["factura", "nota_venta", "documento", "consumidor_final"]);
+    if (documentType != null && String(documentType).trim() !== "" && !DOC_TYPES.has(String(documentType))) {
+      return res.status(400).json({ message: "Tipo de documento inválido" });
+    }
     await ensurePaymentScheduleSchema();
-    const docType = ["factura", "nota_venta", "documento", "consumidor_final"].includes(
-      String(documentType || ""),
-    )
+    const docType = DOC_TYPES.has(String(documentType || ""))
       ? String(documentType)
       : "consumidor_final";
     const shift = await findOpenShiftForAccount(accountId);
@@ -275,6 +386,7 @@ export const posCheckout = async (req, res) => {
           cashRegisterId: resolvedRegisterId,
           sellerAccountId: accountId != null ? Number(accountId) : null,
           paymentMethod: isCredit ? "credito" : paymentMethod || "efectivo",
+          amountReceived,
           paidAt: isCredit ? null : now,
           documentType: docType,
         },
@@ -292,14 +404,14 @@ export const posCheckout = async (req, res) => {
         if (!productForPrice) throw new Error(`Producto #${productId} no encontrado.`);
         let price = Number(row.price);
         const catalogPrice = Number(productForPrice.price);
+        if (!Number.isFinite(price) || price < 0) {
+          throw new Error("Precio inválido en el carrito.");
+        }
         if (user?.loginRol === "Empleado") {
-          if (Number.isFinite(price) && Math.abs(price - catalogPrice) > 0.009) {
+          if (Math.abs(price - catalogPrice) > 0.009) {
             throw new Error(`El precio de ${productForPrice.name} no coincide con el catálogo`);
           }
           price = catalogPrice;
-        }
-        if (!Number.isFinite(price) || price < 0) {
-          throw new Error("Precio inválido en el carrito.");
         }
         orderTotal += Number((price * qty).toFixed(2));
 
@@ -319,9 +431,6 @@ export const posCheckout = async (req, res) => {
         }
         const available0 = await getStoreStockQty(stockStoreId, productId, { transaction: t });
         let available = available0;
-        const autoFill =
-          getAppSettingsSync()?.ordersAllowDeliverStockAdjust !== false &&
-          user?.loginRol !== "Empleado";
         if (available < qty) {
           const deficit = qty - available;
           try {
@@ -340,30 +449,11 @@ export const posCheckout = async (req, res) => {
           }
         }
         if (available < qty) {
-          if (!autoFill) {
-            throw new Error(
-              `Stock insuficiente en este local para ${product.name}. Disponible: ${available}`,
-            );
-          }
-          const deficit = qty - available;
-          await adjustStoreStock(stockStoreId, productId, deficit, {
-            transaction: t,
-            allowNegative: false,
-          });
-          await InventoryMovement.create(
-            {
-              productId: product.id,
-              quantity: deficit,
-              type: "entrada",
-              reason: "AJUSTE_ENTRADA",
-              referenceType: "order",
-              referenceId: order.id,
-              date: now,
-              createdBy: accountId,
-              description: `Autocompletar stock POS · ${product.name} · local #${stockStoreId}`,
-            },
-            { transaction: t },
+          const err = new Error(
+            `Stock insuficiente en este local para ${product.name}. Disponible: ${available}`,
           );
+          err.statusCode = 400;
+          throw err;
         }
         await adjustStoreStock(stockStoreId, productId, -qty, {
           transaction: t,
@@ -460,6 +550,7 @@ export const getPosSales = async (req, res) => {
   try {
     await ensureOrderItemPackSchema();
     await ensureOrderSellerSchema();
+    await ensureOrderAmountReceivedSchema();
     const limit = Math.min(Number(req.query.limit) || 200, 5000);
     const orders = await Order.findAll({
       where: {
@@ -622,6 +713,10 @@ export const getPosSales = async (req, res) => {
         status: order.status,
         notes: order.notes,
         paymentMethod: order.paymentMethod,
+        amountReceived:
+          order.amountReceived != null && Number.isFinite(Number(order.amountReceived))
+            ? Number(Number(order.amountReceived).toFixed(2))
+            : null,
         documentType: order.documentType || inferDocumentTypeFromNotes(order.notes),
         sellerAccountId,
         sellerName,
@@ -750,7 +845,7 @@ export const updateOrderItem = async (req, res) => {
     const isDashboardCorrection =
       req.body?.programmerDashboard === true || req.body?.programmerDashboard === "true";
     if (isDashboardCorrection) {
-      if (user?.loginRol !== "Programador") {
+      if (user?.loginRol !== "Propietario") {
         notifyFail("order_item.programmer_corrected_failed", "No tenés permiso para esta acción", {
           req,
           httpStatus: 403,
@@ -805,7 +900,10 @@ export const updateOrderItem = async (req, res) => {
       const payload = {};
 
       const q = toNonNeg(quantity);
-      if (q !== undefined) payload.quantity = q;
+      if (q !== undefined) {
+        if (q <= 0) return { status: 400, body: { message: "La cantidad debe ser mayor a cero" } };
+        payload.quantity = q;
+      }
 
       const p = toNonNeg(price);
       if (p !== undefined) payload.price = p;
@@ -991,7 +1089,7 @@ export const updateOrderItem = async (req, res) => {
 
 /**
  * @deprecated Mantenimiento one-off: copia order.date → item.deliveredAt para un cliente fijo.
- * Solo accesible en desarrollo vía GET /orders/cmd (Programador). No usar en producción.
+ * Solo accesible en desarrollo vía GET /orders/cmd (Propietario). No usar en producción.
  */
 export const command = async (req, res) => {
   const customerId = 19;
@@ -1312,7 +1410,7 @@ export const unmarkItemAsPaid = async (req, res) => {
         httpStatus: 403,
       });
       return res.status(403).json({
-        message: "Solo Admin (con config activa) o Programador pueden anular un cobro",
+        message: "Solo Admin (con config activa) o Propietario pueden anular un cobro",
       });
     }
 
@@ -1533,30 +1631,53 @@ export const createOrder = async (req, res) => {
       return res.status(400).json({ message: 'Faltan datos del pedido' });
     }
 
-    const order = await Order.create({
-      customerId,
-      notes,
-      date: date, // usa la fecha enviada, o la actual si no viene
+    const created = await sequelize.transaction(async (t) => {
+      const customer = await Customer.findByPk(customerId, { transaction: t });
+      if (!customer) {
+        const err = new Error("Cliente no encontrado");
+        err.statusCode = 400;
+        throw err;
+      }
+      for (const item of items) {
+        const payload = buildCustomerItemPayload(0, item);
+        const product = await InventoryProduct.findByPk(payload.productId, { transaction: t });
+        if (!product) {
+          const err = new Error(`Producto #${payload.productId} no encontrado`);
+          err.statusCode = 400;
+          throw err;
+        }
+      }
+      const order = await Order.create(
+        {
+          customerId,
+          notes,
+          date: date,
+        },
+        { transaction: t },
+      );
+      const createdItems = [];
+      for (const item of items) {
+        createdItems.push(
+          await OrderItem.create(buildCustomerItemPayload(order.id, item), { transaction: t }),
+        );
+      }
+      if (Array.isArray(paymentInstallments)) {
+        await replaceCustomerInstallments(order.id, paymentInstallments || [], { transaction: t });
+      }
+      return { order, createdItems };
     });
 
-    const createdItems = await Promise.all(
-      items.map((item) => OrderItem.create(buildCustomerItemPayload(order.id, item)))
-    );
-
-    if (Array.isArray(paymentInstallments)) {
-      await replaceCustomerInstallments(order.id, paymentInstallments || []);
-    }
-
-    notifyOk("order.created", `Pedido #${order.id}`, { orderId: order.id, customerId });
+    notifyOk("order.created", `Pedido #${created.order.id}`, { orderId: created.order.id, customerId });
     res.status(201).json({
       message: "Pedido registrado correctamente",
-      order,
-      items: createdItems,
+      order: created.order,
+      items: created.createdItems,
     });
   } catch (error) {
     console.error("createOrder:", error);
-    notifyFail("order.create_failed", "Error al crear pedido", { error, req, httpStatus: 500 });
-    res.status(500).json({ message: error?.message || "Error al crear pedido" });
+    const status = error?.statusCode || (/inválid|no encontrado|Faltan/i.test(error?.message || "") ? 400 : 500);
+    notifyFail("order.create_failed", error?.message || "Error al crear pedido", { error, req, httpStatus: status });
+    res.status(status).json({ message: error?.message || "Error al crear pedido" });
   }
 };
 
@@ -1633,7 +1754,7 @@ export const unmarkOrderAsPaid = async (req, res) => {
         httpStatus: 403,
       });
       return res.status(403).json({
-        message: "Solo Admin (con config activa) o Programador pueden anular cobros",
+        message: "Solo Admin (con config activa) o Propietario pueden anular cobros",
       });
     }
 
@@ -1689,11 +1810,15 @@ export const deleteOrderItem = async (req, res) => {
         httpStatus: 403,
       });
       return res.status(403).json({
-        message: "Anule el cobro primero o use Admin/Programador con correcciones financieras activas",
+        message: "Anule el cobro primero o use Admin/Propietario con correcciones financieras activas",
       });
     }
 
     await sequelize.transaction(async (t) => {
+      await restoreSaleStock(
+        [{ referenceType: "order_item", referenceId: item.id }],
+        t,
+      );
       await cleanupOrderItemFinance(item.id, t);
       await item.destroy({ transaction: t });
     });
@@ -1729,11 +1854,14 @@ export const deleteOrder = async (req, res) => {
         httpStatus: 403,
       });
       return res.status(403).json({
-        message: "Anule los cobros primero o use Admin/Programador con correcciones financieras activas",
+        message: "Anule los cobros primero o use Admin/Propietario con correcciones financieras activas",
       });
     }
 
     await sequelize.transaction(async (t) => {
+      const refs = [{ referenceType: "order", referenceId: order.id }];
+      for (const row of items) refs.push({ referenceType: "order_item", referenceId: row.id });
+      await restoreSaleStock(refs, t);
       await cleanupCustomerOrderFinance(order.id, t);
       await order.destroy({ transaction: t });
     });
@@ -1760,7 +1888,7 @@ export const updateOrder = async (req, res) => {
       return res.status(404).json({ message: 'Pedido no encontrado' });
     }
 
-    const isPrivileged = ['Administrador', 'Programador'].includes(user?.loginRol);
+    const isPrivileged = ['Administrador', 'Propietario'].includes(user?.loginRol);
     if (['entregado', 'pagado'].includes(order.status) && !isPrivileged) {
       notifyFail("order.update_failed", `No tiene permisos para editar pedidos ${order.status}`, {
         req,
@@ -1884,7 +2012,7 @@ export const updateOrder = async (req, res) => {
   }
 };
 
-/** POST /orders/:orderId/items — agregar línea a pedido existente (solo Admin / Programador). */
+/** POST /orders/:orderId/items — agregar línea a pedido existente (solo Admin / Propietario). */
 export const addOrderItem = async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -1893,7 +2021,7 @@ export const addOrderItem = async (req, res) => {
     const token = getHeaderToken(req);
     const user = await verifyJWT(token);
 
-    const isPrivileged = ['Administrador', 'Programador'].includes(user?.loginRol);
+    const isPrivileged = ['Administrador', 'Propietario'].includes(user?.loginRol);
     if (!isPrivileged) {
       notifyFail("order_item.create_failed", "No tenés permiso para agregar productos a un pedido existente", {
         req,
@@ -1971,6 +2099,10 @@ export const updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+    const ORDER_STATUSES = new Set(["pendiente", "entregado", "pagado"]);
+    if (!ORDER_STATUSES.has(String(status || ""))) {
+      return res.status(400).json({ message: "Estado de pedido inválido" });
+    }
     const order = await Order.findByPk(id);
     if (!order) {
       notifyFail("order.status_change_failed", `Pedido #${id} no encontrado`, { req, httpStatus: 404 });
@@ -1993,7 +2125,7 @@ export const updateOrderStatus = async (req, res) => {
 
 /**
  * PATCH /orders/order-items/:itemId/programmer-dashboard
- * Solo Programador: entrega/pago con fecha elegida y stock directo.
+ * Solo Propietario: entrega/pago con fecha elegida y stock directo.
  * Sin movimientos de inventario ni ingresos automáticos; queda en Logs.
  */
 export const programmerDashboardOrderItemCorrection = async (req, res) => {

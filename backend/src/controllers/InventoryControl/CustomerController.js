@@ -1,7 +1,10 @@
 import { Customer, Order } from "../../models/Orders.js";
 import {
   composeCustomerFullName,
+  ecuadorIdentError,
+  emailFormatError,
   normalizeCustomerPayload,
+  phoneFormatError,
 } from "../../services/customerNameService.js";
 import { notifyOk, notifyFail } from "../../services/notifyRaptorSolutions.js";
 
@@ -38,6 +41,12 @@ export const createCustomer = async (req, res) => {
     if (payload.cedula && !/^\d{10}$/.test(String(payload.cedula).replace(/\s/g, "")) && !/^\d{13}$/.test(String(payload.cedula).replace(/\s/g, ""))) {
       return res.status(400).json({ message: "La cédula o el RUC no es válido" });
     }
+    const identError = ecuadorIdentError(payload.cedula, payload.identType);
+    if (identError) return res.status(400).json({ message: identError });
+    const phoneError = phoneFormatError(payload.phone);
+    if (phoneError) return res.status(400).json({ message: phoneError });
+    const emailError = emailFormatError(payload.email);
+    if (emailError) return res.status(400).json({ message: emailError });
 
     if (payload.phone) {
       const existing = await Customer.findOne({ where: { phone: payload.phone } });
@@ -99,6 +108,12 @@ export const updateCustomer = async (req, res) => {
     if (!payload.name) {
       payload.name = composeCustomerFullName(payload) || current.name;
     }
+    const identError = ecuadorIdentError(payload.cedula, payload.identType);
+    if (identError) return res.status(400).json({ message: identError });
+    const phoneError = phoneFormatError(payload.phone);
+    if (phoneError) return res.status(400).json({ message: phoneError });
+    const emailError = emailFormatError(payload.email);
+    if (emailError) return res.status(400).json({ message: emailError });
 
     await customer.update(payload);
     const reloaded = await customer.reload();

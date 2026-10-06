@@ -33,6 +33,9 @@ async function assertUniqueCategoryName(name, parentId, categoryId = null) {
   if (!trimmed) {
     throw new Error("El nombre de la categoría es obligatorio.");
   }
+  if (trimmed.length > 120) {
+    throw new Error("El nombre de la categoría es demasiado largo.");
+  }
 
   const where = {
     name: trimmed,
@@ -61,6 +64,9 @@ async function assertUniqueCategoryName(name, parentId, categoryId = null) {
 function mapCategoryError(err, fallbackMessage) {
   if (err?.message && (/packageTiers|categoría|padre|niveles|nombre|obligatorio|existe/i.test(err.message))) {
     return { status: 400, message: err.message };
+  }
+  if (err?.name === "SequelizeDatabaseError" || /Data too long|too long/i.test(err?.message || "")) {
+    return { status: 400, message: "El nombre de la categoría es demasiado largo." };
   }
   if (err?.name === "SequelizeUniqueConstraintError") {
     return {
@@ -117,22 +123,58 @@ export const createCategory = async (req, res) => {
   try {
     const payload = await applyCategoryPayload(req.body);
     const category = await InventoryCategory.create(payload);
-    const full = await InventoryCategory.findByPk(category.id, {
-      include: [CATEGORY_INCLUDE_PARENT],
-    });
-    notifyOk("category.created", `Categoría #${category.id}`, { category: full });
-    res.status(201).json(full);
+    let plain = {
+      id: category.id,
+      name: category.name,
+      description: category.description ?? null,
+      isPublic: category.isPublic,
+      parentId: category.parentId ?? null,
+      parent: null,
+    };
+    try {
+      const full = await InventoryCategory.findByPk(category.id, {
+        include: [CATEGORY_INCLUDE_PARENT],
+      });
+      if (full) {
+        const j = typeof full.toJSON === "function" ? full.toJSON() : full;
+        plain = {
+          id: j.id,
+          name: j.name,
+          description: j.description ?? null,
+          isPublic: j.isPublic,
+          parentId: j.parentId ?? null,
+          parent: j.parent
+            ? { id: j.parent.id, name: j.parent.name }
+            : null,
+        };
+      }
+    } catch (reloadErr) {
+      console.error("createCategory reload:", reloadErr);
+    }
+    try {
+      notifyOk("category.created", `Categoría #${category.id}`, {
+        categoryId: category.id,
+        name: plain.name,
+      });
+    } catch (notifyErr) {
+      console.error("createCategory notify:", notifyErr);
+    }
+    return res.status(201).json(plain);
   } catch (err) {
     const mapped = mapCategoryError(err, "Error al crear categoría");
     if (mapped.status === 500) console.error("createCategory:", err);
-    notifyFail("category.create_failed", mapped.message, {
-      error: mapped.error || err,
-      req,
-      httpStatus: mapped.status,
-    });
-    res.status(mapped.status).json({
+    try {
+      notifyFail("category.create_failed", mapped.message, {
+        error: mapped.error || err,
+        req,
+        httpStatus: mapped.status,
+      });
+    } catch {
+      /* ignore notify */
+    }
+    return res.status(mapped.status).json({
       message: mapped.message,
-      ...(mapped.error ? { error: mapped.error } : {}),
+      ...(mapped.error && mapped.status !== 500 ? { error: String(mapped.error?.message || mapped.error) } : {}),
     });
   }
 };

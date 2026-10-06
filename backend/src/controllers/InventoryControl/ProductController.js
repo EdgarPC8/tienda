@@ -8,6 +8,7 @@ import {
   InventoryProduct,
   InventoryCategory,
   InventoryUnit,
+  InventoryMovement,
   PricingTierGroup,
   // Si también usas HomeProduct o ProductPlacement y guardan archivos, puedes chequearlos acá
   // HomeProduct,
@@ -15,6 +16,7 @@ import {
 } from "../../models/Inventory.js";
 import { StoreStock } from "../../models/StoreStock.js";
 import { Order, OrderItem } from "../../models/Orders.js";
+import { Expense } from "../../models/Finance.js";
 import fileDirName from "../../libs/file-dirname.js";
 import { normalizePackageTiersStrict } from "../../utils/productPricingUtils.js";
 import { toStorageMoney } from "../../utils/moneyPrecision.js";
@@ -183,8 +185,35 @@ const normalize = (p = "") =>
     .replace(/\/+$/, "")
     .replace(/\/{2,}/g, "/");
 
+function productInputError(body) {
+  if (body?.name != null && String(body.name).trim().length > 150) {
+    return "El nombre del producto es demasiado largo";
+  }
+  for (const key of ["price", "supplierPrice", "distributorPrice"]) {
+    if (!(key in (body || {})) || body[key] === "" || body[key] == null) continue;
+    const n = Number(body[key]);
+    if (!Number.isFinite(n) || n < 0 || n > 99999999.99) return "Precio inválido";
+  }
+  return null;
+}
+
+async function assertUniqueProductName(name, excludeId = null) {
+  const trimmed = String(name || "").trim();
+  if (!trimmed) return;
+  const where = { name: trimmed };
+  if (excludeId != null) where.id = { [Op.ne]: Number(excludeId) };
+  const existing = await InventoryProduct.findOne({ where, attributes: ["id"] });
+  if (existing) {
+    const err = new Error("Ya existe un producto con ese nombre");
+    err.statusCode = 409;
+    throw err;
+  }
+}
+
 export const updateProduct = async (req, res) => {
   try {
+    const inputError = productInputError(req.body);
+    if (inputError) return res.status(400).json({ message: inputError });
     await ensureProductRoleFlagsSchema();
     const { id } = req.params;
     const row = await InventoryProduct.findByPk(id);
@@ -194,6 +223,14 @@ export const updateProduct = async (req, res) => {
         httpStatus: 404,
       });
       return res.status(404).json({ message: "Producto no encontrado" });
+    }
+    if (req.body?.name != null) {
+      try {
+        await assertUniqueProductName(req.body.name, id);
+      } catch (e) {
+        if (e?.statusCode) return res.status(e.statusCode).json({ message: e.message });
+        throw e;
+      }
     }
 
     const oldRel = normalize(row.primaryImageUrl || "");
@@ -343,6 +380,8 @@ export const updateProduct = async (req, res) => {
 export const createProduct = async (req, res) => {
   let tempRelPath = null; // ✅ para rollback si falla
   try {
+    const inputError = productInputError(req.body);
+    if (inputError) return res.status(400).json({ message: inputError });
     await ensureProductRoleFlagsSchema();
     const payload = { ...req.body };
     applyBarcodeFields(payload);
@@ -350,6 +389,12 @@ export const createProduct = async (req, res) => {
     normalizeProductRelationFields(payload);
     if (!String(payload.name || "").trim()) {
       return res.status(400).json({ message: "El nombre del producto es obligatorio" });
+    }
+    try {
+      await assertUniqueProductName(payload.name);
+    } catch (e) {
+      if (e?.statusCode) return res.status(e.statusCode).json({ message: e.message });
+      throw e;
     }
     if (payload.price != null && Number(payload.price) < 0) {
       return res.status(400).json({ message: "El precio no puede ser negativo" });
@@ -483,7 +528,7 @@ const isImageInUseElsewhere = async (filename, currentProductId = null) => {
 
 
 
-/** Ajuste directo de stock/minStock desde dashboard (solo Programador, sin movimiento). */
+/** Ajuste directo de stock/minStock desde dashboard (solo Propietario, sin movimiento). */
 export const patchProductStock = async (req, res) => {
   try {
     const { id } = req.params;
@@ -703,6 +748,21 @@ export const deleteProduct = async (req, res) => {
     }
 
     await StoreStock.destroy({ where: { productId: row.id } });
+    const linkedMovements = await InventoryMovement.findAll({
+      where: { productId: row.id },
+      attributes: ["id"],
+    });
+    const movementIds = linkedMovements.map((m) => m.id);
+    await Expense.destroy({
+      where: {
+        [Op.or]: [
+          { referenceType: "inventory_entry", referenceId: row.id },
+          ...(movementIds.length
+            ? [{ referenceType: "inventory_movement", referenceId: { [Op.in]: movementIds } }]
+            : []),
+        ],
+      },
+    });
     await row.destroy();
     notifyOk("product.deleted", `Producto #${id}`, { productId: id });
     res.json({ message: "Producto eliminado" });

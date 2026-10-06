@@ -13,6 +13,33 @@ import { toFinanceDateTime } from "../../utils/financeDateTime.js";
 import { buildFinanceDateColumnWhere } from "../../utils/financeDateUtils.js";
 import { notifyOk, notifyFail } from "../../services/notifyRaptorSolutions.js";
 
+const MONEY_CAP = 99999999.99;
+
+function strictCivilDate(value) {
+  const match = String(value || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (year < 2000 || year > 2100) return null;
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  return `${match[1]}-${match[2]}-${match[3]}`;
+}
+
+function financeEntryError({ date, amount, concept, category }) {
+  if (!String(concept || "").trim()) return "El concepto es obligatorio";
+  if (String(concept).trim().length > 250) return "El concepto admite hasta 250 caracteres";
+  if (!String(category || "").trim()) return "La categoría es obligatoria";
+  if (String(category).trim().length > 120) return "La categoría es demasiado larga";
+  if (amount == null || amount === "" || !Number.isFinite(Number(amount))) return "El monto es obligatorio";
+  const amountNumber = Number(Number(amount).toFixed(2));
+  if (amountNumber <= 0) return "El monto debe ser mayor a cero";
+  if (amountNumber > MONEY_CAP) return "El monto es demasiado grande";
+  if (!strictCivilDate(date)) return "La fecha no es válida";
+  return null;
+}
+
 /**
  * Si un grupo ya tiene abonos (group_payment), borra incomes "order_item" de esos
  * ítems para no sumar el doble en Finanzas (liquidación + Pago ítem #…).
@@ -264,22 +291,15 @@ export const getFinanceSummary = async (req, res) => {
 export const createIncome = async (req, res) => {
   try {
     const { date, amount, concept, category, referenceId, referenceType } = req.body;
-    const amountNumber = Number(amount);
-    if (amount == null || amount === "" || !Number.isFinite(amountNumber)) {
-      return res.status(400).json({ message: "El monto es obligatorio" });
-    }
-    if (amountNumber < 0) {
-      return res.status(400).json({ message: "El monto no puede ser negativo" });
-    }
-    if (amountNumber > 999999999.99) {
-      return res.status(400).json({ message: "El monto es demasiado grande" });
-    }
+    const entryError = financeEntryError({ date, amount, concept, category });
+    if (entryError) return res.status(400).json({ message: entryError });
+    const entryDate = toFinanceDateTime(strictCivilDate(date));
 
         const token = getHeaderToken(req);
       const user = await verifyJWT(token); // para createdBy
     const createdBy = user.accountId;
     const income = await Income.create({
-      date: toFinanceDateTime(date),
+      date: entryDate,
       amount,
       concept,
       category,
@@ -300,22 +320,15 @@ export const createIncome = async (req, res) => {
 export const createExpense = async (req, res) => {
   try {
     const { date, amount, concept, category, referenceId, referenceType } = req.body;
-    const amountNumber = Number(amount);
-    if (amount == null || amount === "" || !Number.isFinite(amountNumber)) {
-      return res.status(400).json({ message: "El monto es obligatorio" });
-    }
-    if (amountNumber < 0) {
-      return res.status(400).json({ message: "El monto no puede ser negativo" });
-    }
-    if (amountNumber > 999999999.99) {
-      return res.status(400).json({ message: "El monto es demasiado grande" });
-    }
+    const entryError = financeEntryError({ date, amount, concept, category });
+    if (entryError) return res.status(400).json({ message: entryError });
+    const entryDate = toFinanceDateTime(strictCivilDate(date));
       const token = getHeaderToken(req);
       const user = await verifyJWT(token); // para createdBy
     const createdBy = user.accountId;
 
     const expense = await Expense.create({
-      date: toFinanceDateTime(date),
+      date: entryDate,
       amount,
       concept,
       category,
@@ -337,11 +350,12 @@ export const getAllIncomes = async (req, res) => {
   try {
     await stripOrderItemIncomesWhenGroupAlreadyPaid();
     const incomes = await Income.findAll({
-      include: [{ model: Account, attributes: { exclude: ["password"] } }],
+      include: [{ model: Account, attributes: ["id", "username"] }],
       order: [
         ["date", "DESC"],
         ["id", "DESC"],
       ],
+      limit: 500,
     });
     res.json(incomes);
   } catch (error) {
@@ -354,11 +368,12 @@ export const getAllIncomes = async (req, res) => {
 export const getAllExpenses = async (req, res) => {
   try {
     const expenses = await Expense.findAll({
-      include: [{ model: Account, attributes: { exclude: ["password"] } }],
+      include: [{ model: Account, attributes: ["id", "username"] }],
       order: [
         ["date", "DESC"],
         ["id", "DESC"],
       ],
+      limit: 500,
     });
     res.json(expenses);
   } catch (error) {
@@ -373,16 +388,9 @@ export const updateIncome = async (req, res) => {
   try {
     const { id } = req.params;
     const { date, amount, concept, category, referenceId, referenceType } = req.body;
-    const amountNumber = Number(amount);
-    if (amount == null || amount === "" || !Number.isFinite(amountNumber)) {
-      return res.status(400).json({ message: "El monto es obligatorio" });
-    }
-    if (amountNumber < 0) {
-      return res.status(400).json({ message: "El monto no puede ser negativo" });
-    }
-    if (amountNumber > 999999999.99) {
-      return res.status(400).json({ message: "El monto es demasiado grande" });
-    }
+    const entryError = financeEntryError({ date, amount, concept, category });
+    if (entryError) return res.status(400).json({ message: entryError });
+    const entryDate = toFinanceDateTime(strictCivilDate(date));
     const income = await Income.findByPk(id);
     if (!income) {
       notifyFail("income.update_failed", `Ingreso #${id} no encontrado`, { req, httpStatus: 404 });
@@ -390,7 +398,7 @@ export const updateIncome = async (req, res) => {
     }
 
     await income.update({
-      date: toFinanceDateTime(date),
+      date: entryDate,
       amount,
       concept,
       category,
@@ -411,16 +419,9 @@ export const updateExpense = async (req, res) => {
   try {
     const { id } = req.params;
     const { date, amount, concept, category, referenceId, referenceType } = req.body;
-    const amountNumber = Number(amount);
-    if (amount == null || amount === "" || !Number.isFinite(amountNumber)) {
-      return res.status(400).json({ message: "El monto es obligatorio" });
-    }
-    if (amountNumber < 0) {
-      return res.status(400).json({ message: "El monto no puede ser negativo" });
-    }
-    if (amountNumber > 999999999.99) {
-      return res.status(400).json({ message: "El monto es demasiado grande" });
-    }
+    const entryError = financeEntryError({ date, amount, concept, category });
+    if (entryError) return res.status(400).json({ message: entryError });
+    const entryDate = toFinanceDateTime(strictCivilDate(date));
     const expense = await Expense.findByPk(id);
     if (!expense) {
       notifyFail("expense.update_failed", `Egreso #${id} no encontrado`, { req, httpStatus: 404 });
@@ -428,7 +429,7 @@ export const updateExpense = async (req, res) => {
     }
 
     await expense.update({
-      date: toFinanceDateTime(date),
+      date: entryDate,
       amount,
       concept,
       category,

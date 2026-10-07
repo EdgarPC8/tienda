@@ -27,11 +27,13 @@ const isAuthenticated = async (req, res, next) => {
 };
 
 /**
- * Solo rol Propietario (correcciones de negocio, stock, turnos técnicos).
+ * Propietario o Programador (correcciones de negocio, stock, turnos técnicos).
+ * Desarrollador (comandos/logs) sigue con requireProgrammer.
  * Debe usarse DESPUÉS de isAuthenticated.
  */
 const requireOwner = (req, res, next) => {
-  if (req.user?.loginRol !== "Propietario") {
+  const rol = req.user?.loginRol;
+  if (rol !== "Propietario" && rol !== "Programador") {
     return res.status(403).json({
       message: "No tenés permiso para esta acción",
     });
@@ -96,7 +98,7 @@ const requireAdminOrProgrammer = (req, res, next) => {
  */
 const requireStaff = (req, res, next) => {
   const rol = req.user?.loginRol;
-  if (!["Propietario", "Administrador", "Empleado"].includes(rol)) {
+  if (!["Propietario", "Programador", "Administrador", "Empleado"].includes(rol)) {
     return res.status(403).json({ message: "Rol no autorizado para esta acción" });
   }
   next();

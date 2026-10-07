@@ -18,5 +18,15 @@ export function isSupplierRoleName(name) {
 
 export function isPrivilegedRoleName(name) {
   const normalized = normalizeRoleName(name);
-  return normalized === ROLE_OWNER || normalized === ROLE_ADMIN;
+  return (
+    normalized === ROLE_OWNER ||
+    normalized === ROLE_PROGRAMMER ||
+    normalized === ROLE_ADMIN
+  );
+}
+
+/** Propietario o Programador (mismos poderes de negocio). */
+export function isOwnerLikeRoleName(name) {
+  const normalized = normalizeRoleName(name);
+  return normalized === ROLE_OWNER || normalized === ROLE_PROGRAMMER;
 }

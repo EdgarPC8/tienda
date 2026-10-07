@@ -9,7 +9,7 @@ import { Notifications } from "../../models/Notifications.js";
 import { sendNotificationToUser } from "../../sockets/notificationSocket.js";
 import { notifyOk, notifyFail } from "../../services/notifyRaptorSolutions.js";
 
-const ADMIN_ROLES = new Set(["Administrador", "Propietario"]);
+const ADMIN_ROLES = new Set(["Administrador", "Propietario", "Programador"]);
 const TASK_STATUS_PRIORITY = { pending: 0, in_progress: 1, blocked: 2, done: 3 };
 
 const isAdminRole = (req) => ADMIN_ROLES.has(String(req?.user?.loginRol || ""));

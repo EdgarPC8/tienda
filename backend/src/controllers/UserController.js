@@ -91,7 +91,13 @@ function formatUserRow(user) {
 }
 
 async function rejectProgrammerAssignment(roles, loginRol) {
-  if (!Array.isArray(roles) || loginRol === "Propietario") return;
+  if (
+    !Array.isArray(roles) ||
+    loginRol === "Propietario" ||
+    loginRol === "Programador"
+  ) {
+    return;
+  }
   const hidden = await Roles.findAll({
     where: { name: ["Propietario", "Programador"] },
   });
@@ -202,12 +208,17 @@ export const addUser = async (req, res) => {
     const { photo, username, password, roles, ...rest } = req.body || {};
     const email = resolveEmailFromBody(req.body || {});
     const userData = pickUserFields(rest);
+    if ("ci" in userData) {
+      const ci = String(userData.ci ?? "").trim();
+      userData.ci = ci || null;
+    }
     if (!String(userData.firstName || userData.firstLastName || "").trim()) {
       return res.status(400).json({ message: "El nombre es obligatorio" });
     }
     if (!String(username || "").trim()) {
       return res.status(400).json({ message: "El nombre de usuario es obligatorio" });
     }
+    // Cédula y correo son opcionales; solo se validan si vienen con valor.
     const identError = userIdentError(userData.ci, userData.documentType);
     if (identError) return res.status(400).json({ message: identError });
     const emailError = emailFormatError(email);
@@ -221,7 +232,9 @@ export const addUser = async (req, res) => {
 
     const newUser = await Users.create(userData);
     try {
-      await upsertUserEmail(newUser.id, email);
+      if (email != null && String(email).trim() !== "") {
+        await upsertUserEmail(newUser.id, email);
+      }
       await upsertUserAccount(newUser.id, { username, password, roles }, req.user?.loginRol);
     } catch (error) {
       await rollbackNewUser(newUser.id);
@@ -267,6 +280,10 @@ export const updateUserData = async (req, res) => {
     const { photo, username, password, roles, ...rest } = req.body;
     const email = resolveEmailFromBody(req.body);
     const userData = pickUserFields(rest);
+    if ("ci" in userData) {
+      const ci = String(userData.ci ?? "").trim();
+      userData.ci = ci || null;
+    }
     const identError = userIdentError(userData.ci, userData.documentType);
     if (identError) return res.status(400).json({ message: identError });
     const emailError = emailFormatError(email);
@@ -276,7 +293,9 @@ export const updateUserData = async (req, res) => {
       await Users.update(userData, { where: { id: userId } });
     }
 
-    await upsertUserEmail(userId, email);
+    if (email !== undefined) {
+      await upsertUserEmail(userId, email);
+    }
     await upsertUserAccount(userId, { username, password, roles }, req.user?.loginRol);
 
     const updated = await Users.findByPk(userId, { include: userInclude });

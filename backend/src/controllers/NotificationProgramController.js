@@ -2,7 +2,7 @@ import { NotificationProgram } from "../models/NotificationProgram.js";
 import { dispatchProgramToUsers } from "../services/notificationService.js";
 import { notifyOk, notifyFail } from "../services/notifyRaptorSolutions.js";
 
-const ADMIN_ROLES = new Set(["Administrador", "Propietario"]);
+const ADMIN_ROLES = new Set(["Administrador", "Propietario", "Programador"]);
 
 function assertAdmin(req, res) {
   if (!ADMIN_ROLES.has(String(req.user?.loginRol || ""))) {

@@ -856,7 +856,7 @@ export const updateOrderItem = async (req, res) => {
     const isDashboardCorrection =
       req.body?.programmerDashboard === true || req.body?.programmerDashboard === "true";
     if (isDashboardCorrection) {
-      if (user?.loginRol !== "Propietario") {
+      if (user?.loginRol !== "Propietario" && user?.loginRol !== "Programador") {
         notifyFail("order_item.programmer_corrected_failed", "No tenés permiso para esta acción", {
           req,
           httpStatus: 403,

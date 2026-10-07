@@ -131,19 +131,10 @@ function programmerMay(method, path) {
   return false;
 }
 
-/** Rol Programador: Desarrollador + Administración (usuarios/cuentas/roles/panel). */
+/** Rol Programador: mismos permisos de API que Propietario (Desarrollador en rutas específicas). */
 export async function restrictProgrammer(req, res, next) {
-  const token = getHeaderToken(req);
-  if (!token) return next();
-  let user;
-  try {
-    user = await verifyJWT(token);
-  } catch {
-    return next();
-  }
-  if (user?.loginRol !== "Programador") return next();
-  if (programmerMay(req.method, pathOf(req))) return next();
-  return res.status(403).json({ message: "No tenés permiso para esta acción" });
+  // Programador ya no se restringe aquí: opera como Propietario en negocio.
+  return next();
 }
 
 /** Rol Proveedor: inicio, perfil, sus pedidos a proveedor y lectura básica. */

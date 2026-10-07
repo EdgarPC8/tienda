@@ -12,7 +12,7 @@ import { getAppSettingsSync } from "../services/appSettingsService.js";
 /** Admin (si config lo permite) o Propietario pueden anular pagos / borrar con cascada financiera. */
 export function canFinanceCascadeCorrection(user) {
   const role = user?.loginRol;
-  if (role === "Propietario") return true;
+  if (role === "Propietario" || role === "Programador") return true;
   if (role === "Administrador") {
     return getAppSettingsSync().financeAllowAdminCorrections !== false;
   }

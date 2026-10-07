@@ -57,7 +57,7 @@ const PROGRAMMER_ONLY_MSG =
 
 const PRODUCTION_OP_REF_PREFIX = "produccion_op:";
 
-const assertProgrammerRole = (user) => user?.loginRol === "Propietario";
+const assertProgrammerRole = (user) => user?.loginRol === "Propietario" || user?.loginRol === "Programador";
 
 /** ID de operación de producción (PR-… / PF-…) desde referenceType o descripción. */
 export const extractOperationId = (movement) => {

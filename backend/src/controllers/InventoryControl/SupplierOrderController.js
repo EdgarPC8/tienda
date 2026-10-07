@@ -470,7 +470,7 @@ export const updateSupplierOrder = async (req, res) => {
     const hasDateOverride = receivedAt !== undefined || paidAt !== undefined;
     const hasPaymentInstallments = paymentInstallments !== undefined;
     const user = await verifyJWT(getHeaderToken(req));
-    const isPropietario = user?.loginRol === "Propietario";
+    const isPropietario = user?.loginRol === "Propietario" || user?.loginRol === "Programador";
     if (hasDateOverride) {
       if (!isPropietario) {
         notifyFail("supplier_order.update_failed", "No tenés permiso para editar las fechas de entrega y pago", {

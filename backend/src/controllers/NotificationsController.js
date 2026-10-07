@@ -168,7 +168,7 @@ export const markManyAsSeen = async (req, res) => {
   }
   try {
     const where = { id: ids, deleted: false };
-    if (!sameUser(req, req.user?.userId) || (req.user?.loginRol !== "Administrador" && req.user?.loginRol !== "Propietario")) {
+    if (!sameUser(req, req.user?.userId) || (req.user?.loginRol !== "Administrador" && req.user?.loginRol !== "Propietario" && req.user?.loginRol !== "Programador")) {
       where.userId = req.user?.userId;
     }
     await Notifications.update(
@@ -195,7 +195,7 @@ export const deleteManyNotifications = async (req, res) => {
   }
   try {
     const where = { id: ids };
-    if (req.user?.loginRol !== "Administrador" && req.user?.loginRol !== "Propietario") {
+    if (req.user?.loginRol !== "Administrador" && req.user?.loginRol !== "Propietario" && req.user?.loginRol !== "Programador") {
       where.userId = req.user?.userId;
     }
     await Notifications.update(

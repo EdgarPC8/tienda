@@ -24,8 +24,8 @@ import { ensureSingleLocalOwnStore } from "../../services/storeStockService.js";
 
 const CAJA_POS_TAG = "[CAJA_POS]";
 const to2 = (n) => Number(Number(n || 0).toFixed(2));
-const ADMIN_ROLES = new Set(["Administrador", "Propietario"]);
-const PROGRAMMER_ROLE = "Propietario";
+const ADMIN_ROLES = new Set(["Administrador", "Propietario", "Programador"]);
+const isOwnerLike = (rol) => rol === "Propietario" || rol === "Programador";
 const USER_LIST_ATTRS = ["id", "firstName", "firstLastName", "ci"];
 
 const OUT_CATEGORIES = new Set(["gasto_operativo", "compra_mercancia", "retiro", "otro"]);
@@ -147,7 +147,7 @@ function computeExpectedCash(opening, salesCash, cashOut, cashIn) {
 }
 
 function requireProgrammerRole(req, res, failTypeKey = "shift.update_failed") {
-  if (req.user?.loginRol !== PROGRAMMER_ROLE) {
+  if ((!isOwnerLike(req.user?.loginRol))) {
     notifyFail(failTypeKey, "No tenés permiso para esta acción.", { req, httpStatus: 403 });
     res.status(403).json({ message: "No tenés permiso para esta acción." });
     return false;
@@ -472,7 +472,7 @@ export async function createShiftMovement(req, res) {
       notifyFail("shift_movement.create_failed", "Turno no encontrado", { req, httpStatus: 404 });
       return res.status(404).json({ message: "Turno no encontrado." });
     }
-    const isProgrammer = req.user.loginRol === PROGRAMMER_ROLE;
+    const isProgrammer = isOwnerLike(req.user.loginRol);
     if (!isProgrammer && shift.accountId !== accountId) {
       notifyFail("shift_movement.create_failed", "Solo puedes registrar movimientos en tu turno", {
         req,
@@ -696,7 +696,7 @@ export async function openShift(req, res) {
 
     const { counts, total: openingCashTotal } = resolved;
     let openedAtDate = new Date();
-    if (req.user.loginRol === PROGRAMMER_ROLE && openedAt) {
+    if (isOwnerLike(req.user.loginRol) && openedAt) {
       const parsed = parseOptionalIsoDate(openedAt);
       if (parsed === undefined) {
         notifyFail("shift.open_failed", "Fecha de apertura no válida", { req, httpStatus: 400 });
@@ -850,7 +850,7 @@ export async function closeShift(req, res) {
     const cashDifference = to2(closingCashTotal - expectedCashTotal);
 
     let closedAtDate = new Date();
-    if (req.user.loginRol === PROGRAMMER_ROLE && closedAt) {
+    if (isOwnerLike(req.user.loginRol) && closedAt) {
       const parsed = parseOptionalIsoDate(closedAt);
       if (parsed === undefined) {
         notifyFail("shift.close_failed", "Fecha de cierre no válida", { req, httpStatus: 400 });

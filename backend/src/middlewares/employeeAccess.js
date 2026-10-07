@@ -114,12 +114,24 @@ function programmerMay(method, path) {
   if (/\/users\/photo\/\d+\/?$/.test(path)) return m === "PUT" || m === "DELETE";
   // Sesión propia (misma forma que Empleado).
   if (m === "GET" && /\/account\/\d+(?:\/[^/]+)?\/?$/.test(path)) return true;
-  if (m === "GET" && /\/comands\/getLogs\/?$/.test(path)) return true;
   if (m === "GET" && /\/notifications\/unreadCount\/\d+\/?$/.test(path)) return true;
+
+  // Módulo Desarrollador
+  if (/\/comands(\/|$)/.test(path)) return true;
+  if (/\/img(\/|$)/.test(path)) return true;
+  if (/\/files(\/|$)/.test(path)) return true;
+
+  // Módulo Administración
+  if (/\/users(\/|$)/.test(path)) return true;
+  if (/\/account(\/|$)/.test(path)) return true;
+  if (/\/rol(\/|$)/.test(path)) return true;
+  if (/\/notification-programs(\/|$)/.test(path)) return true;
+  if (m === "GET" && /\/(news|notifications)(\/|$)/.test(path)) return true;
+
   return false;
 }
 
-/** Rol Programador limitado: inicio, perfil propio y lectura de logs. */
+/** Rol Programador: Desarrollador + Administración (usuarios/cuentas/roles/panel). */
 export async function restrictProgrammer(req, res, next) {
   const token = getHeaderToken(req);
   if (!token) return next();

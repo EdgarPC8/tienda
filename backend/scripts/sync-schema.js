@@ -1,57 +1,22 @@
 /**
- * Sincroniza el esquema de BD con los modelos (ALTER TABLE).
- * Incluye inventario, turnos, publicidad, media, etc.
+ * Solo sincroniza esquema (tablas/columnas) con los modelos Sequelize.
+ * No crea locales, no migra stock, no limpia datos ni IDs.
+ *
  * Uso: npm run db:sync
  *
- * No corre en el arranque del API: el boot solo autentica y levanta el puerto.
+ * Para bodega/cajas/FK/stock → npm run db:prepare
  */
 import "dotenv/config";
 import { sequelize } from "../src/database/connection.js";
 import "../src/database/registerEdDeliModels.js";
 import { syncDatabaseSchema } from "../src/database/syncModels.js";
 import { ensureCustomerNameSchema } from "../src/services/customerNameService.js";
-import { loadAppSettings, getAppSettingsSync } from "../src/services/appSettingsService.js";
 import { ensureEntitlementTable } from "../src/services/entitlementService.js";
 import {
   ensureStoreLocationKindEnum,
   ensureStoreIsVisibleColumn,
-  ensureBodegaStore,
-  ensureSingleLocalOwnStore,
-  migrateGlobalStockToBodega,
 } from "../src/services/storeStockService.js";
-import { seedDefaultCashRegistersForOwnStores } from "../src/models/CashRegister.js";
 import { ensureAccountIsActiveColumn } from "../src/models/Account.js";
-import { spawn } from "node:child_process";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-function runFixExpenseReferenceFk() {
-  const script = path.resolve(__dirname, "fix-expense-reference-fk.js");
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [script], {
-      stdio: "inherit",
-      env: process.env,
-      cwd: path.resolve(__dirname, ".."),
-    });
-    child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`fix-expense-reference-fk exit ${code}`))));
-    child.on("error", reject);
-  });
-}
-
-function runFixMultistockOff() {
-  const script = path.resolve(__dirname, "fix-multistock-off.js");
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [script], {
-      stdio: "inherit",
-      env: process.env,
-      cwd: path.resolve(__dirname, ".."),
-    });
-    child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`fix-multistock-off exit ${code}`))));
-    child.on("error", reject);
-  });
-}
 
 try {
   await sequelize.authenticate();
@@ -61,17 +26,8 @@ try {
   await ensureCustomerNameSchema();
   await ensureAccountIsActiveColumn();
   await ensureEntitlementTable({ alter: true });
-  await seedDefaultCashRegistersForOwnStores();
-  await loadAppSettings();
-  if (getAppSettingsSync()?.multiStockEnabled) {
-    await ensureBodegaStore();
-    await migrateGlobalStockToBodega();
-  } else {
-    await ensureSingleLocalOwnStore();
-  }
-  await runFixExpenseReferenceFk();
-  await runFixMultistockOff();
-  console.log("✅ Esquema sincronizado:", result.models?.join(", ") || "ok");
+  console.log("✅ Esquema sincronizado (solo tablas/columnas):", result.models?.join(", ") || "ok");
+  console.log("   Si necesitás bodega/cajas/migración de stock: npm run db:prepare");
   process.exit(0);
 } catch (error) {
   console.error("❌ Error sincronizando esquema:", error);

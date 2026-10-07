@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   requireAdminOrProgrammer,
+  requireOwner,
   requireProgrammer,
 } from "../src/middlewares/authMiddelware.js";
 
@@ -21,8 +22,30 @@ function mockRes() {
   return res;
 }
 
-test("requireProgrammer: permite Propietario", () => {
+test("requireOwner: permite Propietario", () => {
   const req = { user: { loginRol: "Propietario" } };
+  const res = mockRes();
+  let nextCalled = false;
+  requireOwner(req, res, () => {
+    nextCalled = true;
+  });
+  assert.equal(nextCalled, true);
+  assert.equal(res.statusCode, 200);
+});
+
+test("requireOwner: rechaza Programador", () => {
+  const req = { user: { loginRol: "Programador" } };
+  const res = mockRes();
+  let nextCalled = false;
+  requireOwner(req, res, () => {
+    nextCalled = true;
+  });
+  assert.equal(nextCalled, false);
+  assert.equal(res.statusCode, 403);
+});
+
+test("requireProgrammer: permite Programador", () => {
+  const req = { user: { loginRol: "Programador" } };
   const res = mockRes();
   let nextCalled = false;
   requireProgrammer(req, res, () => {
@@ -32,8 +55,8 @@ test("requireProgrammer: permite Propietario", () => {
   assert.equal(res.statusCode, 200);
 });
 
-test("requireProgrammer: rechaza Empleado", () => {
-  const req = { user: { loginRol: "Empleado" } };
+test("requireProgrammer: rechaza Propietario", () => {
+  const req = { user: { loginRol: "Propietario" } };
   const res = mockRes();
   let nextCalled = false;
   requireProgrammer(req, res, () => {
@@ -45,6 +68,16 @@ test("requireProgrammer: rechaza Empleado", () => {
 
 test("requireAdminOrProgrammer: permite Administrador", () => {
   const req = { user: { loginRol: "Administrador" } };
+  const res = mockRes();
+  let nextCalled = false;
+  requireAdminOrProgrammer(req, res, () => {
+    nextCalled = true;
+  });
+  assert.equal(nextCalled, true);
+});
+
+test("requireAdminOrProgrammer: permite Programador", () => {
+  const req = { user: { loginRol: "Programador" } };
   const res = mockRes();
   let nextCalled = false;
   requireAdminOrProgrammer(req, res, () => {

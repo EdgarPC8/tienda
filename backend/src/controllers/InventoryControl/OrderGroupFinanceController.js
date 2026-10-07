@@ -37,6 +37,14 @@ const toNum = (v, def = 0) => {
     return dt.toISOString().slice(0, 10);
   };
 
+  /** DateTime completo (ISO) para campos con hora en BD. */
+  const isoDateTime = (d) => {
+    if (!d) return null;
+    const dt = new Date(d);
+    if (Number.isNaN(dt.getTime())) return null;
+    return dt.toISOString();
+  };
+
   const truncateNote = (text, max = 255) => {
     const s = String(text || "").trim();
     if (s.length <= max) return s;
@@ -1166,7 +1174,7 @@ export const getFinanceWorkbenchAll = async (req, res) => {
           customerId: g.customerId,
           concept: g.concept,
           status: g.status,
-          createdAt: isoDateOnly(g.createdAt),
+          createdAt: isoDateTime(g.createdAt),
           totalAmount: totalCalc, // ✅ siempre real (recalculado)
           paidAmount: paid,
           remainingAmount: remaining,
@@ -1178,7 +1186,7 @@ export const getFinanceWorkbenchAll = async (req, res) => {
         id: p.id,
         groupId: p.groupId,
         customerId: p.customerId,
-        date: isoDateOnly(p.date) || isoDateOnly(p.createdAt),
+        date: isoDateTime(p.date) || isoDateTime(p.createdAt),
         amount: Number(toNum(p.amount).toFixed(2)),
         note: p.note ?? "",
         method: p.method ?? "efectivo",
@@ -1254,7 +1262,7 @@ export const getFinanceWorkbenchAll = async (req, res) => {
           outOrders.push({
             id: o.id,
             customerId: o.customerId ?? c.id,
-            date: isoDateOnly(o.date) || isoDateOnly(o.createdAt),
+            date: isoDateTime(o.date) || isoDateTime(o.createdAt),
             items: itemsArr.map((it) => {
               const gid = groupIdByItemId.get(it.id) || null;
 
@@ -1264,7 +1272,7 @@ export const getFinanceWorkbenchAll = async (req, res) => {
                 product: it.ERP_inventory_product?.name ?? "(sin nombre)",
                 qty: toNum(it.quantity),
                 price: toNum(it.price),
-                paidAt: it.paidAt ? isoDateOnly(it.paidAt) : null,
+                paidAt: it.paidAt ? isoDateTime(it.paidAt) : null,
                 soldQty:toNum(it.soldQty),
                 damagedQty:toNum(it.damagedQty),
                 giftQty:toNum(it.giftQty),

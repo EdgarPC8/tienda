@@ -10,21 +10,21 @@ import { es } from 'date-fns/locale';
 import { OrderItem } from "../../models/Orders.js";
 import { ItemGroup, ItemGroupItem, Payment } from "../../models/Finance.js";
 import { toFinanceDateTime } from "../../utils/financeDateTime.js";
-import { buildFinanceDateColumnWhere } from "../../utils/financeDateUtils.js";
+import { buildFinanceDateColumnWhere, buildFinanceDateWhere } from "../../utils/financeDateUtils.js";
 import { notifyOk, notifyFail } from "../../services/notifyRaptorSolutions.js";
 
 const MONEY_CAP = 99999999.99;
 
-function strictCivilDate(value) {
+/** Acepta YYYY-MM-DD o datetime (con hora); conserva la hora al persistir. */
+function hasValidDatePrefix(value) {
   const match = String(value || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!match) return null;
+  if (!match) return false;
   const year = Number(match[1]);
   const month = Number(match[2]);
   const day = Number(match[3]);
-  if (year < 2000 || year > 2100) return null;
+  if (year < 2000 || year > 2100) return false;
   const date = new Date(year, month - 1, day);
-  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
-  return `${match[1]}-${match[2]}-${match[3]}`;
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
 }
 
 function financeEntryError({ date, amount, concept, category }) {
@@ -36,7 +36,7 @@ function financeEntryError({ date, amount, concept, category }) {
   const amountNumber = Number(Number(amount).toFixed(2));
   if (amountNumber <= 0) return "El monto debe ser mayor a cero";
   if (amountNumber > MONEY_CAP) return "El monto es demasiado grande";
-  if (!strictCivilDate(date)) return "La fecha no es válida";
+  if (!hasValidDatePrefix(date)) return "La fecha no es válida";
   return null;
 }
 
@@ -93,10 +93,14 @@ export const getFinanceSummary = async (req, res) => {
   };
 
   try {
+    const { startDate, endDate } = req.query || {};
+    const hasPeriodFilter = Boolean(startDate || endDate);
+    const periodWhere = hasPeriodFilter ? buildFinanceDateWhere(startDate, endDate) : {};
+
     await stripOrderItemIncomesWhenGroupAlreadyPaid();
     const [totalIncome, totalExpense, groupLinks, openGroups, completedPayments] = await Promise.all([
-      Income.sum('amount'),
-      Expense.sum('amount'),
+      Income.sum("amount", hasPeriodFilter ? { where: periodWhere } : {}),
+      Expense.sum("amount", hasPeriodFilter ? { where: periodWhere } : {}),
       ItemGroupItem.findAll({ attributes: ['groupId', 'orderItemId'], raw: true }),
       ItemGroup.findAll({ where: { status: 'open' }, attributes: ['id'], raw: true }),
       Payment.findAll({ where: { status: 'completed' }, attributes: ['groupId', 'amount'], raw: true }),
@@ -166,9 +170,14 @@ export const getFinanceSummary = async (req, res) => {
     const expense = Number(totalExpense || 0);
 
     const now = new Date();
-    const monthStart = format(startOfMonth(now), "yyyy-MM-dd");
-    const monthEnd = format(endOfMonth(now), "yyyy-MM-dd");
-    const monthDateWhere = buildFinanceDateColumnWhere(monthStart, monthEnd) || {};
+    const monthStart = hasPeriodFilter
+      ? String(startDate || endDate).slice(0, 10)
+      : format(startOfMonth(now), "yyyy-MM-dd");
+    const monthEnd = hasPeriodFilter
+      ? String(endDate || startDate).slice(0, 10)
+      : format(endOfMonth(now), "yyyy-MM-dd");
+    const monthDateWhere =
+      hasPeriodFilter ? periodWhere : buildFinanceDateColumnWhere(monthStart, monthEnd) || {};
     const [monthIncomeRaw, monthExpenseRaw] = await Promise.all([
       Income.sum("amount", { where: monthDateWhere }),
       Expense.sum("amount", { where: monthDateWhere }),
@@ -270,7 +279,10 @@ export const getFinanceSummary = async (req, res) => {
       monthExpense,
       monthBalance,
       monthMarginPct,
-      monthLabel: format(now, "MMMM yyyy", { locale: es }),
+      monthLabel: hasPeriodFilter
+        ? `${format(parse(monthStart, "yyyy-MM-dd", new Date()), "d MMM yyyy", { locale: es })} – ${format(parse(monthEnd, "yyyy-MM-dd", new Date()), "d MMM yyyy", { locale: es })}`
+        : format(now, "MMMM yyyy", { locale: es }),
+      periodFiltered: hasPeriodFilter,
       monthIncomeWithPending,
       monthBalanceWithPending,
       monthMarginWithPendingPct,
@@ -293,14 +305,15 @@ export const createIncome = async (req, res) => {
     const { date, amount, concept, category, referenceId, referenceType } = req.body;
     const entryError = financeEntryError({ date, amount, concept, category });
     if (entryError) return res.status(400).json({ message: entryError });
-    const entryDate = toFinanceDateTime(strictCivilDate(date));
+    const parsedAmount = Number(Number(amount).toFixed(2));
+    const entryDate = toFinanceDateTime(date);
 
         const token = getHeaderToken(req);
       const user = await verifyJWT(token); // para createdBy
     const createdBy = user.accountId;
     const income = await Income.create({
       date: entryDate,
-      amount,
+      amount: parsedAmount,
       concept,
       category,
       referenceId,
@@ -322,14 +335,15 @@ export const createExpense = async (req, res) => {
     const { date, amount, concept, category, referenceId, referenceType } = req.body;
     const entryError = financeEntryError({ date, amount, concept, category });
     if (entryError) return res.status(400).json({ message: entryError });
-    const entryDate = toFinanceDateTime(strictCivilDate(date));
+    const parsedAmount = Number(Number(amount).toFixed(2));
+    const entryDate = toFinanceDateTime(date);
       const token = getHeaderToken(req);
       const user = await verifyJWT(token); // para createdBy
     const createdBy = user.accountId;
 
     const expense = await Expense.create({
       date: entryDate,
-      amount,
+      amount: parsedAmount,
       concept,
       category,
       referenceId,
@@ -390,7 +404,8 @@ export const updateIncome = async (req, res) => {
     const { date, amount, concept, category, referenceId, referenceType } = req.body;
     const entryError = financeEntryError({ date, amount, concept, category });
     if (entryError) return res.status(400).json({ message: entryError });
-    const entryDate = toFinanceDateTime(strictCivilDate(date));
+    const parsedAmount = Number(Number(amount).toFixed(2));
+    const entryDate = toFinanceDateTime(date);
     const income = await Income.findByPk(id);
     if (!income) {
       notifyFail("income.update_failed", `Ingreso #${id} no encontrado`, { req, httpStatus: 404 });
@@ -399,7 +414,7 @@ export const updateIncome = async (req, res) => {
 
     await income.update({
       date: entryDate,
-      amount,
+      ...(parsedAmount != null ? { amount: parsedAmount } : {}),
       concept,
       category,
       referenceId,
@@ -421,7 +436,8 @@ export const updateExpense = async (req, res) => {
     const { date, amount, concept, category, referenceId, referenceType } = req.body;
     const entryError = financeEntryError({ date, amount, concept, category });
     if (entryError) return res.status(400).json({ message: entryError });
-    const entryDate = toFinanceDateTime(strictCivilDate(date));
+    const parsedAmount = Number(Number(amount).toFixed(2));
+    const entryDate = toFinanceDateTime(date);
     const expense = await Expense.findByPk(id);
     if (!expense) {
       notifyFail("expense.update_failed", `Egreso #${id} no encontrado`, { req, httpStatus: 404 });
@@ -430,7 +446,7 @@ export const updateExpense = async (req, res) => {
 
     await expense.update({
       date: entryDate,
-      amount,
+      ...(parsedAmount != null ? { amount: parsedAmount } : {}),
       concept,
       category,
       referenceId,

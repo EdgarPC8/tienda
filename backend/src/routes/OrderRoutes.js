@@ -86,7 +86,7 @@ import {
   dissolveSupplierPack,
 } from "../controllers/InventoryControl/SupplierPayablesController.js";
 
-import { isAuthenticated, requireProgrammer } from "../middlewares/authMiddelware.js";
+import { isAuthenticated, requireOwner } from "../middlewares/authMiddelware.js";
 import { 
     // ✅ WORKBENCH
     getFinanceWorkbenchAll,
@@ -118,7 +118,7 @@ const router = express.Router();
 // En producción NO se expone. En dev: solo Propietario autenticado.
 // --------------------
 if (process.env.NODE_ENV !== "production") {
-  router.get("/cmd", isAuthenticated, requireProgrammer, command);
+  router.get("/cmd", isAuthenticated, requireOwner, command);
 }
 
 // --------------------
@@ -303,14 +303,14 @@ router.put("/order-items/:itemId/unmark-paid", isAuthenticated, unmarkItemAsPaid
 router.patch(
   "/order-items/:itemId/programmer-dashboard",
   isAuthenticated,
-  requireProgrammer,
+  requireOwner,
   programmerDashboardOrderItemCorrection,
 );
 
 router.put(
   "/order-items/:itemId/programmer-dashboard",
   isAuthenticated,
-  requireProgrammer,
+  requireOwner,
   programmerDashboardOrderItemCorrection,
 );
 

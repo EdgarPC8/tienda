@@ -10,6 +10,7 @@ const GESTOR_SYNC_SECRET = process.env.GESTOR_SYNC_SECRET || "";
 
 const EMPTY = {
   maintenance: false,
+  updating: false,
   subscribed: false,
   features: [],
   subscription: null,
@@ -45,9 +46,10 @@ function normalizePayload(body) {
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
   const subscribed = Boolean(parsed.subscribed);
   const maintenance = Boolean(parsed.maintenance);
+  const updating = Boolean(parsed.updating);
   const subscription = parsed.subscription ?? null;
   const features = normalizeFeatures(parsed.features);
-  return { maintenance, subscribed, subscription, features };
+  return { maintenance, updating, subscribed, subscription, features };
 }
 
 /** Quita módulos/secciones ocultos antes de exponer al frontend. */
@@ -91,6 +93,7 @@ export async function getEntitlementResponse() {
   const payload = coerceJson(row.payload) || EMPTY;
   const out = {
     maintenance: Boolean(payload.maintenance),
+    updating: Boolean(payload.updating),
     subscribed: Boolean(payload.subscribed),
     features: stripHiddenFeatures(normalizeFeatures(payload.features)),
     subscription: stripHiddenFromSubscription(payload.subscription ?? null),

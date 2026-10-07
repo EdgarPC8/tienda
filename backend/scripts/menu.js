@@ -32,10 +32,253 @@ function detectAppLabel() {
 
 const APP_LABEL = detectAppLabel();
 
-/** @typedef {{ id: string, title: string, desc: string, file: string, args?: string[], env?: Record<string,string>, danger?: 'low'|'med'|'high', write?: boolean }} ScriptItem */
+/** @typedef {{ id: string, title: string, desc: string, file?: string, npmScript?: string, npmArgs?: string[], args?: string[], env?: Record<string,string>, danger?: 'low'|'med'|'high', write?: boolean }} ScriptItem */
 
 /** @type {{ name: string, items: ScriptItem[] }[]} */
 const CATALOG = [
+  {
+    name: "npm db:* (esquema / backup / roles)",
+    color: "blue",
+    items: [
+      {
+        id: "npm-db-sync",
+        title: "db:sync · solo tablas/columnas",
+        desc: "ALTER de modelos. No crea locales, no migra stock, no limpia IDs ni datos.",
+        npmScript: "db:sync",
+        write: true,
+        danger: "med",
+      },
+      {
+        id: "npm-db-prepare",
+        title: "db:prepare · bodega / cajas / stock / FK",
+        desc: "Datos de runtime: cajas, bodega/local, migrar stock, fix FK expenses. No es sync de esquema.",
+        npmScript: "db:prepare",
+        write: true,
+        danger: "high",
+      },
+      {
+        id: "npm-db-sync-cats",
+        title: "db:sync:categories",
+        desc: "ALTER solo ERP_inventory_categories.",
+        npmScript: "db:sync:categories",
+        write: true,
+        danger: "med",
+      },
+      {
+        id: "npm-db-sync-editor",
+        title: "db:sync:editor",
+        desc: "ALTER solo editor_templates.",
+        npmScript: "db:sync:editor",
+        write: true,
+        danger: "med",
+      },
+      {
+        id: "npm-db-reset",
+        title: "db:reset · RESET desde backup.json",
+        desc: "BORRA tablas, recrea y carga backup.json. Destructivo.",
+        npmScript: "db:reset",
+        write: true,
+        danger: "high",
+      },
+      {
+        id: "npm-db-check-backup",
+        title: "db:check-backup",
+        desc: "Resumen de backup.json (tamaño y filas).",
+        npmScript: "db:check-backup",
+        danger: "low",
+      },
+      {
+        id: "npm-db-verify-backup",
+        title: "db:verify:backup-json",
+        desc: "Detecta JSON corrupto en backup.",
+        npmScript: "db:verify:backup-json",
+        danger: "low",
+      },
+      {
+        id: "npm-db-patch-backup",
+        title: "db:patch:backup",
+        desc: "Normaliza backup.json al esquema actual.",
+        npmScript: "db:patch:backup",
+        write: true,
+        danger: "med",
+      },
+      {
+        id: "npm-db-audit-json",
+        title: "db:audit:json-fields",
+        desc: "Audita JSON mal guardado (BD + backup).",
+        npmScript: "db:audit:json-fields",
+        danger: "low",
+      },
+      {
+        id: "npm-db-repair-json",
+        title: "db:repair:json-fields",
+        desc: "Repara packageTiers/wholesaleRules mal escapados.",
+        npmScript: "db:repair:json-fields",
+        write: true,
+        danger: "med",
+      },
+      {
+        id: "npm-db-migrate-cats",
+        title: "db:migrate:categories",
+        desc: "Jerarquía principales + subcategorías.",
+        npmScript: "db:migrate:categories",
+        write: true,
+        danger: "high",
+      },
+      {
+        id: "npm-db-reorg-cats",
+        title: "db:reorganize:categories",
+        desc: "Reasigna productos a categorías.",
+        npmScript: "db:reorganize:categories",
+        write: true,
+        danger: "high",
+      },
+      {
+        id: "npm-db-migrate-tramos",
+        title: "db:migrate:tramos",
+        desc: "Tramos de categorías → pricing groups.",
+        npmScript: "db:migrate:tramos",
+        write: true,
+        danger: "high",
+      },
+      {
+        id: "npm-db-seed-panes",
+        title: "db:seed:panes-group",
+        desc: "Grupo de precios mix de panes.",
+        npmScript: "db:seed:panes-group",
+        write: true,
+        danger: "med",
+      },
+      {
+        id: "npm-db-migrate-paths",
+        title: "db:migrate:paths-to-sistema",
+        desc: "Rutas EdDeli/ → sistema/.",
+        npmScript: "db:migrate:paths-to-sistema",
+        write: true,
+        danger: "high",
+      },
+      {
+        id: "npm-db-fix-expense-fk",
+        title: "db:fix:expense-reference-fk",
+        desc: "Quita FK incorrecta que rompe abonos a proveedor.",
+        npmScript: "db:fix:expense-reference-fk",
+        write: true,
+        danger: "med",
+      },
+      {
+        id: "npm-db-diag-supplier",
+        title: "db:diagnose:supplier-pay",
+        desc: "Diagnóstico de pagos/abonos a proveedor (solo lee).",
+        npmScript: "db:diagnose:supplier-pay",
+        danger: "low",
+      },
+      {
+        id: "npm-db-fix-pos",
+        title: "db:fix:pos-customer",
+        desc: "Ventas POS → cliente Consumidor Final.",
+        npmScript: "db:fix:pos-customer",
+        write: true,
+        danger: "med",
+      },
+      {
+        id: "npm-db-fix-empleado",
+        title: "db:fix:empleado-role",
+        desc: "Renombra rol Estudiante → Empleado.",
+        npmScript: "db:fix:empleado-role",
+        write: true,
+        danger: "med",
+      },
+      {
+        id: "npm-db-raw-final-dry",
+        title: "db:fix:raw-to-final:dry",
+        desc: "Lista insumos raw→final sin escribir.",
+        npmScript: "db:fix:raw-to-final:dry",
+        danger: "low",
+      },
+      {
+        id: "npm-db-raw-final",
+        title: "db:fix:raw-to-final",
+        desc: "Pasa productos type raw → final.",
+        npmScript: "db:fix:raw-to-final",
+        write: true,
+        danger: "med",
+      },
+      {
+        id: "npm-db-seed-roles-dry",
+        title: "db:seed:roles:dry",
+        desc: "Simula roles canónicos (Propietario, Admin, Empleado, Programador, Proveedor).",
+        npmScript: "db:seed:roles:dry",
+        danger: "low",
+      },
+      {
+        id: "npm-db-seed-roles",
+        title: "db:seed:roles",
+        desc: "Asegura los 5 roles; Profesional/Proovedor → Proveedor.",
+        npmScript: "db:seed:roles",
+        write: true,
+        danger: "med",
+      },
+      {
+        id: "npm-db-images-report",
+        title: "db:images:report",
+        desc: "Totales barcode / imagen.",
+        npmScript: "db:images:report",
+        danger: "low",
+      },
+      {
+        id: "npm-db-images-candidates",
+        title: "db:images:report:candidates",
+        desc: "Lista barcode sin imagen (candidatos Go-UPC).",
+        npmScript: "db:images:report:candidates",
+        danger: "low",
+      },
+      {
+        id: "npm-db-images-clear-dry",
+        title: "db:images:clear-missing:dry",
+        desc: "Simula limpiar primaryImageUrl rotas.",
+        npmScript: "db:images:clear-missing:dry",
+        danger: "low",
+      },
+      {
+        id: "npm-db-images-clear",
+        title: "db:images:clear-missing",
+        desc: "Anula primaryImageUrl si el archivo no existe.",
+        npmScript: "db:images:clear-missing",
+        write: true,
+        danger: "med",
+      },
+      {
+        id: "npm-db-images-goupc-dry",
+        title: "db:images:enrich-goupc:dry",
+        desc: "Simula búsqueda de fotos en Go-UPC.",
+        npmScript: "db:images:enrich-goupc:dry",
+        danger: "low",
+      },
+      {
+        id: "npm-db-images-goupc",
+        title: "db:images:enrich-goupc",
+        desc: "Descarga fotos Go-UPC por barcode.",
+        npmScript: "db:images:enrich-goupc",
+        write: true,
+        danger: "med",
+      },
+      {
+        id: "npm-db-images-sync-dry",
+        title: "db:images:sync-server:dry",
+        desc: "Simula subir imágenes al servidor.",
+        npmScript: "db:images:sync-server:dry",
+        danger: "low",
+      },
+      {
+        id: "npm-db-images-sync",
+        title: "db:images:sync-server",
+        desc: "Sube imágenes + URLs al servidor (SSH).",
+        npmScript: "db:images:sync-server",
+        write: true,
+        danger: "med",
+      },
+    ],
+  },
   {
     name: "Imágenes / barcodes",
     color: "magenta",
@@ -476,9 +719,17 @@ const CATALOG = [
       {
         id: "sync-schema",
         title: "Sync esquema completo (ALTER)",
-        desc: "Sincroniza modelos Sequelize con la BD (DB_SYNC_ALTER=1).",
+        desc: "Solo tablas/columnas. No migra stock ni crea bodega/cajas.",
         file: "sync-schema.js",
         env: { DB_SYNC_ALTER: "1" },
+        write: true,
+        danger: "med",
+      },
+      {
+        id: "prepare-runtime",
+        title: "Prepare runtime (bodega/cajas/stock/FK)",
+        desc: "Migraciones de datos: cajas, bodega, stock, FK expenses.",
+        file: "prepare-runtime-data.js",
         write: true,
         danger: "high",
       },
@@ -512,6 +763,21 @@ const CATALOG = [
     name: "Roles / editor / demo",
     color: "green",
     items: [
+      {
+        id: "seed-roles-dry",
+        title: "db:seed:roles:dry · simular roles canónicos",
+        desc: "Propietario, Administrador, Empleado, Programador, Proveedor (sin escribir).",
+        npmScript: "db:seed:roles:dry",
+        danger: "low",
+      },
+      {
+        id: "seed-roles",
+        title: "db:seed:roles · aplicar roles canónicos",
+        desc: "Asegura los 5 roles; Profesional/Proovedor → Proveedor.",
+        npmScript: "db:seed:roles",
+        write: true,
+        danger: "med",
+      },
       {
         id: "fix-role",
         title: "Renombrar rol Estudiante → Empleado",
@@ -771,9 +1037,37 @@ function waitEnter(msg = "Enter para volver al menú…") {
 }
 
 function runScript(item) {
+  const env = { ...process.env, ...(item.env || {}) };
+
+  if (item.npmScript) {
+    const npmArgs = ["run", item.npmScript, ...(item.npmArgs || [])];
+    console.log("");
+    console.log(`${c.bold}Ejecutando:${c.reset} npm ${npmArgs.join(" ")}`);
+    console.log(`${c.dim}cwd: ${BACKEND_ROOT}${c.reset}`);
+    console.log(`${c.dim}────────────────────────────────────────${c.reset}\n`);
+
+    return new Promise((resolve) => {
+      const child = spawn("npm", npmArgs, {
+        cwd: BACKEND_ROOT,
+        env,
+        stdio: "inherit",
+      });
+      child.on("exit", (code, signal) => {
+        console.log("");
+        if (signal) {
+          console.log(`${c.yellow}Terminó por señal ${signal}${c.reset}`);
+        } else if (code === 0) {
+          console.log(`${c.green}OK (exit ${code})${c.reset}`);
+        } else {
+          console.log(`${c.red}Falló (exit ${code})${c.reset}`);
+        }
+        resolve(code ?? 1);
+      });
+    });
+  }
+
   const scriptPath = path.join(__dirname, item.file);
   const args = [scriptPath, ...(item.args || [])];
-  const env = { ...process.env, ...(item.env || {}) };
 
   console.log("");
   console.log(`${c.bold}Ejecutando:${c.reset} node ${path.relative(BACKEND_ROOT, scriptPath)}${(item.args || []).length ? " " + item.args.join(" ") : ""}`);
@@ -809,7 +1103,11 @@ async function confirmAndRun(item) {
   console.log("");
   console.log(`${c.white}${item.desc}${c.reset}`);
   console.log("");
-  console.log(`${c.dim}Archivo:${c.reset} ${c.cyan}scripts/${item.file}${c.reset}`);
+  if (item.npmScript) {
+    console.log(`${c.dim}npm:${c.reset} ${c.cyan}npm run ${item.npmScript}${c.reset}`);
+  } else {
+    console.log(`${c.dim}Archivo:${c.reset} ${c.cyan}scripts/${item.file}${c.reset}`);
+  }
   if (item.args?.length) {
     console.log(`${c.dim}Args:${c.reset} ${c.yellow}${item.args.join(" ")}${c.reset}`);
   }
@@ -839,7 +1137,10 @@ async function openGroup(group) {
       flattenForGroup(group),
       (r) => {
         if (r?.kind === "script" && r.item) {
-          return `${c.dim}${r.item.desc}${c.reset}\n${c.dim}→ scripts/${r.item.file}${(r.item.args || []).length ? " " + r.item.args.join(" ") : ""}${c.reset}`;
+          const target = r.item.npmScript
+            ? `npm run ${r.item.npmScript}`
+            : `scripts/${r.item.file}${(r.item.args || []).length ? " " + r.item.args.join(" ") : ""}`;
+          return `${c.dim}${r.item.desc}${c.reset}\n${c.dim}→ ${target}${c.reset}`;
         }
         if (r?.kind === "back") return `${c.dim}Regresa al listado de categorías.${c.reset}`;
         return "";

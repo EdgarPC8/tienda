@@ -10,6 +10,7 @@
     "dev": "nodemon index.js",
     "start": "node index.js",
     "db:sync": "DB_SYNC_ALTER=1 node scripts/sync-schema.js",
+    "db:prepare": "node scripts/prepare-runtime-data.js",
     "seed": "node src/database/seed.js",
     "seed:catalog": "node scripts/seed-catalog-tienda.js",
     "db:seed:catalog": "npm run seed:catalog",

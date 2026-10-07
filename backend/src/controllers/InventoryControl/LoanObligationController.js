@@ -508,6 +508,7 @@ export const createObligation = async (req, res) => {
     if (!openDay) {
       return res.status(400).json({ message: "La fecha de apertura no es válida" });
     }
+    // Conserva hora del datetime-local; openDay solo para calendario de cuotas.
 
     let resolvedName = String(partyName || "").trim();
     if (resolvedName.length > 150) {
@@ -545,7 +546,7 @@ export const createObligation = async (req, res) => {
     const conceptText =
       conceptTextRaw ||
       (direction === "receivable" ? "Préstamo otorgado" : "Préstamo recibido");
-    const dateOnly = toFinanceDateTime(openDay);
+    const dateOnly = toFinanceDateTime(openDate);
     const french = amortizationFrench === true;
     if (french) {
       const rateError = loanRateError(loanTerms);
@@ -730,7 +731,7 @@ export const updateObligation = async (req, res) => {
       obligation.note = noteText;
       obligation.originalAmount = amt;
       if (labelColor !== undefined) obligation.labelColor = normalizeLabelColor(labelColor);
-      if (paid <= EPS && openDate) obligation.openDate = toFinanceDateTime(strictDate(openDate));
+      if (paid <= EPS && openDate) obligation.openDate = toFinanceDateTime(openDate);
       if (french && loanTerms && typeof loanTerms === "object") {
         obligation.loanTerms = JSON.parse(JSON.stringify(loanTerms));
         obligation.changed("loanTerms", true);
@@ -830,8 +831,7 @@ export const payObligation = async (req, res) => {
       return res.status(400).json({ message: parsedAmount.error || "Monto inválido" });
     }
     const payAmount = parsedAmount.amount;
-    const payDay = strictDate(date);
-    if (!payDay) {
+    if (!strictDate(date)) {
       return res.status(400).json({ message: "La fecha del pago no es válida" });
     }
     const payMethod = method == null || String(method).trim() === "" ? "efectivo" : String(method).trim();
@@ -860,7 +860,7 @@ export const payObligation = async (req, res) => {
         };
       }
 
-      const paymentDate = toFinanceDateTime(payDay);
+      const paymentDate = toFinanceDateTime(date);
       const newRemaining = roundMoney(remaining - payAmount);
       const isFull = newRemaining <= EPS;
       const counterparty = obligation.partyName;

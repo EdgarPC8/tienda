@@ -19,6 +19,7 @@ import { downloadBackup } from "../database/insertData.js";
 import {
   isAuthenticated,
   requireProgrammer,
+  requireOwnerOrProgrammer,
   requireLogsAccess,
   requireAdminOrProgrammer,
 } from "../middlewares/authMiddelware.js";
@@ -33,8 +34,9 @@ const upload = multer({
 });
 
 /**
- * Rutas destructivas / sensibles: login + rol Propietario.
- * Antes upload-backup estaba público → cualquiera podía subir un backup.json.
+ * Desarrollador (Programador): logs, reload BD, licencias.
+ * Backups JSON: Propietario (Configuración) o Programador (menú Desarrollador).
+ * Panel: Admin / Propietario / Programador.
  */
 router.get("/createLicense", isAuthenticated, requireProgrammer, createLicense);
 router.get("/getLogs", isAuthenticated, requireLogsAccess, getLogs);
@@ -42,23 +44,38 @@ router.delete("/logs", isAuthenticated, requireProgrammer, deleteLogs);
 router.delete("/logs/:id", isAuthenticated, requireProgrammer, deleteLogById);
 router.get("/panel-stats", isAuthenticated, requireAdminOrProgrammer, getPanelStatsController);
 router.get("/saveBackup", isAuthenticated, requireAdminOrProgrammer, saveBackupController);
-router.get("/downloadBackup", isAuthenticated, requireProgrammer, downloadBackup);
-router.get("/backups", isAuthenticated, requireProgrammer, listBackupsController);
-router.get("/backups/main/download", isAuthenticated, requireProgrammer, downloadMainBackupController);
-router.get("/backups/stored/:filename/download", isAuthenticated, requireProgrammer, downloadStoredBackupController);
-router.post("/backups/stored/:filename/set-main", isAuthenticated, requireProgrammer, setMainBackupController);
-router.delete("/backups/stored/:filename", isAuthenticated, requireProgrammer, deleteStoredBackupController);
+router.get("/downloadBackup", isAuthenticated, requireOwnerOrProgrammer, downloadBackup);
+router.get("/backups", isAuthenticated, requireOwnerOrProgrammer, listBackupsController);
+router.get("/backups/main/download", isAuthenticated, requireOwnerOrProgrammer, downloadMainBackupController);
+router.get(
+  "/backups/stored/:filename/download",
+  isAuthenticated,
+  requireOwnerOrProgrammer,
+  downloadStoredBackupController,
+);
+router.post(
+  "/backups/stored/:filename/set-main",
+  isAuthenticated,
+  requireOwnerOrProgrammer,
+  setMainBackupController,
+);
+router.delete(
+  "/backups/stored/:filename",
+  isAuthenticated,
+  requireOwnerOrProgrammer,
+  deleteStoredBackupController,
+);
 router.post(
   "/backups/stored/prune-and-save",
   isAuthenticated,
-  requireProgrammer,
+  requireOwnerOrProgrammer,
   pruneStoredBackupsController,
 );
 router.get("/reloadBD", isAuthenticated, requireProgrammer, reloadBdController);
 router.post(
   "/upload-backup",
   isAuthenticated,
-  requireProgrammer,
+  requireOwnerOrProgrammer,
   upload.single("backup"),
   uploadBackupController,
 );

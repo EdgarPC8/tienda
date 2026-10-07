@@ -48,6 +48,14 @@ function isoDateOnly(v) {
   return d.toISOString().slice(0, 10);
 }
 
+/** DateTime completo (ISO) para campos con hora en BD. */
+function isoDateTime(v) {
+  if (!v) return null;
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
 let schemaReady = false;
 
 /** Asegura tablas de pacas + columna supplierPackId sin usar sync({ alter }) (rompe FKs en MySQL). */
@@ -328,11 +336,11 @@ export const getSupplierPayablesWorkbench = async (req, res) => {
       return {
         id: o.id,
         supplierId: o.supplierId,
-        date: isoDateOnly(o.date) || isoDateOnly(o.createdAt),
+        date: isoDateTime(o.date) || isoDateTime(o.createdAt),
         notes: o.notes || "",
         status: o.status,
-        receivedAt: o.receivedAt ? isoDateOnly(o.receivedAt) : null,
-        paidAt: o.paidAt ? isoDateOnly(o.paidAt) : null,
+        receivedAt: o.receivedAt ? isoDateTime(o.receivedAt) : null,
+        paidAt: o.paidAt ? isoDateTime(o.paidAt) : null,
         paymentMethod: o.paymentMethod || null,
         totalAmount: total,
         paidAmount: paid,
@@ -409,7 +417,7 @@ export const getSupplierPayablesWorkbench = async (req, res) => {
       supplierOrderId: p.supplierOrderId,
       supplierId: p.supplierId,
       supplierPackId: p.supplierPackId ?? null,
-      date: isoDateOnly(p.date) || isoDateOnly(p.createdAt),
+      date: isoDateTime(p.date) || isoDateTime(p.createdAt),
       amount: round2(p.amount),
       method: p.method || "efectivo",
       note: p.note || "",

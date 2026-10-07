@@ -1,6 +1,6 @@
 // routes/inventoryRoutes.js
 import express from 'express';
-import { isAuthenticated, requireProgrammer, requireAdminOrProgrammer } from "../middlewares/authMiddelware.js";
+import { isAuthenticated, requireOwner, requireAdminOrProgrammer } from "../middlewares/authMiddelware.js";
 
 // Product Controllers
 import {
@@ -276,7 +276,7 @@ router.post('/suppliers/:id/peer-secret', isAuthenticated, generateSupplierPeerS
 router.post('/products', isAuthenticated, edDeliUploadSingle, createProduct);            // Crear producto
 router.get('/products', isAuthenticated, getAllProducts);           // Obtener todos los productos
 router.get('/products-sales-summary', isAuthenticated, getProductSalesSummary);
-router.patch('/products/:id/stock', isAuthenticated, requireProgrammer, patchProductStock);
+router.patch('/products/:id/stock', isAuthenticated, requireOwner, patchProductStock);
 router.get('/products/:id/store-stocks', isAuthenticated, getProductStoreStocks);
 router.put('/products/:id', isAuthenticated, edDeliUploadSingle, updateProduct);        // Editar producto
 router.delete('/products/:id', isAuthenticated, deleteProduct);     // Eliminar producto

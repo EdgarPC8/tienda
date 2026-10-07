@@ -39,6 +39,7 @@ import NewsRoutes from "./src/routes/NewsRoutes.js";
 import SriBillingRoutes from "./src/routes/SriBillingRoutes.js";
 import { loadAppSettings, getAppSettingsSync } from "./src/services/appSettingsService.js";
 import { ensureOwnerAndProgrammerRoles } from "./src/database/ensureRoleNames.js";
+import { ensurePeerSyncSchema } from "./src/services/supplierPeerSyncService.js";
 import { loadSriBillingSettings } from "./src/services/sriBillingService.js";
 import { ensureEntitlementTable, enforceEntitlementSideEffectsOnBoot } from "./src/services/entitlementService.js";
 import { ensureAppNewsTable } from "./src/services/appNewsService.js";
@@ -65,7 +66,7 @@ import {
   notFoundMiddleware,
   scrubSqlResponses,
 } from "./src/middlewares/errorMiddleware.js";
-import { restrictEmployee, restrictProgrammer } from "./src/middlewares/employeeAccess.js";
+import { restrictEmployee, restrictProgrammer, restrictSupplier } from "./src/middlewares/employeeAccess.js";
 import { PORT, API_PREFIX } from "./src/config/serverEnv.js";
 
 // ✅ __dirname en ES Modules
@@ -100,6 +101,7 @@ app.use(scrubSqlResponses);
 app.use(loggerMiddleware);
 app.use(restrictEmployee);
 app.use(restrictProgrammer);
+app.use(restrictSupplier);
 app.use(loadMetricsMiddleware);
 
 // CORS — localhost, LAN 192.168/10.x y dominio institucional (sin IPs fijas)
@@ -171,6 +173,7 @@ export async function main() {
   try {
     await sequelize.authenticate();
     await ensureOwnerAndProgrammerRoles();
+    await ensurePeerSyncSchema();
     await loadAppSettings();
     await loadSriBillingSettings();
     // Sin sync({ alter }) en arranque: el esquema se alinea a mano con `npm run db:sync`.

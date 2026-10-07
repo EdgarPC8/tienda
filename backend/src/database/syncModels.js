@@ -1,6 +1,7 @@
 import { Account, AccountRoles } from "../models/Account.js";
 import { Users } from "../models/Users.js";
 import { Roles } from "../models/Roles.js";
+import { SupplierAccount } from "../models/SupplierAccount.js";
 import { UserData } from "../models/UserData.js";
 import { License } from "../models/License.js";
 import { Logs } from "../models/Logs.js";
@@ -59,6 +60,7 @@ const MODELS_TO_SYNC = [
   Notifications,
   TaskItem,
   AccountRoles,
+  SupplierAccount,
 
   // ── FK a tablas del grupo anterior ──
   InventoryMovement,

@@ -133,3 +133,36 @@ export async function restrictProgrammer(req, res, next) {
   if (programmerMay(req.method, pathOf(req))) return next();
   return res.status(403).json({ message: "No tenés permiso para esta acción" });
 }
+
+/** Rol Proveedor: inicio, perfil, sus pedidos a proveedor y lectura básica. */
+function supplierMay(method, path) {
+  const m = String(method || "GET").toUpperCase();
+  if (m === "OPTIONS") return true;
+  if (/\/(login|getSession|changeRole)\/?$/.test(path)) return true;
+  if (m === "GET" && /\/(app\/settings|app\/time-status|subscription)\/?$/.test(path)) return true;
+  if (/\/users\/me\/data\/?$/.test(path)) return true;
+  if (/\/users\/photo\/\d+\/?$/.test(path)) return m === "PUT" || m === "DELETE";
+  if (m === "GET" && /\/account\/\d+(?:\/[^/]+)?\/?$/.test(path)) return true;
+  if (m === "GET" && /\/notifications\/unreadCount\/\d+\/?$/.test(path)) return true;
+  if (m === "GET" && /\/news(\/|$)/.test(path)) return true;
+  if (m === "GET" && /\/orders\/supplier-orders(\/|$)/.test(path)) return true;
+  if (m === "GET" && /\/orders\/suppliers(\/|$)/.test(path)) return true;
+  if (m === "GET" && /\/inventory\/suppliers(\/|$)/.test(path)) return true;
+  if (m === "GET" && /\/inventory\/products(\/|$)/.test(path)) return true;
+  return false;
+}
+
+export async function restrictSupplier(req, res, next) {
+  const token = getHeaderToken(req);
+  if (!token) return next();
+  let user;
+  try {
+    user = await verifyJWT(token);
+  } catch {
+    return next();
+  }
+  const rol = String(user?.loginRol || "");
+  if (rol !== "Proveedor" && rol !== "Proovedor") return next();
+  if (supplierMay(req.method, pathOf(req))) return next();
+  return res.status(403).json({ message: "No tenés permiso para esta acción" });
+}

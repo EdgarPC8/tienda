@@ -387,10 +387,19 @@ const toNum = (v, def = 0) => {
         const orders = orderIds.length
           ? await Order.findAll({
               where: { id: { [Op.in]: orderIds } },
-              attributes: ["id", "date"],
+              attributes: ["id", "date", "peerAcceptStatus"],
               transaction: t,
             })
           : [];
+
+        if (orders.some((o) => o.peerAcceptStatus === "pending_accept")) {
+          return {
+            status: 400,
+            body: {
+              message: "Este pedido llegó del sistema enlazado: aceptalo y enlazá los productos antes de cobrarlo o marcarlo como pagado",
+            },
+          };
+        }
   
         // ✅ total basado en "vendido cobrable"
         // vendido = quantity - damagedQty - giftQty

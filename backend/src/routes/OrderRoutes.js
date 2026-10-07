@@ -36,7 +36,24 @@ import {
   createSupplier,
   updateSupplier,
   deleteSupplier,
+  getSupplierAccounts,
+  linkSupplierAccountHandler,
+  unlinkSupplierAccountHandler,
+  generateSupplierPeerSecret,
 } from "../controllers/InventoryControl/SupplierController.js";
+import {
+  receivePeerSupplierOrderHandler,
+  receivePeerCustomerOrderHandler,
+  pushOrderToPeerHandler,
+  pushSupplierOrderToPeerHandler,
+  getPeerOrderStatusHandler,
+  applyPeerAcceptStatusHandler,
+  updateCustomerPeerLinkHandler,
+  getPeerAcceptOrderHandler,
+  acceptPeerSupplierOrderHandler,
+  getPeerAcceptCustomerOrderHandler,
+  acceptPeerCustomerOrderHandler,
+} from "../controllers/InventoryControl/PeerSyncController.js";
 import {
   listSupplierProductCodes,
   listAllSupplierProductCodes,
@@ -184,6 +201,42 @@ router.get("/suppliers", isAuthenticated, getAllSuppliers);
 router.post("/suppliers", isAuthenticated, createSupplier);
 router.put("/suppliers/:id", isAuthenticated, updateSupplier);
 router.delete("/suppliers/:id", isAuthenticated, deleteSupplier);
+router.get("/suppliers/:id/accounts", isAuthenticated, getSupplierAccounts);
+router.post("/suppliers/:id/accounts", isAuthenticated, linkSupplierAccountHandler);
+router.delete("/suppliers/:id/accounts/:accountId", isAuthenticated, unlinkSupplierAccountHandler);
+router.post("/suppliers/:id/peer-secret", isAuthenticated, generateSupplierPeerSecret);
+
+router.post("/peer-sync/supplier-orders", receivePeerSupplierOrderHandler);
+router.post("/peer-sync/customer-orders", receivePeerCustomerOrderHandler);
+router.get("/peer-sync/status", getPeerOrderStatusHandler);
+router.post("/peer-sync/accept-status", applyPeerAcceptStatusHandler);
+router.post("/:id/push-to-peer", isAuthenticated, pushOrderToPeerHandler);
+router.put("/customers/:id/peer-link", isAuthenticated, updateCustomerPeerLinkHandler);
+router.get(
+  "/supplier-orders/:id/peer-accept",
+  isAuthenticated,
+  getPeerAcceptOrderHandler,
+);
+router.post(
+  "/supplier-orders/:id/peer-accept",
+  isAuthenticated,
+  acceptPeerSupplierOrderHandler,
+);
+router.post(
+  "/supplier-orders/:id/push-to-peer",
+  isAuthenticated,
+  pushSupplierOrderToPeerHandler,
+);
+router.get(
+  "/:id/peer-accept",
+  isAuthenticated,
+  getPeerAcceptCustomerOrderHandler,
+);
+router.post(
+  "/:id/peer-accept",
+  isAuthenticated,
+  acceptPeerCustomerOrderHandler,
+);
 
 router.get("/supplier-product-codes", isAuthenticated, listSupplierProductCodes);
 router.get("/supplier-product-codes/all", isAuthenticated, listAllSupplierProductCodes);

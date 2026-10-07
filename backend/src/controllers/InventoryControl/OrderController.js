@@ -545,7 +545,7 @@ export const posCheckout = async (req, res) => {
 
 const CAJA_POS_TAG_EXPORT = "[CAJA_POS]";
 
-/** GET /orders/pos/sales — ventas de caja para facturación e impresión. */
+/** GET /orders/pos/sales — ventas de caja + pedidos cliente (mismo hub de ventas). */
 export const getPosSales = async (req, res) => {
   try {
     await ensureOrderItemPackSchema();
@@ -553,12 +553,6 @@ export const getPosSales = async (req, res) => {
     await ensureOrderAmountReceivedSchema();
     const limit = Math.min(Number(req.query.limit) || 200, 5000);
     const orders = await Order.findAll({
-      where: {
-        [Op.or]: [
-          { notes: { [Op.like]: `%${CAJA_POS_TAG_EXPORT}%` } },
-          { documentType: { [Op.ne]: null } },
-        ],
-      },
       include: [
         { model: Customer, as: "ERP_customer" },
         {
@@ -684,6 +678,8 @@ export const getPosSales = async (req, res) => {
           subtotal,
           iva,
           lineTotal,
+          deliveredAt: item.deliveredAt || null,
+          paidAt: item.paidAt || null,
         };
       });
       const total = items.reduce((acc, it) => acc + it.lineTotal, 0);
@@ -695,6 +691,12 @@ export const getPosSales = async (req, res) => {
         order.sellerAccountId != null ? Number(order.sellerAccountId) : null;
       const sellerName =
         (sellerAccountId && sellerByAccountId.get(sellerAccountId)) || "—";
+      const allItemsPaid =
+        items.length > 0 && items.every((it) => Boolean(it.paidAt));
+      const paidAt = order.paidAt || (allItemsPaid ? order.date : null);
+      const paidAmount = paidAt ? Number(total.toFixed(2)) : 0;
+      const remainingAmount = Number(Math.max(0, total - paidAmount).toFixed(2));
+      const isPos = String(order.notes || "").includes(CAJA_POS_TAG_EXPORT);
 
       const establishmentCode = inv
         ? String(inv.establishmentCode || defaultEst).padStart(3, "0")
@@ -709,10 +711,14 @@ export const getPosSales = async (req, res) => {
       return {
         id: order.id,
         date: order.date,
-        paidAt: order.paidAt,
+        paidAt,
+        paidAmount,
+        remainingAmount,
         status: order.status,
         notes: order.notes,
         paymentMethod: order.paymentMethod,
+        isPosSale: isPos,
+        peerAcceptStatus: order.peerAcceptStatus || null,
         amountReceived:
           order.amountReceived != null && Number.isFinite(Number(order.amountReceived))
             ? Number(Number(order.amountReceived).toFixed(2))
@@ -733,8 +739,13 @@ export const getPosSales = async (req, res) => {
               phone: customer.phone,
               email: customer.email,
               address: customer.address,
+              remoteApp: customer.remoteApp || null,
             }
           : null,
+        remoteSyncStatus: order.remoteSyncStatus || null,
+        remoteSyncSupplierOrderId: order.remoteSyncSupplierOrderId || null,
+        remoteSyncApp: order.remoteSyncApp || null,
+        remotePeerAcceptStatus: order.remotePeerAcceptStatus || null,
         items,
         subtotal: inv?.subtotal != null ? Number(inv.subtotal) : Number(subtotal.toFixed(2)),
         ice: Number(Number(ice || 0).toFixed(2)),
@@ -760,14 +771,14 @@ export const getPosSales = async (req, res) => {
           : {
               invoiceId: null,
               status: null,
-              statusLabel: "Sin SRI",
+              statusLabel: isPos ? "Sin SRI" : "Pedido",
               environment,
               environmentLabel: envLabel(environment),
               establishmentCode,
               emissionPointCode,
               estabPtoEmi: `${establishmentCode}-${emissionPointCode}`,
               sequential: null,
-              sequentialLabel: "—",
+              sequentialLabel: isPos ? "—" : `PED-${order.id}`,
               accessKey: null,
               authorizationNumber: null,
               authorizedAt: null,
@@ -1289,6 +1300,14 @@ export const markItemAsPaid = async (req, res) => {
 
       if (!item) return { status: 404, body: { message: "Item not found" } };
       if (item.paidAt) return { status: 400, body: { message: "Este ítem ya está pagado" } };
+      if (item.ERP_order?.peerAcceptStatus === "pending_accept") {
+        return {
+          status: 400,
+          body: {
+            message: "Este pedido llegó del sistema enlazado: aceptalo y enlazá los productos antes de cobrarlo o marcarlo como pagado",
+          },
+        };
+      }
 
       // ✅ Cobrar por vendido (soldQty). Si no existe soldQty, cobra por quantity (compat).
       const billableQty = getBillableQty(item);
@@ -1492,6 +1511,12 @@ export const markItemAsDelivered = async (req, res) => {
         extra: { itemId },
       });
       return res.status(400).json({ message: "Este ítem ya fue marcado como entregado" });
+    }
+    if (item.ERP_order?.peerAcceptStatus === "pending_accept") {
+      return res.status(400).json({
+        message:
+          "Este pedido llegó del sistema enlazado: aceptalo y enlazá los productos antes de entregarlo",
+      });
     }
 
     // ✅ si es panadería/consignación: NO descontar stock aquí
@@ -1699,6 +1724,16 @@ export const markOrderAsPaid = async (req, res) => {
         extra: { orderId: id },
       });
       return res.status(400).json({ message: 'El pedido ya está marcado como pagado' });
+    }
+    if (order.peerAcceptStatus === "pending_accept") {
+      notifyFail("order.mark_paid_failed", "Pedido enlazado pendiente de aceptación", {
+        req,
+        httpStatus: 400,
+        extra: { orderId: id },
+      });
+      return res.status(400).json({
+        message: "Este pedido llegó del sistema enlazado: aceptalo y enlazá los productos antes de cobrarlo o marcarlo como pagado",
+      });
     }
 
     const now = new Date();
@@ -2107,6 +2142,19 @@ export const updateOrderStatus = async (req, res) => {
     if (!order) {
       notifyFail("order.status_change_failed", `Pedido #${id} no encontrado`, { req, httpStatus: 404 });
       return res.status(404).json({ message: 'Pedido no encontrado' });
+    }
+    if (
+      order.peerAcceptStatus === "pending_accept" &&
+      (status === "pagado" || status === "entregado")
+    ) {
+      notifyFail("order.status_change_failed", "Pedido enlazado pendiente de aceptación", {
+        req,
+        httpStatus: 400,
+        extra: { orderId: id },
+      });
+      return res.status(400).json({
+        message: "Este pedido llegó del sistema enlazado: aceptalo y enlazá los productos antes de cobrarlo o marcarlo como pagado",
+      });
     }
 
     order.status = status;

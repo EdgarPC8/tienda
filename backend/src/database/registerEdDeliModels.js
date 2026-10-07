@@ -9,6 +9,7 @@ import "../models/Notifications.js";
 import "../models/NotificationProgram.js";
 import "../models/Inventory.js";
 import "../models/Orders.js";
+import "../models/SupplierAccount.js";
 import "../models/Finance.js";
 import "../models/Editor.js";
 import "../models/CashShift.js";

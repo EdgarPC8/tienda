@@ -7,6 +7,7 @@ import { logger } from "../log/LogActivity.js";
 import { License } from "../models/License.js";
 import { calculateExpirationDate } from "../helpers/functions.js";
 import { notifyOk, notifyFail } from "../services/notifyRaptorSolutions.js";
+import { normalizeRoleName } from "../utils/roleNames.js";
 import {
   loginBlockedMessage,
   noteLoginFail,
@@ -73,12 +74,17 @@ export const login = async (req, res) => {
       });
     }
 
+    const sessionRoles = (account.roles || []).map((role) => ({
+      ...role.toJSON(),
+      name: normalizeRoleName(role.name),
+    }));
+
     // Si no se seleccionó un rol y tiene más de uno, devolvemos la lista para que el frontend elija
     if (!selectedRoleId) {
-      if (account.roles.length > 1) {
+      if (sessionRoles.length > 1) {
         return res.json({
           selectRole: true,
-          roles: account.roles.map((role) => ({
+          roles: sessionRoles.map((role) => ({
             id: role.id,
             name: role.name,
           })),
@@ -87,10 +93,10 @@ export const login = async (req, res) => {
       }
 
       // Si tiene uno solo, lo usamos directamente
-      selectedRoleId = account.roles[0]?.id;
+      selectedRoleId = sessionRoles[0]?.id;
     }
 
-    const selectedRole = account.roles.find((r) => r.id === selectedRoleId);
+    const selectedRole = sessionRoles.find((r) => r.id === selectedRoleId);
     if (!selectedRole) {
       notifyFail("auth.login_failed", "Rol seleccionado inválido", {
         req,
@@ -104,7 +110,7 @@ export const login = async (req, res) => {
       userId: account.userId,
       accountId: account.id,
       rolId: selectedRole.id,
-      loginRol: selectedRole.name,
+      loginRol: normalizeRoleName(selectedRole.name),
     };
 
     noteLoginOk(loginKey);
@@ -114,7 +120,7 @@ export const login = async (req, res) => {
       accountId: account.id,
       userId: account.userId,
       rolId: selectedRole.id,
-      loginRol: selectedRole.name,
+      loginRol: normalizeRoleName(selectedRole.name),
     });
     res.json({ message: "User authenticated", token });
   } catch (error) {
@@ -192,18 +198,18 @@ export const changeRole = async (req, res) => {
       userId: account.userId,
       accountId: account.id,
       rolId: hasRole.id,
-      loginRol: hasRole.name,
+      loginRol: normalizeRoleName(hasRole.name),
     };
 
     const token = await createAccessToken({ payload });
     notifyOk("auth.role_changed", "Cambio de rol", {
       accountId: account.id,
       rolId: hasRole.id,
-      loginRol: hasRole.name,
+      loginRol: normalizeRoleName(hasRole.name),
     });
     res.json({
       token,
-      message: `Rol cambiado a ${hasRole.name}`,
+      message: `Rol cambiado a ${normalizeRoleName(hasRole.name)}`,
     });
   } catch (error) {
     notifyFail("auth.role_change_failed", "Error al cambiar de rol", {

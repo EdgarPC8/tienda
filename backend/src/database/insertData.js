@@ -6,6 +6,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 import { Roles } from "../models/Roles.js";
 import { Users } from "../models/Users.js";
 import { Account, AccountRoles } from "../models/Account.js";
+import { SupplierAccount } from "../models/SupplierAccount.js";
 import { sequelize } from "./connection.js";
 import { prepareTablesForRestore } from "./prepareTablesForRestore.js";
 import { repairJsonFieldValue, deserializeJsonFields } from "../utils/jsonFieldUtils.js";
@@ -97,6 +98,7 @@ export const BACKUP_TABLE_ENTRIES = [
   { key: "Users", model: Users },
   { key: "Account", model: Account },
   { key: "AccountRoles", model: AccountRoles },
+  { key: "SupplierAccount", model: SupplierAccount },
   { key: "UserData", model: UserData },
   { key: "Notifications", model: Notifications },
   { key: "NotificationProgram", model: NotificationProgram, sanitize: "NotificationProgram" },
@@ -561,6 +563,7 @@ export async function ensureBackupFileExists() {
     { id: 2, name: "Administrador" },
     { id: 3, name: "Empleado" },
     { id: 4, name: "Programador" },
+    { id: 5, name: "Proveedor" },
   ];
   const payload = JSON.stringify(empty, null, 2);
   await fs.writeFile(backupFilePath, payload, "utf8");

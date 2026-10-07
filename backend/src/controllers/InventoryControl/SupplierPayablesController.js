@@ -468,6 +468,14 @@ export const paySupplierOrder = async (req, res) => {
       if (order.status === "cancelado") {
         return { status: 400, body: { message: "El pedido está cancelado" } };
       }
+      if (order.peerAcceptStatus === "pending_accept") {
+        return {
+          status: 400,
+          body: {
+            message: "Este pedido llegó del sistema enlazado: aceptalo y enlazá los productos antes de pagarlo",
+          },
+        };
+      }
 
       const instMap = await loadSupplierInstallmentsMap([order.id]);
       const firstInstallmentDueDate = (instMap.get(order.id) || [])[0]?.dueDate || null;
@@ -1452,6 +1460,28 @@ export const paySupplierPack = async (req, res) => {
       }
       if (isOrderGroup && memberOrderIds.length < 1) {
         return { status: 400, body: { message: "El grupo no tiene pedidos" } };
+      }
+
+      const pendingPeerIds = memberOrderIds.length
+        ? (
+            await SupplierOrder.findAll({
+              where: {
+                id: { [Op.in]: memberOrderIds },
+                peerAcceptStatus: "pending_accept",
+              },
+              attributes: ["id"],
+              transaction: t,
+            })
+          ).map((o) => o.id)
+        : [];
+      if (pendingPeerIds.length) {
+        return {
+          status: 400,
+          body: {
+            message:
+              "Hay pedidos del sistema enlazado pendientes de aceptación. Aceptalos antes de pagar el grupo/paca.",
+          },
+        };
       }
 
       const alreadyPaid = round2(

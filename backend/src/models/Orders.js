@@ -32,6 +32,10 @@ export const Customer = sequelize.define("ERP_customers", {
     allowNull: false,
     defaultValue: true,
   },
+  remoteApp: { type: DataTypes.STRING(32), allowNull: true },
+  remoteSupplierId: { type: DataTypes.INTEGER, allowNull: true },
+  remoteBaseUrl: { type: DataTypes.STRING(255), allowNull: true },
+  remoteSyncSecret: { type: DataTypes.STRING(255), allowNull: true },
 }, {
   timestamps: true,
 });
@@ -64,9 +68,20 @@ export const Order = sequelize.define("ERP_orders", {
     allowNull: false,
     defaultValue: Sequelize.NOW
   },
-  financeIncomeId: { type: DataTypes.INTEGER, allowNull: true }
-
-  
+  financeIncomeId: { type: DataTypes.INTEGER, allowNull: true },
+  remoteSyncApp: { type: DataTypes.STRING(32), allowNull: true },
+  remoteSyncSupplierOrderId: { type: DataTypes.INTEGER, allowNull: true },
+  remoteSyncedAt: { type: DataTypes.DATE, allowNull: true },
+  remoteSyncStatus: { type: DataTypes.STRING(40), allowNull: true },
+  remoteSyncError: { type: DataTypes.TEXT, allowNull: true },
+  remoteSyncPayloadHash: { type: DataTypes.STRING(64), allowNull: true },
+  remotePeerAcceptStatus: { type: DataTypes.STRING(40), allowNull: true },
+  /** Pedidos entrantes peer: pending_accept | accepted */
+  peerAcceptStatus: { type: DataTypes.STRING(40), allowNull: true },
+  peerSourceApp: { type: DataTypes.STRING(32), allowNull: true },
+  peerSourceOrderId: { type: DataTypes.INTEGER, allowNull: true },
+  peerAcceptedSnapshot: { type: DataTypes.TEXT("long"), allowNull: true },
+  peerRevisionBaseline: { type: DataTypes.TEXT("long"), allowNull: true },
 }, {
   timestamps: true,
 });
@@ -75,7 +90,7 @@ export const Order = sequelize.define("ERP_orders", {
 export const OrderItem = sequelize.define("ERP_order_items", {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   orderId: { type: DataTypes.INTEGER, allowNull: false },
-  productId: { type: DataTypes.INTEGER, allowNull: false },
+  productId: { type: DataTypes.INTEGER, allowNull: true },
   quantity: { type: DataTypes.FLOAT, allowNull: false },
   price: { type: DataTypes.DECIMAL(14, 6), allowNull: false },
   soldQty: {
@@ -123,8 +138,10 @@ export const OrderItem = sequelize.define("ERP_order_items", {
   lotCode: { type: DataTypes.STRING(80), allowNull: true },
   expiresAt: { type: DataTypes.DATEONLY, allowNull: true },
   manufacturedAt: { type: DataTypes.DATEONLY, allowNull: true },
-  
-  
+  remoteName: { type: DataTypes.STRING(180), allowNull: true },
+  remoteBarcode: { type: DataTypes.STRING(80), allowNull: true },
+  remoteSku: { type: DataTypes.STRING(80), allowNull: true },
+  remoteCode: { type: DataTypes.STRING(100), allowNull: true },
 }, {
   timestamps: false,
 });
@@ -162,6 +179,10 @@ export const Supplier = sequelize.define("ERP_suppliers", {
     allowNull: false,
     defaultValue: true,
   },
+  remoteApp: { type: DataTypes.STRING(32), allowNull: true },
+  remoteSupplierId: { type: DataTypes.INTEGER, allowNull: true },
+  remoteBaseUrl: { type: DataTypes.STRING(255), allowNull: true },
+  remoteSyncSecret: { type: DataTypes.STRING(255), allowNull: true },
 }, {
   timestamps: true,
 });
@@ -185,6 +206,23 @@ export const SupplierOrder = sequelize.define("ERP_supplier_orders", {
   financeExpenseId: { type: DataTypes.INTEGER, allowNull: true },
   /** Nº de factura del proveedor (XML SRI / digitado). */
   invoiceNumber: { type: DataTypes.STRING(80), allowNull: true },
+  /**
+   * Pedidos entrantes entre apps: pending_accept | accepted.
+   * null = pedido normal (no peer).
+   */
+  peerAcceptStatus: { type: DataTypes.STRING(40), allowNull: true },
+  peerSourceApp: { type: DataTypes.STRING(32), allowNull: true },
+  peerSourceOrderId: { type: DataTypes.INTEGER, allowNull: true },
+  peerAcceptedSnapshot: { type: DataTypes.TEXT("long"), allowNull: true },
+  peerRevisionBaseline: { type: DataTypes.TEXT("long"), allowNull: true },
+  /** Envío de este pedido a proveedor → pedido cliente en app par. */
+  remoteSyncApp: { type: DataTypes.STRING(32), allowNull: true },
+  remoteSyncCustomerOrderId: { type: DataTypes.INTEGER, allowNull: true },
+  remoteSyncedAt: { type: DataTypes.DATE, allowNull: true },
+  remoteSyncStatus: { type: DataTypes.STRING(40), allowNull: true },
+  remoteSyncError: { type: DataTypes.TEXT, allowNull: true },
+  remoteSyncPayloadHash: { type: DataTypes.STRING(64), allowNull: true },
+  remotePeerAcceptStatus: { type: DataTypes.STRING(40), allowNull: true },
 }, {
   timestamps: true,
 });
@@ -192,7 +230,8 @@ export const SupplierOrder = sequelize.define("ERP_supplier_orders", {
 export const SupplierOrderItem = sequelize.define("ERP_supplier_order_items", {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
   orderId: { type: DataTypes.INTEGER, allowNull: false },
-  productId: { type: DataTypes.INTEGER, allowNull: false },
+  /** Nullable: línea peer sin producto local aún (se enlaza al aceptar). */
+  productId: { type: DataTypes.INTEGER, allowNull: true },
   quantity: { type: DataTypes.FLOAT, allowNull: false },
   unitPrice: { type: DataTypes.DECIMAL(14, 6), allowNull: false, defaultValue: 0 },
   /** Descuento de línea en $ (como en factura SRI). */
@@ -214,6 +253,11 @@ export const SupplierOrderItem = sequelize.define("ERP_supplier_order_items", {
   manufacturedAt: { type: DataTypes.DATEONLY, allowNull: true },
   /** Lote de inventario creado al recibir. */
   inventoryBatchId: { type: DataTypes.INTEGER, allowNull: true },
+  /** Nombre / códigos del producto en la app origen (peer). */
+  remoteName: { type: DataTypes.STRING(180), allowNull: true },
+  remoteBarcode: { type: DataTypes.STRING(80), allowNull: true },
+  remoteSku: { type: DataTypes.STRING(80), allowNull: true },
+  remoteCode: { type: DataTypes.STRING(100), allowNull: true },
 }, {
   timestamps: false,
 });

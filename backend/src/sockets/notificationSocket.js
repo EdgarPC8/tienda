@@ -26,6 +26,18 @@ export const sendNotificationToUser = (userId, notification) => {
   }
 };
 
+/** Pedido peer creado/actualizado: refresca hubs sin recargar la página. */
+export const sendPeerOrderUpdated = (userId, payload = {}) => {
+  if (!io) return;
+  io.to(`user_${userId}`).emit("peerOrderUpdated", {
+    kind: payload.kind || null,
+    orderId: payload.orderId || null,
+    updated: Boolean(payload.updated),
+    link: payload.link || null,
+    at: new Date().toISOString(),
+  });
+};
+
 /** Aviso global: entitlement / mantenimiento cambió (gestor push o pull). */
 export const broadcastEntitlementUpdated = (payload = {}) => {
   if (!io) return;

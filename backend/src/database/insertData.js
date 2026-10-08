@@ -247,10 +247,15 @@ export function parseBackupJsonContent(content) {
   return prepareBackupForRestore(shaped);
 }
 
+/** Serializa backup en JSON compacto (más rápido y menos I/O que pretty-print). */
+function stringifyBackupPayload(normalized) {
+  return JSON.stringify(normalized);
+}
+
 /** Escribe backup.json normalizado en disco. */
 export async function writeBackupToDisk(jsonData) {
   const normalized = prepareBackupForRestore(ensureBackupShape(jsonData));
-  await fs.writeFile(backupFilePath, JSON.stringify(normalized, null, 2), "utf8");
+  await fs.writeFile(backupFilePath, stringifyBackupPayload(normalized), "utf8");
   return { path: backupFilePath, tables: summarizeBackupData(normalized) };
 }
 
@@ -712,7 +717,7 @@ export const saveBackup = async ({ updateMainBackup = true } = {}) => {
     const backupFileName = `backup-${timestamp}.json`;
     const backupPath = resolve(backups, backupFileName);
 
-    const payload = JSON.stringify(normalized, null, 2);
+    const payload = stringifyBackupPayload(normalized);
     await fs.writeFile(backupPath, payload, "utf8");
     if (updateMainBackup) {
       await fs.writeFile(backupFilePath, payload, "utf8");
@@ -746,18 +751,10 @@ export function resolveStoredBackupPath(filename) {
   return full;
 }
 
-async function summarizeBackupAtPath(filePath) {
-  try {
-    const raw = await fs.readFile(filePath, "utf8");
-    const counts = summarizeBackupData(parseBackupJsonContent(raw));
-    const totalRows = Object.values(counts).reduce((a, n) => a + n, 0);
-    return { counts, totalRows, valid: true };
-  } catch {
-    return { counts: {}, totalRows: 0, valid: false };
-  }
-}
-
-/** Lista copias con fecha en src/backups/ (más recientes primero). */
+/**
+ * Lista copias con fecha en src/backups/ (más recientes primero).
+ * Solo metadata de disco: no abre ni parsea JSON (puede haber cientos de MB).
+ */
 export async function listStoredBackups() {
   await fs.mkdir(backups, { recursive: true });
   const names = await fs.readdir(backups);
@@ -774,15 +771,14 @@ export async function listStoredBackups() {
       continue;
     }
 
-    const { counts, totalRows, valid } = await summarizeBackupAtPath(filePath);
     files.push({
       filename: name,
       sizeBytes: st.size,
       sizeMB: Number((st.size / 1024 / 1024).toFixed(2)),
       modifiedAt: st.mtime.toISOString(),
-      counts,
-      totalRows,
-      valid,
+      counts: {},
+      totalRows: null,
+      valid: st.size > 2,
     });
   }
 
@@ -790,25 +786,43 @@ export async function listStoredBackups() {
   return files;
 }
 
-/** Resumen del backup fijo + listado de copias guardadas. */
-export async function getBackupsWorkbench() {
-  const mainRaw = await readBackupFileSummary();
-  let mainModifiedAt = null;
-  if (mainRaw.exists) {
-    try {
-      const st = await fs.stat(backupFilePath);
-      mainModifiedAt = st.mtime.toISOString();
-    } catch {
-      /* ignore */
+/** Metadata liviana de backup.json (sin leer ni parsear el contenido). */
+export async function readBackupFileMetaLight() {
+  try {
+    const st = await fs.stat(backupFilePath);
+    return {
+      exists: true,
+      path: backupFilePath,
+      sizeBytes: st.size,
+      sizeMB: Number((st.size / 1024 / 1024).toFixed(2)),
+      modifiedAt: st.mtime.toISOString(),
+      counts: {},
+      totalRows: null,
+    };
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return {
+        exists: false,
+        path: backupFilePath,
+        sizeBytes: 0,
+        sizeMB: 0,
+        counts: {},
+        totalRows: 0,
+        modifiedAt: null,
+      };
     }
+    throw error;
   }
+}
 
+/** Resumen del backup fijo + listado de copias guardadas (rápido, sin parsear JSON). */
+export async function getBackupsWorkbench() {
+  const mainRaw = await readBackupFileMetaLight();
   const main = {
     ...mainRaw,
     filename: "backup.json",
     isMain: true,
-    modifiedAt: mainModifiedAt,
-    valid: mainRaw.exists && mainRaw.totalRows > 0,
+    valid: Boolean(mainRaw.exists && mainRaw.sizeBytes > 2),
   };
 
   const stored = await listStoredBackups();

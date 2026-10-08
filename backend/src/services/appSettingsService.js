@@ -382,6 +382,9 @@ function serializeJsonFieldsForDb(data) {
   if ("receiptDetailSettings" in out && out.receiptDetailSettings != null) {
     out.receiptDetailSettings = serializeReceiptDetailSettings(out.receiptDetailSettings);
   }
+  if ("tableColumnVisibility" in out && out.tableColumnVisibility != null) {
+    out.tableColumnVisibility = serializeTableColumnVisibility(out.tableColumnVisibility);
+  }
   if ("themePalette" in out && out.themePalette != null) {
     out.themePalette = serializeThemePalette(out.themePalette);
   }

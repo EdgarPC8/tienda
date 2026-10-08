@@ -71,7 +71,7 @@ router.post(
   requireOwnerOrProgrammer,
   pruneStoredBackupsController,
 );
-router.get("/reloadBD", isAuthenticated, requireProgrammer, reloadBdController);
+router.get("/reloadBD", isAuthenticated, requireOwnerOrProgrammer, reloadBdController);
 router.post(
   "/upload-backup",
   isAuthenticated,

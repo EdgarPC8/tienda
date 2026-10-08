@@ -39,6 +39,15 @@ export const CashShift = sequelize.define(
     cashInTotal: { type: DataTypes.DECIMAL(12, 2), allowNull: true },
     openingNotes: { type: DataTypes.TEXT, allowNull: true },
     closingNotes: { type: DataTypes.TEXT, allowNull: true },
+    /**
+     * Qué se hizo con cashDifference al (o después del) cierre:
+     * null = sin diferencia / no aplica · pending · omitted · income · expense
+     */
+    differenceResolution: { type: DataTypes.STRING(20), allowNull: true },
+    differenceResolvedAt: { type: DataTypes.DATE, allowNull: true },
+    /** Id del Income o Expense creado al regularizar. */
+    differenceFinanceId: { type: DataTypes.INTEGER, allowNull: true },
+    differenceFinanceType: { type: DataTypes.STRING(20), allowNull: true },
   },
   {
     timestamps: true,

@@ -68,6 +68,11 @@ import {
 } from "./src/middlewares/errorMiddleware.js";
 import { restrictEmployee, restrictProgrammer, restrictSupplier } from "./src/middlewares/employeeAccess.js";
 import { PORT, API_PREFIX } from "./src/config/serverEnv.js";
+import {
+  PEER_APPS,
+  PEER_APPS_MODE,
+  listRemotePeerOptions,
+} from "./src/config/peerAppsConfig.js";
 
 // ✅ __dirname en ES Modules
 const __filename = fileURLToPath(import.meta.url);
@@ -204,6 +209,12 @@ export async function main() {
 
     httpServer.listen(PORT, async () => {
       console.log(`🟢 Backend + Socket.IO · puerto ${PORT} · API /${api}`);
+      const peers = listRemotePeerOptions()
+        .map((p) => `${p.key}=${p.baseUrl}`)
+        .join(" · ");
+      console.log(
+        `🔗 Peer-sync mode=${PEER_APPS_MODE} · self=${PEER_APPS.tienda?.baseUrl || "—"} · ${peers}`,
+      );
       await startNotificationScheduler();
     });
   } catch (error) {

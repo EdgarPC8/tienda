@@ -10,7 +10,7 @@ import {
   ensureDefaultCashRegisters,
   padEmissionCode,
 } from "../../models/CashRegister.js";
-import { Expense } from "../../models/Finance.js";
+import { Expense, Income } from "../../models/Finance.js";
 import { toAppDateTime, nowApp } from "../../utils/appDateTime.js";
 import {
   computeCashTotal,
@@ -36,6 +36,173 @@ const CATEGORY_EXPENSE_LABEL = {
   gasto_operativo: "Egresos operativos",
   compra_mercancia: "Compras",
 };
+
+const DIFF_RESOLVED = new Set(["omitted", "income", "expense"]);
+let cashShiftDiffColumnsReady = false;
+
+/** Asegura columnas de regularización de diferencia (idempotente). */
+async function ensureCashShiftDifferenceColumns() {
+  if (cashShiftDiffColumnsReady) return;
+  const cols = [
+    ["differenceResolution", "VARCHAR(20) NULL"],
+    ["differenceResolvedAt", "DATETIME NULL"],
+    ["differenceFinanceId", "INT NULL"],
+    ["differenceFinanceType", "VARCHAR(20) NULL"],
+  ];
+  for (const [name, ddl] of cols) {
+    try {
+      const [rows] = await sequelize.query(
+        `SELECT COUNT(*) AS c FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'ERP_cash_shifts'
+           AND COLUMN_NAME = ?`,
+        { replacements: [name] },
+      );
+      const exists = Number(rows?.[0]?.c || 0) > 0;
+      if (!exists) {
+        await sequelize.query(
+          `ALTER TABLE \`ERP_cash_shifts\` ADD COLUMN \`${name}\` ${ddl}`,
+        );
+      }
+    } catch (err) {
+      console.warn(`[shifts] ensure column ${name}:`, err?.message || err);
+    }
+  }
+  cashShiftDiffColumnsReady = true;
+}
+
+function isDifferencePending(shift) {
+  const diff = to2(shift?.cashDifference);
+  if (!diff) return false;
+  if (shift?.status !== "closed") return false;
+  const res = shift?.differenceResolution;
+  if (!res || res === "pending") return true;
+  return false;
+}
+
+function differenceKind(diff) {
+  const n = to2(diff);
+  if (n > 0) return "surplus";
+  if (n < 0) return "shortage";
+  return "none";
+}
+
+/**
+ * @param {import("sequelize").Model} shift
+ * @param {"omit"|"register"} action
+ * @param {number} accountId
+ * @param {import("sequelize").Transaction} [transaction]
+ */
+async function applyDifferenceResolution(shift, action, accountId, transaction) {
+  await ensureCashShiftDifferenceColumns();
+  const diff = to2(shift.cashDifference);
+  if (!diff) {
+    throw Object.assign(new Error("Este turno no tiene diferencia de efectivo."), {
+      status: 400,
+    });
+  }
+  if (shift.status !== "closed") {
+    throw Object.assign(new Error("Solo se puede regularizar un turno cerrado."), {
+      status: 400,
+    });
+  }
+  if (DIFF_RESOLVED.has(shift.differenceResolution)) {
+    throw Object.assign(new Error("La diferencia de este turno ya fue regularizada."), {
+      status: 400,
+    });
+  }
+
+  const resolvedAt = nowApp();
+  const abs = to2(Math.abs(diff));
+  const kind = differenceKind(diff);
+
+  if (action === "omit") {
+    await shift.update(
+      {
+        differenceResolution: "omitted",
+        differenceResolvedAt: resolvedAt,
+        differenceFinanceId: null,
+        differenceFinanceType: null,
+      },
+      { transaction },
+    );
+    return {
+      resolution: "omitted",
+      kind,
+      amount: abs,
+      financeId: null,
+      financeType: null,
+    };
+  }
+
+  if (action !== "register") {
+    throw Object.assign(new Error("Acción no válida. Usá omit o register."), {
+      status: 400,
+    });
+  }
+
+  if (kind === "surplus") {
+    const income = await Income.create(
+      {
+        date: toAppDateTime(shift.closedAt) || resolvedAt,
+        amount: abs,
+        concept: `Sobrante de caja · turno #${shift.id}`,
+        category: "Sobrante de caja",
+        referenceId: shift.id,
+        referenceType: "cash_shift_difference",
+        status: "paid",
+        createdBy: accountId,
+      },
+      { transaction },
+    );
+    await shift.update(
+      {
+        differenceResolution: "income",
+        differenceResolvedAt: resolvedAt,
+        differenceFinanceId: income.id,
+        differenceFinanceType: "income",
+      },
+      { transaction },
+    );
+    return {
+      resolution: "income",
+      kind,
+      amount: abs,
+      financeId: income.id,
+      financeType: "income",
+    };
+  }
+
+  const expense = await Expense.create(
+    {
+      date: toAppDateTime(shift.closedAt) || resolvedAt,
+      amount: abs,
+      concept: `Faltante de caja · turno #${shift.id}`,
+      category: "Faltante de caja",
+      referenceId: shift.id,
+      referenceType: "cash_shift_difference",
+      status: "paid",
+      createdBy: accountId,
+    },
+    { transaction },
+  );
+  await shift.update(
+    {
+      differenceResolution: "expense",
+      differenceResolvedAt: resolvedAt,
+      differenceFinanceId: expense.id,
+      differenceFinanceType: "expense",
+    },
+    { transaction },
+  );
+  return {
+    resolution: "expense",
+    kind,
+    amount: abs,
+    financeId: expense.id,
+    financeType: "expense",
+  };
+}
 
 function userLabel(user) {
   if (!user) return "—";
@@ -632,58 +799,58 @@ export async function openShift(req, res) {
       store = await ensureSingleLocalOwnStore();
       resolvedStoreId = store.id;
     } else {
-    const storeWhere = { isActive: true, locationKind: "propia" };
+      const storeWhere = { isActive: true, locationKind: "propia" };
 
-    const activeStores = await Store.findAll({
-      where: storeWhere,
-      order: [["position", "ASC"], ["id", "ASC"]],
-      attributes: [
-        "id",
-        "name",
-        "address",
-        "establishmentCode",
-        "emissionPointCode",
-        "locationKind",
-        "isActive",
-      ],
-    });
+      const activeStores = await Store.findAll({
+        where: storeWhere,
+        order: [["position", "ASC"], ["id", "ASC"]],
+        attributes: [
+          "id",
+          "name",
+          "address",
+          "establishmentCode",
+          "emissionPointCode",
+          "locationKind",
+          "isActive",
+        ],
+      });
 
-    if (activeStores.length > 0) {
-      if (!resolvedStoreId) {
-        if (activeStores.length === 1) {
-          resolvedStoreId = activeStores[0].id;
-        } else {
-          notifyFail("shift.open_failed", "Selecciona el local para abrir turno", { req, httpStatus: 400 });
+      if (activeStores.length > 0) {
+        if (!resolvedStoreId) {
+          if (activeStores.length === 1) {
+            resolvedStoreId = activeStores[0].id;
+          } else {
+            notifyFail("shift.open_failed", "Selecciona el local para abrir turno", { req, httpStatus: 400 });
+            return res.status(400).json({
+              message: "Selecciona el local / panadería desde el que abres el turno.",
+              stores: activeStores,
+            });
+          }
+        }
+        store = activeStores.find((s) => Number(s.id) === Number(resolvedStoreId)) || null;
+        if (!store) {
+          store = await Store.findByPk(resolvedStoreId);
+        }
+        const isActiveVal =
+          store &&
+          (store.isActive === true || store.isActive === 1 || store.isActive === "1");
+        const isPropia =
+          store && String(store.locationKind || "").toLowerCase() === "propia";
+        const storeOk = Boolean(store && isPropia && isActiveVal);
+        if (!storeOk) {
+          notifyFail("shift.open_failed", "Elige una sucursal válida", { req, httpStatus: 400 });
           return res.status(400).json({
-            message: "Selecciona el local / panadería desde el que abres el turno.",
-            stores: activeStores,
+            message:
+              "Elige una sucursal propia activa (no bodega ni vitrina). Créala o actívala en Locales.",
           });
         }
-      }
-      store = activeStores.find((s) => Number(s.id) === Number(resolvedStoreId)) || null;
-      if (!store) {
+      } else if (resolvedStoreId) {
         store = await Store.findByPk(resolvedStoreId);
+        if (!store) {
+          notifyFail("shift.open_failed", "Local no encontrado", { req, httpStatus: 400 });
+          return res.status(400).json({ message: "Local no encontrado." });
+        }
       }
-      const isActiveVal =
-        store &&
-        (store.isActive === true || store.isActive === 1 || store.isActive === "1");
-      const isPropia =
-        store && String(store.locationKind || "").toLowerCase() === "propia";
-      const storeOk = Boolean(store && isPropia && isActiveVal);
-      if (!storeOk) {
-        notifyFail("shift.open_failed", "Elige una sucursal válida", { req, httpStatus: 400 });
-        return res.status(400).json({
-          message:
-            "Elige una sucursal propia activa (no bodega ni vitrina). Créala o actívala en Locales.",
-        });
-      }
-    } else if (resolvedStoreId) {
-      store = await Store.findByPk(resolvedStoreId);
-      if (!store) {
-        notifyFail("shift.open_failed", "Local no encontrado", { req, httpStatus: 400 });
-        return res.status(400).json({ message: "Local no encontrado." });
-      }
-    }
     }
 
     const resolved = resolveCashFromBody(req.body);
@@ -817,9 +984,13 @@ export async function setActiveCashRegister(req, res) {
 
 export async function closeShift(req, res) {
   try {
+    await ensureCashShiftDifferenceColumns();
     const { accountId } = req.user;
     const { id } = req.params;
-    const { notes, closedAt } = req.body;
+    const { notes, closedAt, differenceAction } = req.body;
+    const diffAction = String(differenceAction || "")
+      .trim()
+      .toLowerCase();
 
     const shift = await CashShift.findByPk(id);
     if (!shift) {
@@ -849,6 +1020,29 @@ export async function closeShift(req, res) {
     const expectedCashTotal = computeExpectedCash(opening, sales.salesCash, cashOut, cashIn);
     const cashDifference = to2(closingCashTotal - expectedCashTotal);
 
+    // Con diferencia hay que decidir omit|register antes (o junto) al cierre.
+    if (cashDifference !== 0 && diffAction !== "omit" && diffAction !== "register") {
+      notifyFail(
+        "shift.close_failed",
+        "Hay sobrante o faltante: indicá differenceAction omit o register",
+        { req, httpStatus: 400 },
+      );
+      return res.status(400).json({
+        message:
+          "Hay diferencia de efectivo. Elegí omitir o registrar como ingreso/egreso antes de cerrar.",
+        needsDifferenceResolution: true,
+        summary: {
+          openingCashTotal: opening,
+          ...sales,
+          cashOut,
+          cashIn,
+          expectedCashTotal,
+          closingCashTotal,
+          cashDifference,
+        },
+      });
+    }
+
     let closedAtDate = new Date();
     if (isOwnerLike(req.user.loginRol) && closedAt) {
       const parsed = parseOptionalIsoDate(closedAt);
@@ -859,26 +1053,59 @@ export async function closeShift(req, res) {
       if (parsed) closedAtDate = parsed;
     }
 
-    await shift.update({
-      status: "closed",
-      closedAt: closedAtDate,
-      closingCashCounts: counts,
-      closingCashTotal,
-      expectedCashTotal,
-      cashDifference,
-      salesCashTotal: sales.salesCash,
-      salesTransferTotal: sales.salesTransfer,
-      salesCardTotal: sales.salesCard,
-      salesTotal: sales.salesTotal,
-      cashOutTotal: cashOut,
-      cashInTotal: cashIn,
-      closingNotes: notes || null,
+    let differenceResult = null;
+    await sequelize.transaction(async (transaction) => {
+      await shift.update(
+        {
+          status: "closed",
+          closedAt: closedAtDate,
+          closingCashCounts: counts,
+          closingCashTotal,
+          expectedCashTotal,
+          cashDifference,
+          salesCashTotal: sales.salesCash,
+          salesTransferTotal: sales.salesTransfer,
+          salesCardTotal: sales.salesCard,
+          salesTotal: sales.salesTotal,
+          cashOutTotal: cashOut,
+          cashInTotal: cashIn,
+          closingNotes: notes || null,
+          differenceResolution: cashDifference !== 0 ? "pending" : null,
+          differenceResolvedAt: null,
+          differenceFinanceId: null,
+          differenceFinanceType: null,
+        },
+        { transaction },
+      );
+
+      if (cashDifference !== 0 && (diffAction === "omit" || diffAction === "register")) {
+        await shift.reload({ transaction });
+        differenceResult = await applyDifferenceResolution(
+          shift,
+          diffAction,
+          accountId,
+          transaction,
+        );
+      }
     });
 
-    notifyOk("shift.closed", `Turno #${id} cerrado`, { shiftId: id });
+    await shift.reload();
+    notifyOk("shift.closed", `Turno #${id} cerrado`, {
+      shiftId: id,
+      differenceResolution: differenceResult?.resolution || null,
+    });
     res.json({
-      message: "Turno cerrado correctamente.",
+      message:
+        differenceResult?.resolution === "omitted"
+          ? "Turno cerrado. Diferencia omitida."
+          : differenceResult?.resolution === "income"
+            ? "Turno cerrado. Sobrante registrado como ingreso."
+            : differenceResult?.resolution === "expense"
+              ? "Turno cerrado. Faltante registrado como egreso."
+              : "Turno cerrado correctamente.",
       shift,
+      needsDifferenceResolution: false,
+      differenceResult,
       summary: {
         openingCashTotal: opening,
         ...sales,
@@ -890,7 +1117,178 @@ export async function closeShift(req, res) {
       },
     });
   } catch (error) {
-    notifyFail("shift.close_failed", error.message, { error, req, httpStatus: 500 });
+    const status = error?.status || 500;
+    notifyFail("shift.close_failed", error.message, { error, req, httpStatus: status });
+    res.status(status).json({ message: error.message });
+  }
+}
+
+/** Turnos cerrados con sobrante/faltante aún no regularizado. */
+export async function getPendingDifferenceShifts(req, res) {
+  try {
+    await ensureCashShiftDifferenceColumns();
+    const { accountId, loginRol } = req.user;
+    const limit = Math.min(Number(req.query.limit) || 50, 100);
+    const where = {
+      status: "closed",
+      cashDifference: { [Op.ne]: 0 },
+      [Op.or]: [
+        { differenceResolution: null },
+        { differenceResolution: "pending" },
+      ],
+    };
+    if (!ADMIN_ROLES.has(loginRol)) where.accountId = accountId;
+
+    const shifts = await CashShift.findAll({
+      where,
+      include: [
+        {
+          model: Users,
+          as: "user",
+          attributes: ["id", "firstName", "firstLastName"],
+        },
+        {
+          model: Store,
+          as: "store",
+          attributes: ["id", "name", "establishmentCode", "emissionPointCode"],
+        },
+      ],
+      order: [["closedAt", "DESC"]],
+      limit,
+    });
+
+    res.json(
+      shifts.map((s) => {
+        const diff = to2(s.cashDifference);
+        return {
+          id: s.id,
+          closedAt: s.closedAt,
+          openedAt: s.openedAt,
+          cashDifference: diff,
+          kind: differenceKind(diff),
+          amount: to2(Math.abs(diff)),
+          expectedCashTotal: s.expectedCashTotal != null ? to2(s.expectedCashTotal) : null,
+          closingCashTotal: s.closingCashTotal != null ? to2(s.closingCashTotal) : null,
+          differenceResolution: s.differenceResolution || "pending",
+          store: s.store,
+          user: s.user,
+          userLabel: userLabel(s.user),
+        };
+      }),
+    );
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+}
+
+/** Regulariza un turno: omit | register (ingreso si sobra, egreso si falta). */
+export async function resolveShiftDifference(req, res) {
+  try {
+    await ensureCashShiftDifferenceColumns();
+    const { accountId, loginRol } = req.user;
+    const action = String(req.body?.action || "").trim();
+    const shift = await CashShift.findByPk(req.params.id);
+    if (!shift) {
+      return res.status(404).json({ message: "Turno no encontrado." });
+    }
+    if (!ADMIN_ROLES.has(loginRol) && shift.accountId !== accountId) {
+      return res.status(403).json({ message: "No autorizado." });
+    }
+
+    const result = await sequelize.transaction(async (transaction) =>
+      applyDifferenceResolution(shift, action, accountId, transaction),
+    );
+
+    notifyOk(
+      "shift.difference_resolved",
+      `Turno #${shift.id} diferencia → ${result.resolution}`,
+      { shiftId: shift.id, ...result },
+    );
+    await shift.reload();
+    res.json({
+      message:
+        result.resolution === "omitted"
+          ? "Diferencia omitida."
+          : result.resolution === "income"
+            ? "Sobrante registrado como ingreso."
+            : "Faltante registrado como egreso.",
+      result,
+      shift,
+    });
+  } catch (error) {
+    const status = error?.status || 500;
+    if (status >= 500) {
+      notifyFail("shift.difference_resolve_failed", error.message, {
+        error,
+        req,
+        httpStatus: status,
+      });
+    }
+    res.status(status).json({ message: error.message });
+  }
+}
+
+/** Regulariza varios turnos de una vez. */
+export async function resolveShiftDifferencesBulk(req, res) {
+  try {
+    await ensureCashShiftDifferenceColumns();
+    const { accountId, loginRol } = req.user;
+    const action = String(req.body?.action || "").trim();
+    const ids = Array.isArray(req.body?.shiftIds)
+      ? req.body.shiftIds.map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0)
+      : [];
+    if (!ids.length) {
+      return res.status(400).json({ message: "Indicá al menos un turno (shiftIds)." });
+    }
+    if (action !== "omit" && action !== "register") {
+      return res.status(400).json({ message: "Acción no válida. Usá omit o register." });
+    }
+
+    const where = { id: { [Op.in]: ids }, status: "closed" };
+    if (!ADMIN_ROLES.has(loginRol)) where.accountId = accountId;
+
+    const shifts = await CashShift.findAll({ where });
+    const results = [];
+    const errors = [];
+
+    await sequelize.transaction(async (transaction) => {
+      for (const shift of shifts) {
+        try {
+          if (!isDifferencePending(shift)) {
+            errors.push({
+              shiftId: shift.id,
+              message: "Sin diferencia pendiente.",
+            });
+            continue;
+          }
+          const result = await applyDifferenceResolution(
+            shift,
+            action,
+            accountId,
+            transaction,
+          );
+          results.push({ shiftId: shift.id, ...result });
+        } catch (err) {
+          errors.push({ shiftId: shift.id, message: err.message });
+        }
+      }
+    });
+
+    notifyOk("shift.difference_resolved_bulk", `${results.length} turnos regularizados`, {
+      count: results.length,
+      action,
+    });
+    res.json({
+      message: `Regularizados ${results.length} de ${ids.length}.`,
+      results,
+      errors,
+    });
+  } catch (error) {
+    notifyFail("shift.difference_resolve_failed", error.message, {
+      error,
+      req,
+      httpStatus: 500,
+    });
     res.status(500).json({ message: error.message });
   }
 }

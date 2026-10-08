@@ -210,8 +210,8 @@ router.post("/peer-sync/supplier-orders", receivePeerSupplierOrderHandler);
 router.post("/peer-sync/customer-orders", receivePeerCustomerOrderHandler);
 router.get("/peer-sync/status", getPeerOrderStatusHandler);
 router.post("/peer-sync/accept-status", applyPeerAcceptStatusHandler);
-router.post("/:id/push-to-peer", isAuthenticated, pushOrderToPeerHandler);
 router.put("/customers/:id/peer-link", isAuthenticated, updateCustomerPeerLinkHandler);
+// Rutas concretas ANTES de /:id/… (si no, Express puede no enrutar bien en prod).
 router.get(
   "/supplier-orders/:id/peer-accept",
   isAuthenticated,
@@ -237,6 +237,7 @@ router.post(
   isAuthenticated,
   acceptPeerCustomerOrderHandler,
 );
+router.post("/:id/push-to-peer", isAuthenticated, pushOrderToPeerHandler);
 
 router.get("/supplier-product-codes", isAuthenticated, listSupplierProductCodes);
 router.get("/supplier-product-codes/all", isAuthenticated, listAllSupplierProductCodes);

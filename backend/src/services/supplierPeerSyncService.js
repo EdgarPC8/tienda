@@ -241,29 +241,6 @@ export async function ensurePeerSyncSchema() {
       console.warn(`ensurePeerSyncSchema ${table} productId nullable:`, error?.message || error);
     }
   }
-
-  // Evita duplicados en envíos concurrentes (peerSourceApp + peerSourceOrderId).
-  for (const [table, idxName] of [
-    ["ERP_supplier_orders", "uq_peer_source_supplier_order"],
-    ["ERP_orders", "uq_peer_source_customer_order"],
-  ]) {
-    try {
-      const [rows] = await sequelize.query(
-        `SELECT COUNT(*) AS c FROM information_schema.STATISTICS
-         WHERE TABLE_SCHEMA = DATABASE()
-           AND TABLE_NAME = :table
-           AND INDEX_NAME = :idx`,
-        { replacements: { table, idx: idxName } },
-      );
-      if (Number(rows?.[0]?.c || 0) > 0) continue;
-      await sequelize.query(
-        `ALTER TABLE \`${table}\`
-         ADD UNIQUE INDEX \`${idxName}\` (\`peerSourceApp\`, \`peerSourceOrderId\`)`,
-      );
-    } catch (error) {
-      console.warn(`ensurePeerSyncSchema ${table} unique peer source:`, error?.message || error);
-    }
-  }
 }
 
 function normalizeBaseUrl(url) {
@@ -821,7 +798,6 @@ export async function receivePeerSupplierOrder({
       const nextNotes = [noteBase, marker, "Pendiente de aceptación / enlace de productos"]
         .filter(Boolean)
         .join(" · ");
-      // update por id: fuerza pending_accept aunque el pedido ya estuviera accepted
       await SupplierOrder.update(
         {
           date: date ? new Date(date) : existing.date,
@@ -838,6 +814,7 @@ export async function receivePeerSupplierOrder({
         orderId: existing.id,
         unmappedCount,
         updated: true,
+        unchanged: false,
         changes: computePeerChanges(baseline, resolved),
       };
     }
@@ -879,7 +856,7 @@ export async function receivePeerSupplierOrder({
           { transaction: t },
         );
       }
-      return { orderId: order.id, unmappedCount, updated: false, changes: [] };
+      return { orderId: order.id, unmappedCount, updated: false, unchanged: false, changes: [] };
     } catch (createErr) {
       const isDup =
         createErr?.name === "SequelizeUniqueConstraintError" ||
@@ -955,6 +932,7 @@ export async function receivePeerSupplierOrder({
         orderId: raced.id,
         unmappedCount,
         updated: true,
+        unchanged: false,
         changes: computePeerChanges(baseline, resolved),
       };
     }
@@ -989,11 +967,7 @@ export async function receivePeerSupplierOrder({
   };
 }
 
-/**
- * Acepta un pedido peer: enlaza ítems a productos locales y guarda códigos
- * para la próxima sincronización.
- * body.mappings = [{ itemId, productId }]
- */
+
 export async function acceptPeerSupplierOrder(orderId, mappings = []) {
   await ensurePeerSyncSchema();
   const id = Number(orderId);
@@ -1452,7 +1426,8 @@ export async function pushClientOrderToPeer(orderId) {
 
   let remote;
   try {
-    const res = await fetch(`${baseUrl}/orders/peer-sync/supplier-orders`, {
+    const remoteUrl = `${baseUrl}/orders/peer-sync/supplier-orders`;
+    const res = await fetch(remoteUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1462,7 +1437,9 @@ export async function pushClientOrderToPeer(orderId) {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const err = new Error(body?.message || `Error remoto HTTP ${res.status}`);
+      const err = new Error(
+        body?.message || `Error remoto HTTP ${res.status} → ${remoteUrl}`,
+      );
       err.status = res.status;
       throw err;
     }
@@ -2120,7 +2097,8 @@ export async function pushSupplierOrderToPeer(supplierOrderId) {
 
   let remote;
   try {
-    const res = await fetch(`${baseUrl}/orders/peer-sync/customer-orders`, {
+    const remoteUrl = `${baseUrl}/orders/peer-sync/customer-orders`;
+    const res = await fetch(remoteUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -2130,7 +2108,9 @@ export async function pushSupplierOrderToPeer(supplierOrderId) {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const err = new Error(body?.message || `Error remoto HTTP ${res.status}`);
+      const err = new Error(
+        body?.message || `Error remoto HTTP ${res.status} → ${remoteUrl}`,
+      );
       err.status = res.status;
       throw err;
     }

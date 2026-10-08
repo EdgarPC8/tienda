@@ -1,14 +1,10 @@
 /**
  * Enlace entre las 3 apps Raptor (EdDeli ↔ Tienda ↔ Store).
- * Local: 127.0.0.1:puerto · Producción: mismo origen que el build Vite.
  *
- * Modo:
- *   PEER_APPS_MODE=local|production
- *   o NODE_ENV=production
- *   o se infiere de SUBSCRIPTION_API_URL (si apunta al dominio institucional)
+ * Por defecto → producción (mismo origen que el build Vite), porque en el
+ * servidor el gestor suele estar en 127.0.0.1 y eso NO debe forzar peers locales.
  *
- * Override por app: PEER_EDDELI_BASE_URL, PEER_TIENDA_BASE_URL, PEER_STORE_BASE_URL
- * Origen global: PEER_APPS_ORIGIN (ej. https://aplicaciones.marianosamaniego.edu.ec)
+ * En tu PC / desarrollo: PEER_APPS_MODE=local en backend/.env
  */
 export const LOCAL_APP_KEY = "tienda";
 
@@ -41,15 +37,9 @@ function resolvePeerMode() {
     .toLowerCase();
   if (explicit === "local" || explicit === "production") return explicit;
 
-  if (String(process.env.NODE_ENV || "").trim().toLowerCase() === "production") {
-    return "production";
-  }
-
-  const sub = String(process.env.SUBSCRIPTION_API_URL || "");
-  if (/aplicaciones\.marianosamaniego\.edu\.ec/i.test(sub)) return "production";
-  if (/127\.0\.0\.1|localhost/i.test(sub)) return "local";
-
-  return "local";
+  // Default producción: en el server el .env suele tener gestor en localhost
+  // y eso hacía que los peers apuntaran a 127.0.0.1 → 404.
+  return "production";
 }
 
 function resolveOrigin(mode) {

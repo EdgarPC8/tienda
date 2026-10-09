@@ -11,6 +11,20 @@ function cleanMessage(message, status) {
 export function scrubSqlResponses(req, res, next) {
   const orig = res.json.bind(res);
   res.json = (body) => {
+    // Sequelize Model: { ...model } copia dataValues/_options y rompe el JSON
+    // (el frontend deja de ver .id al crear producto/cliente/XML).
+    if (
+      body != null &&
+      typeof body === "object" &&
+      !Array.isArray(body) &&
+      typeof body.toJSON === "function"
+    ) {
+      try {
+        body = body.toJSON();
+      } catch {
+        /* seguir con body original */
+      }
+    }
     if (!body || typeof body !== "object" || Array.isArray(body)) return orig(body);
     const nextBody = { ...body };
     if (typeof nextBody.message === "string") {

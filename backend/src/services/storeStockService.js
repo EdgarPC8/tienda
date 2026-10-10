@@ -315,6 +315,23 @@ export async function setProductCatalogStock(
 }
 
 /**
+ * Multistock OFF: el stock general (`product.stock`) manda.
+ * Alinea la fila del local de operación antes de vender/entregar,
+ * para que Caja (catálogo) y el cobro (store) no queden desfasados.
+ */
+export async function alignOperationStoreToCatalogStock(
+  productId,
+  catalogQty,
+  { transaction } = {},
+) {
+  if (isMultiStockEnabled()) return null;
+  return setProductCatalogStock(productId, catalogQty, {
+    transaction,
+    allowNegative: true,
+  });
+}
+
+/**
  * Migración inicial: si no hay filas de stock por local,
  * mueve product.stock actual a Bodega y deja el total sincronizado.
  */

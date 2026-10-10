@@ -14,11 +14,12 @@ import { parsePagination, sendPaginated } from "../../utils/pagination.js";
 import { notifyOk, notifyFail } from "../../services/notifyRaptorSolutions.js";
 import {
   adjustStoreStock,
+  alignOperationStoreToCatalogStock,
   getDefaultStockStoreId,
   getStoreStockQty,
   storeHoldsInventory,
 } from "../../services/storeStockService.js";
-import { getAppSettingsSync } from "../../services/appSettingsService.js";
+import { getAppSettingsSync, isMultiStockEnabled } from "../../services/appSettingsService.js";
 import { consumeBatchesFefo } from "../../services/batchStockService.js";
 import { autoOpenPacksToCoverProduct } from "../../services/presentationOpenService.js";
 import {
@@ -239,7 +240,7 @@ async function restoreSaleStock(refs, transaction) {
 
 /** Con un solo local, la entrega mueve ese local y el producto juntos. */
 async function resolveDeliverStoreId(body, { transaction, requireExplicit = false } = {}) {
-  const multi = getAppSettingsSync()?.multiStockEnabled !== false;
+  const multi = isMultiStockEnabled();
   if (!multi) {
     const sid = await getDefaultStockStoreId({ transaction });
     return sid ? Number(sid) : null;
@@ -423,11 +424,24 @@ export const posCheckout = async (req, res) => {
 
         // Crédito y contado: el producto ya salió de caja → rebajar stock y marcar entregado.
         // En crédito solo falta cobro (paidAt null → calendario amarillo).
-        const stockStoreId = shift.storeId || (await getDefaultStockStoreId({ transaction: t }));
-        if (!shift.storeId) {
+        const multi = isMultiStockEnabled();
+        let stockStoreId = multi
+          ? shift.storeId || (await getDefaultStockStoreId({ transaction: t }))
+          : await getDefaultStockStoreId({ transaction: t });
+        if (multi && !shift.storeId) {
           throw new Error(
             "El turno no tiene local asignado. Cierra y abre turno en una sucursal propia para vender con stock.",
           );
+        }
+        if (!stockStoreId) {
+          throw new Error("No hay local de operación para descontar stock.");
+        }
+        // Multistock OFF: stock general (ficha) manda → alinear fila del local antes de validar.
+        if (!multi) {
+          await alignOperationStoreToCatalogStock(productId, num(product.stock), {
+            transaction: t,
+          });
+          await product.reload({ transaction: t });
         }
         const available0 = await getStoreStockQty(stockStoreId, productId, { transaction: t });
         let available = available0;
@@ -450,7 +464,9 @@ export const posCheckout = async (req, res) => {
         }
         if (available < qty) {
           const err = new Error(
-            `Stock insuficiente en este local para ${product.name}. Disponible: ${available}`,
+            multi
+              ? `Stock insuficiente en este local para ${product.name}. Disponible: ${available}`
+              : `Stock insuficiente para ${product.name}. Disponible: ${available}`,
           );
           err.statusCode = 400;
           throw err;
@@ -1532,7 +1548,7 @@ export const markItemAsDelivered = async (req, res) => {
     }
 
     const qty = num(item.quantity);
-    const multi = getAppSettingsSync()?.multiStockEnabled !== false;
+    const multi = isMultiStockEnabled();
 
     await sequelize.transaction(async (t) => {
       const deliverStoreId = await resolveDeliverStoreId(req.body || {}, {
@@ -1549,11 +1565,19 @@ export const markItemAsDelivered = async (req, res) => {
       }
 
       if (deliverStoreId) {
+        if (!multi) {
+          await alignOperationStoreToCatalogStock(product.id, num(product.stock), {
+            transaction: t,
+          });
+          await product.reload({ transaction: t });
+        }
         const available = await getStoreStockQty(deliverStoreId, product.id, { transaction: t });
         if (available < qty) {
           throw Object.assign(
             new Error(
-              `Stock insuficiente en este local para entregar. Disponible: ${available}, pedido: ${qty}`,
+              multi
+                ? `Stock insuficiente en este local para entregar. Disponible: ${available}, pedido: ${qty}`
+                : `Stock insuficiente para entregar. Disponible: ${available}, pedido: ${qty}`,
             ),
             { status: 400 },
           );

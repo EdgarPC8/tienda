@@ -32,6 +32,8 @@ function employeeMay(method, path, user) {
   if (m === "GET" && /\/news(\/|$)/.test(path)) return true;
 
   if (m === "GET" && /\/inventory\/(products|categories|units)(\/|$)/.test(path)) return true;
+  // Turno/caja: listar locales (y stock por local) para abrir en el local principal.
+  if (m === "GET" && /\/inventory\/stores(\/|$)/.test(path)) return true;
   if (m === "GET" && /\/inventory\/(stores\/\d+\/stocks|products\/\d+\/store-stocks)/.test(path)) return true;
   if (m === "GET" && /\/inventory\/tier-groups/.test(path)) return true;
   if (m === "POST" && /\/inventory\/movements\/open-presentation/.test(path)) return true;
@@ -40,6 +42,10 @@ function employeeMay(method, path, user) {
   if (m === "POST" && /\/orders\/customers\/?$/.test(path)) return true;
   if (m === "GET" && /\/orders\/supplier-product-codes/.test(path)) return true;
   if (m === "POST" && /\/orders\/pos\/checkout\/?$/.test(path)) return true;
+
+  // Solo lectura: estado SRI en Caja y promos del cliente (sin administrar).
+  if (m === "GET" && /\/sri\/settings\/?$/.test(path)) return true;
+  if (m === "GET" && /\/marketing\/promotions\/customer\/\d+\/?$/.test(path)) return true;
 
   return false;
 }

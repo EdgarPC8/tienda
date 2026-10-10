@@ -1,6 +1,11 @@
 import { verifyJWT, getHeaderToken } from "../../libs/jwt.js";
 
-import { InventoryMovement, InventoryProduct, Store } from "../../models/Inventory.js";
+import {
+  InventoryMovement,
+  InventoryProduct,
+  InventoryUnit,
+  Store,
+} from "../../models/Inventory.js";
 import { Customer, Order, OrderItem } from "../../models/Orders.js";
 import { Income, ItemGroupItem, Payment } from "../../models/Finance.js";
 import { findOpenShiftForAccount } from "./ShiftController.js";
@@ -41,6 +46,15 @@ import {
 } from "../../utils/financeCascadeUtils.js";
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+
+/** Cliente genérico de mostrador: no sirve para crédito (no hay a quién cobrar). */
+function isConsumidorFinalCustomer(customer) {
+  if (!customer) return false;
+  const n = String(customer.name || "").toLowerCase().trim();
+  if (n.includes("consumidor") && n.includes("final")) return true;
+  const ced = String(customer.cedula || "").replace(/\D/g, "");
+  return ced.length >= 10 && /^9+$/.test(ced);
+}
 
 let orderItemDeliverSchemaReady = false;
 let orderItemPackSchemaReady = false;
@@ -357,6 +371,12 @@ export const posCheckout = async (req, res) => {
     if (!customer) {
       return res.status(400).json({ message: "Ese cliente no existe" });
     }
+    if (isCredit && isConsumidorFinalCustomer(customer)) {
+      return res.status(400).json({
+        message:
+          "Para venta a crédito elegí un cliente identificado (no Consumidor Final).",
+      });
+    }
 
     let resolvedRegisterId = shift.activeCashRegisterId || null;
     if (cashRegisterId != null && cashRegisterId !== "") {
@@ -541,6 +561,18 @@ export const posCheckout = async (req, res) => {
           throw new Error("La suma de las cuotas debe coincidir con el total de la venta.");
         }
         await replaceCustomerInstallments(order.id, paymentInstallments, { transaction: t });
+      }
+
+      // Contado + efectivo: el recibido no puede ser menor al total (evita arqueo inflado).
+      if (!isCredit && pay === "efectivo") {
+        if (amountReceived == null) {
+          throw new Error("Ingresá el monto recibido en efectivo.");
+        }
+        if (amountReceived + 0.009 < orderTotal) {
+          throw new Error(
+            `El monto recibido debe ser al menos $${orderTotal.toFixed(2)} (total de la venta).`,
+          );
+        }
       }
 
       return order;

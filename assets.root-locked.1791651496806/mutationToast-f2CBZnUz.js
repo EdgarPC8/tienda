@@ -1,0 +1,1 @@
+async function i(a,{promise:u,onSuccess:t,successMessage:n,errorMessage:r}){try{return await a({promise:u,onSuccess:t,successMessage:n,errorMessage:r})}catch{return null}}async function s(a,{promise:u,reload:t,onClose:n,successMessage:r,errorMessage:c}){return i(a,{promise:u,successMessage:r,errorMessage:c,onSuccess:async()=>{t&&await t(),n&&n()}})}export{s as r};

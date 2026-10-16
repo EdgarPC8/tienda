@@ -9,6 +9,22 @@ export const DEFAULT_TEMPLATE_SETTINGS = {
 
 const layerHasBind = (layer) => !!(layer?.bind?.textFrom || layer?.bind?.srcFrom);
 
+function normalizeFolders(rawFolders) {
+  if (!Array.isArray(rawFolders)) return undefined;
+  return rawFolders
+    .filter((f) => f && f.id)
+    .map((f) => {
+      const slot = Number(f.productSlot);
+      return {
+        id: String(f.id),
+        name: String(f.name || f.id),
+        parentId: f.parentId ? String(f.parentId) : null,
+        ...(f.collapsed ? { collapsed: true } : {}),
+        ...(Number.isFinite(slot) && slot >= 0 ? { productSlot: Math.floor(slot) } : {}),
+      };
+    });
+}
+
 export function normalizeTemplateSettings(raw = {}, ctx = {}) {
   const layers = Array.isArray(ctx.layers) ? ctx.layers : [];
   const backgroundSrc = ctx.backgroundSrc;
@@ -39,7 +55,19 @@ export function normalizeTemplateSettings(raw = {}, ctx = {}) {
     requiresProduct = layers.some(layerHasBind);
   }
 
-  return { templateKind, requiresProduct, backgroundMode };
+  const folders = normalizeFolders(raw.folders);
+  const previewData =
+    raw.previewData && typeof raw.previewData === "object" && !Array.isArray(raw.previewData)
+      ? raw.previewData
+      : undefined;
+
+  return {
+    templateKind,
+    requiresProduct,
+    backgroundMode,
+    ...(folders ? { folders } : {}),
+    ...(previewData ? { previewData } : {}),
+  };
 }
 
 export function extractTemplateSettings({
@@ -50,7 +78,16 @@ export function extractTemplateSettings({
   backgroundSrc,
 } = {}) {
   const fromMeta = templateJson?.meta || doc?.meta || {};
-  const fromBodySettings = body?.settingsJson && typeof body.settingsJson === "object" ? body.settingsJson : {};
+  let rawSettings = body?.settingsJson ?? null;
+  if (typeof rawSettings === "string") {
+    try {
+      rawSettings = JSON.parse(rawSettings);
+    } catch {
+      rawSettings = null;
+    }
+  }
+  const fromBodySettings =
+    rawSettings && typeof rawSettings === "object" ? rawSettings : {};
   const merged = {
     ...fromBodySettings,
     templateKind:
@@ -65,6 +102,18 @@ export function extractTemplateSettings({
       body.backgroundMode ??
       fromBodySettings.backgroundMode ??
       fromMeta.backgroundMode,
+    folders:
+      body.folders ??
+      fromBodySettings.folders ??
+      fromMeta.folders ??
+      doc.folders,
+    previewData:
+      body.previewData ??
+      fromBodySettings.previewData ??
+      fromMeta.previewData ??
+      (doc?.data && typeof doc.data === "object" && Object.keys(doc.data).length
+        ? doc.data
+        : undefined),
   };
 
   const layerSource = layers || templateJson?.layers || doc?.layers || [];
@@ -75,9 +124,12 @@ export function extractTemplateSettings({
 
 export function settingsToMeta(settings = {}) {
   const normalized = normalizeTemplateSettings(settings);
-  return {
+  const out = {
     templateKind: normalized.templateKind,
     requiresProduct: normalized.requiresProduct,
     backgroundMode: normalized.backgroundMode,
   };
+  if (Array.isArray(normalized.folders)) out.folders = normalized.folders;
+  if (normalized.previewData) out.previewData = normalized.previewData;
+  return out;
 }

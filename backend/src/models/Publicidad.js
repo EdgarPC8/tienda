@@ -66,7 +66,7 @@ export const PublicidadPlaylistItem = sequelize.define(
     /** ID estable del cliente (slide_xxx) para edición */
     slideKey: { type: DataTypes.STRING(64), allowNull: true },
     contentType: {
-      type: DataTypes.ENUM("product", "image", "video", "menu", "text"),
+      type: DataTypes.ENUM("product", "image", "video", "menu", "text", "template"),
       allowNull: false,
     },
     /** Productos del tablero menú (contentType = menu) */

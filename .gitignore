@@ -41,5 +41,3 @@ backend/src/img/products/
 *.bak
 node_modules/
 
-# graphify
-graphify-out/

@@ -396,16 +396,12 @@ export const importTemplate = async (req, res) => {
       { transaction: t }
     );
 
-    // Si llega isDefault=true, apagar otros defaults del mismo app+format
-    if (tpl.isDefault && tpl.app && tpl.format) {
+    // Si llega isDefault=true, solo esta queda como default
+    if (tpl.isDefault) {
       await EditorTemplate.update(
         { isDefault: false },
         {
-          where: {
-            id: { [Op.ne]: tpl.id },
-            app: tpl.app,
-            format: tpl.format,
-          },
+          where: { id: { [Op.ne]: tpl.id }, isDefault: true },
           transaction: t,
         }
       );
@@ -814,6 +810,17 @@ export const updateTemplate = async (req, res) => {
 
       await tpl.update(patch, { transaction: t });
 
+      // Solo una plantilla default a la vez
+      if (patch.isDefault === true) {
+        await EditorTemplate.update(
+          { isDefault: false },
+          {
+            where: { id: { [Op.ne]: tpl.id }, isDefault: true },
+            transaction: t,
+          }
+        );
+      }
+
       await t.commit();
       notifyOk("editor.template_updated", `Plantilla #${tpl.id}`, { templateId: tpl.id });
       return res.json({ message: "Template actualizado", template: tpl });
@@ -875,15 +882,22 @@ const buildResolvedDocFromTemplateRow = (templateRow) => {
     backgroundSrc: templateRow.backgroundSrc,
   });
 
+  const previewData =
+    settings.previewData && typeof settings.previewData === "object"
+      ? settings.previewData
+      : {};
+
   return {
     canvas: { width: templateRow.canvasWidth, height: templateRow.canvasHeight },
     backgroundSrc: templateRow.backgroundSrc,
     meta: {
       name: templateRow.name,
       ...settingsToMeta(settings),
+      ...(Object.keys(previewData).length ? { previewData } : {}),
     },
     groups,
     layers,
+    data: previewData,
   };
 };
 

@@ -857,12 +857,114 @@ export const addSupplierOrderItem = async (req, res) => {
   }
 };
 
+/**
+ * Revierte el stock ingresado al recibir la compra (Propietario / correcciones).
+ * Descuenta ERP_store_stocks, anula movimientos ENTRADA_COMPRA y ajusta lotes.
+ */
+async function reverseReceivedStockForSupplierOrder(order, user, transaction) {
+  const items = await SupplierOrderItem.findAll({
+    where: { orderId: order.id },
+    transaction,
+  });
+  const storeId =
+    order.receivedStoreId != null && Number(order.receivedStoreId) > 0
+      ? Number(order.receivedStoreId)
+      : await getDefaultStockStoreId({ transaction });
+
+  const qtyByBatchId = new Map();
+  for (const item of items) {
+    const qty = toNum(item.quantity);
+    if (qty <= 0 || !item.productId) continue;
+    const product = await InventoryProduct.findByPk(item.productId, {
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!product) continue;
+    await applyReceiveQty({
+      product,
+      qty: -qty,
+      storeId,
+      transaction,
+    });
+    await InventoryMovement.create(
+      {
+        productId: product.id,
+        type: "ajuste",
+        reason: "AJUSTE_SALIDA",
+        quantity: qty,
+        description: `Eliminación compra #${order.id}: reversión de recepción`,
+        referenceType: "supplier_order",
+        referenceId: order.id,
+        createdBy: user?.accountId || 0,
+        date: nowApp(),
+      },
+      { transaction },
+    );
+    const bid = Number(item.inventoryBatchId);
+    if (Number.isFinite(bid) && bid > 0) {
+      qtyByBatchId.set(bid, toNum(qtyByBatchId.get(bid)) + qty);
+    }
+  }
+
+  await InventoryMovement.destroy({
+    where: {
+      referenceType: "supplier_order",
+      referenceId: order.id,
+      reason: "ENTRADA_COMPRA",
+    },
+    transaction,
+  });
+
+  const batchIds = [...qtyByBatchId.keys()];
+  if (batchIds.length) {
+    await InventoryMovement.destroy({
+      where: {
+        referenceType: "inventory_batch",
+        referenceId: { [Op.in]: batchIds },
+        reason: "ENTRADA_COMPRA",
+      },
+      transaction,
+    });
+    for (const batchId of batchIds) {
+      const batch = await InventoryBatch.findByPk(batchId, {
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+      if (!batch) continue;
+      const reverseQty = toNum(qtyByBatchId.get(batchId));
+      const initial = toNum(batch.quantityInitial);
+      const remaining = toNum(batch.quantityRemaining);
+      if (Math.abs(initial - remaining) < 1e-6 && Math.abs(initial - reverseQty) < 1e-6) {
+        await batch.destroy({ transaction });
+        continue;
+      }
+      const nextRemaining = Math.max(0, remaining - reverseQty);
+      const nextInitial = Math.max(0, initial - reverseQty);
+      if (nextRemaining <= 1e-9 && nextInitial <= 1e-9) {
+        await batch.destroy({ transaction });
+      } else {
+        await batch.update(
+          {
+            quantityInitial: nextInitial,
+            quantityRemaining: nextRemaining,
+            status: nextRemaining <= 0 ? "exhausted" : batch.status,
+            notes: `${batch.notes || ""} · anulado al borrar compra #${order.id}`.trim(),
+          },
+          { transaction },
+        );
+      }
+    }
+  }
+}
+
 export const deleteSupplierOrder = async (req, res) => {
   try {
     const token = getHeaderToken(req);
     const user = await verifyJWT(token);
 
-    const order = await SupplierOrder.findByPk(req.params.id);
+    const order = await SupplierOrder.findByPk(req.params.id, {
+      include: [{ model: SupplierOrderItem, as: "ERP_supplier_order_items" }],
+    });
     if (!order) {
       notifyFail("supplier_order.delete_failed", `Pedido proveedor #${req.params.id} no encontrado`, {
         req,
@@ -871,9 +973,11 @@ export const deleteSupplierOrder = async (req, res) => {
       return res.status(404).json({ message: "Pedido no encontrado" });
     }
 
-    if (order.receivedAt) {
+    const wasReceived = Boolean(order.receivedAt);
+    if (wasReceived && !canFinanceCascadeCorrection(user)) {
       return res.status(400).json({
-        message: "Esta compra ya ingresó mercadería. No se puede borrar sin devolver ese stock.",
+        message:
+          "Esta compra ya ingresó mercadería. Solo Propietario (o Admin con correcciones) puede borrarla y devolver el stock.",
       });
     }
 
@@ -889,16 +993,24 @@ export const deleteSupplierOrder = async (req, res) => {
     }
 
     await sequelize.transaction(async (t) => {
+      if (wasReceived) {
+        await reverseReceivedStockForSupplierOrder(order, user, t);
+      }
       if (hasFinance) {
         await cleanupSupplierOrderFinance(order.id, t);
       }
+      await SupplierOrderItem.destroy({ where: { orderId: order.id }, transaction: t });
       await order.destroy({ transaction: t });
     });
 
     notifyOk("supplier_order.deleted", `Pedido proveedor #${req.params.id}`, {
       supplierOrderId: Number(req.params.id),
     });
-    res.json({ message: "Pedido a proveedor eliminado (egresos/abonos vinculados eliminados si existían)" });
+    res.json({
+      message: wasReceived
+        ? "Compra eliminada: se revirtió el stock ingresado y los egresos/abonos vinculados"
+        : "Pedido a proveedor eliminado (egresos/abonos vinculados eliminados si existían)",
+    });
   } catch (error) {
     console.error("deleteSupplierOrder:", error);
     notifyFail("supplier_order.delete_failed", `Error al eliminar pedido #${req.params.id}`, {
@@ -906,7 +1018,9 @@ export const deleteSupplierOrder = async (req, res) => {
       req,
       httpStatus: 500,
     });
-    res.status(500).json({ message: "Error al eliminar pedido" });
+    res.status(500).json({
+      message: error.message || "Error al eliminar pedido",
+    });
   }
 };
 

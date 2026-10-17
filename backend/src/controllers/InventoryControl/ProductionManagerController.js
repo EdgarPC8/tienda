@@ -2,6 +2,12 @@
 import { sequelize } from '../../database/connection.js';
 import {  InventoryProduct, InventoryRecipe } from '../../models/Inventory.js';
 import { notifyOk, notifyFail } from "../../services/notifyRaptorSolutions.js";
+import {
+  ProductionInputError,
+  assertOfficialProductionActions,
+  parseProductionQuantity,
+  planProduction,
+} from "../../services/productionGramsService.js";
 // controllers/registerProductionController.js
 
 
@@ -311,22 +317,23 @@ async function buildSimulation(productId, cantidadFinal, multiplicador = 1, debu
 // Controlador Express
 export const simulateProductionController = async (req, res) => {
   try {
-    const productId = parseInt(req.query.productId);
-    const cantidad = parseInt(req.query.cantidad);
-
-
-    // console.log("Producto:", productId);
-    // 📦 Ejecutar
-
-
-    if (!productId || !cantidad || isNaN(productId) || isNaN(cantidad)) {
-      return res.status(400).json({ message: "Parámetros inválidos" });
+    const productId = Number(req.query.productId);
+    if (!Number.isInteger(productId) || productId <= 0) {
+      return res.status(400).json({ message: "Indicá el producto a producir" });
     }
-    const resultado = await buildSimulation(productId, cantidad);
-    res.status(200).json(resultado);
+    const cantidad = parseProductionQuantity(req.query.cantidad);
+    assertOfficialProductionActions(req.query);
+    const resultado = await planProduction(productId, cantidad);
+    res.status(200).json({ resultado });
   } catch (error) {
-    console.error("Error en simulación de producción:", error);
-    res.status(500).json({ message: "Error interno del servidor" });
+    const status = error instanceof ProductionInputError ? error.status : 400;
+    const message = error instanceof ProductionInputError
+      ? error.message
+      : "No se pudo simular la producción";
+    if (!(error instanceof ProductionInputError)) {
+      console.error("Error en simulación de producción:", error);
+    }
+    res.status(status).json({ message });
   }
 };
 

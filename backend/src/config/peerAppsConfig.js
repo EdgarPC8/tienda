@@ -6,7 +6,7 @@
  *
  * En tu PC / desarrollo: PEER_APPS_MODE=local en backend/.env
  */
-export const LOCAL_APP_KEY = "tienda";
+export const LOCAL_APP_KEY = "eddeli";
 
 /** Secreto compartido entre las tres apps para peer-sync. */
 export const PEER_SYNC_SECRET = "raptor-peer-sync-v1-eddeli-tienda-store";

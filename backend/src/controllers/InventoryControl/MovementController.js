@@ -28,6 +28,16 @@ import {
 } from "../../services/storeStockService.js";
 import { consumeBatchesFefo } from "../../services/batchStockService.js";
 import {
+  ProductionInputError,
+  applyProductionPlan,
+  assertProductionRole,
+  assertOfficialProductionActions,
+  autocompleteAllowed,
+  packagingOpenEnabled,
+  parseProductionQuantity,
+  planProduction,
+} from "../../services/productionGramsService.js";
+import {
   executeOpenPresentation,
   PRESENTATION_OPEN_REF,
 } from "../../services/presentationOpenService.js";
@@ -441,7 +451,7 @@ export const registerProductionIntermediateFromPayload = async (req, res) => {
   }
 };
 export const registerProductionFinalFromPayload = async (req, res) => {
-  const { productId, quantity, simulated, movementDate } = req.body;
+  const { productId, quantity, movementDate } = req.body || {};
 
   const token = getHeaderToken(req);
   let user = null;
@@ -452,159 +462,156 @@ export const registerProductionFinalFromPayload = async (req, res) => {
     return res.status(401).json({ message: "No autorizado" });
   }
 
-  if (!productId || !quantity) {
-    notifyFail("production.final_register_failed", "Faltan campos obligatorios", { req, httpStatus: 400 });
-    return res.status(400).json({ message: "Faltan campos obligatorios" });
-  }
-
-  if (!simulated || !simulated.requiere) {
-    notifyFail("production.final_register_failed", "Falta estructura de simulación", { req, httpStatus: 400 });
-    return res.status(400).json({ message: "Falta estructura de simulación" });
-  }
-
-  const finalProduct = await InventoryProduct.findByPk(productId);
-  if (!finalProduct) {
-    notifyFail("production.final_register_failed", "Producto no encontrado", { req, httpStatus: 404 });
-    return res.status(404).json({ message: "Producto no encontrado" });
-  }
-
-  const opId = `PF-${Date.now()}-${Math.floor(Math.random() * 1e5)}`;
-  const prodMovementDate = resolveMovementDate(movementDate, user);
-
   try {
-    await sequelize.transaction(async (t) => {
-      const fetchP = async (id) => {
-        const p = await InventoryProduct.findByPk(id, { transaction: t, lock: t.LOCK.UPDATE });
-        if (!p) throw new Error(`Producto ${id} no encontrado`);
-        return p;
-      };
+    assertProductionRole(user);
+    assertOfficialProductionActions(req.body);
+    const fundas = parseProductionQuantity(quantity);
+    const id = Number(productId);
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new ProductionInputError("Indicá el producto a producir");
+    }
 
+    const opId = `PF-${Date.now()}-${Math.floor(Math.random() * 1e5)}`;
+    const prodMovementDate = resolveMovementDate(movementDate, user);
+    const allowAutocomplete = autocompleteAllowed(user, req.body?.autocompletarStock === true);
+    if (req.body?.autocompletarStock === true && !packagingOpenEnabled()) {
+      throw new ProductionInputError("La apertura de empaques está desactivada en Configuración");
+    }
+
+    const resumen = await sequelize.transaction(async (t) => {
+      const plan = await planProduction(id, fundas, { transaction: t });
       const mov = async ({
-        productId,
+        productId: pid,
         type,
         reason,
-        quantity,
+        quantity: qty,
         description,
-        referenceType,
-        referenceId,
         price,
-      }) => {
-        return InventoryMovement.create(
-          {
-            productId,
-            type,
-            reason,
-            quantity: num(quantity),
-            description,
-            price: price ?? null,
-            referenceType: referenceType ?? productionReferenceType(opId),
-            referenceId: referenceId ?? null,
-            createdBy: user.accountId,
-            date: prodMovementDate,
-          },
-          { transaction: t }
-        );
-      };
-
-      const procesarNodo = async (nodo, parentName = "") => {
-        const prod = await fetchP(nodo.id);
-
-        // Determinar cantidad en "unidad de stock" del producto
-        // - Si nodo trae cantidadGramos -> convertir según unidad del producto
-        // - Si trae cantidadUnidades -> convertir según unidad del producto
-        let qtyStock = 0;
-        let detalle = "";
-
-        if (nodo.cantidadGramos != null) {
-          qtyStock = gramsToStockUnits(prod, nodo.cantidadGramos);
-          detalle = `${nodo.cantidadGramos} g`;
-        } else if (nodo.cantidadUnidades != null) {
-          qtyStock = unitsToStockUnits(prod, nodo.cantidadUnidades);
-          detalle = `${nodo.cantidadUnidades} u`;
-        } else {
-          return;
-        }
-
-        if (nodo.requiere && nodo.requiere.length > 0) {
-          // primero procesa hijos
-          for (const sub of nodo.requiere) {
-            await procesarNodo(sub, nodo.producto);
-          }
-
-          // si es intermedio, registras entrada + salida (traza) y ajustas sobrante
-          if (nodo.esIntermedio && qtyStock > 0) {
-            await mov({
-              productId: nodo.id,
-              type: "entrada",
-              reason: "ENTRADA_PRODUCCION",
-              quantity: qtyStock,
-              description: `Producción intermedia de ${nodo.producto}. OP:${opId}`,
-            });
-
-            await mov({
-              productId: nodo.id,
-              type: "salida",
-              reason: "SALIDA_CONSUMO_INTERNO",
-              quantity: qtyStock,
-              description: `Consumo de ${nodo.producto} para ${parentName}. OP:${opId}`,
-            });
-
-            // sobrante viene del simulador: debería estar en unidad de stock del intermedio
-            if (nodo.sobrante != null) {
-              prod.stock = num(nodo.sobrante);
-              await prod.save({ transaction: t });
-            }
-          }
-        } else {
-          // insumo final: salida
-          if (qtyStock > 0) {
-            const before = num(prod.stock);
-            prod.stock = before - qtyStock;
-            await prod.save({ transaction: t });
-
-            await mov({
-              productId: nodo.id,
-              type: "salida",
-              reason: "SALIDA_CONSUMO_INTERNO",
-              quantity: qtyStock,
-              description: `Consumo de insumo ${nodo.producto} (${detalle}) para ${parentName}. OP:${opId}`,
-            });
-          }
-        }
-      };
-
-      for (const nodo of simulated.requiere) {
-        await procesarNodo(nodo, simulated.producto);
-      }
-
-      // Movimiento principal de producción final (ENTRADA_PRODUCCION)
-      await mov({
-        productId: simulated.id,
-        type: "produccion",
-        reason: "ENTRADA_PRODUCCION",
-        quantity: simulated.cantidadDeseada,
-        description: `Producción final de ${simulated.producto}. OP:${opId}`,
+      }) => InventoryMovement.create(
+        {
+          productId: pid,
+          type,
+          reason,
+          quantity: num(qty),
+          description,
+          price: price ?? null,
+          referenceType: productionReferenceType(opId),
+          referenceId: null,
+          createdBy: user.accountId,
+          date: prodMovementDate,
+        },
+        { transaction: t },
+      );
+      await applyProductionPlan(plan, {
+        transaction: t,
+        allowAutocomplete,
+        opId,
+        mov,
+        abrirEmpaques: req.body?.abrirEmpaques,
+        mermas: req.body?.mermas,
+        referenceType: productionReferenceType(opId),
+        accountId: user.accountId,
+        movementDate: prodMovementDate,
       });
-
-      // subir stock del producto final
-      finalProduct.stock = num(finalProduct.stock) + num(simulated.cantidadDeseada);
-      await finalProduct.save({ transaction: t });
+      return { opId, plan };
     });
 
-    notifyOk("production.final_registered", "Producción final", { opId, productId });
-    return res.status(201).json({ ok: true, message: "Producción registrada exitosamente" });
+    notifyOk("production.final_registered", "Producción final", { opId: resumen.opId, productId: id });
+    return res.status(201).json({
+      ok: true,
+      message: "Producción registrada exitosamente",
+      opId: resumen.opId,
+      costoPorFunda: resumen.plan.costoPorFunda,
+      advertencias: resumen.plan.advertencias,
+    });
   } catch (error) {
-    console.error("registerProductionFinalFromPayload error:", error);
-    notifyFail("production.final_register_failed", "Error al registrar producción", {
+    const status = error instanceof ProductionInputError ? error.status : 400;
+    const safe = error?.message && !/sql|sequelize/i.test(String(error.message));
+    const message = error instanceof ProductionInputError
+      ? error.message
+      : (safe ? error.message : "No se pudo registrar la producción");
+    if (!(error instanceof ProductionInputError)) {
+      console.error("registerProductionFinalFromPayload error:", error);
+    }
+    notifyFail("production.final_register_failed", message, {
       error,
       req,
-      httpStatus: 500,
+      httpStatus: status,
     });
-    return res.status(500).json({
-      ok: false,
-      message: "Error al registrar producción",
-      detail: String(error?.message || error),
+    return res.status(status).json({ ok: false, message });
+  }
+};
+
+export const anularProduccion = async (req, res) => {
+  const token = getHeaderToken(req);
+  let user = null;
+  try {
+    user = await verifyJWT(token);
+  } catch (e) {
+    return res.status(401).json({ message: "No autorizado" });
+  }
+
+  try {
+    assertProductionRole(user);
+    const opId = String(req.body?.opId || req.params?.opId || "").trim();
+    if (!/^PF-\d+-\d+$/.test(opId)) {
+      throw new ProductionInputError("Indicá la producción a anular");
+    }
+    const ref = productionReferenceType(opId);
+    const out = await sequelize.transaction(async (t) => {
+      const rows = await InventoryMovement.findAll({
+        where: { referenceType: ref },
+        order: [["id", "DESC"]],
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
+      if (!rows.length) {
+        throw new ProductionInputError("No se encontró esa producción", 404);
+      }
+      const already = await InventoryMovement.findOne({
+        where: { referenceType: `produccion_anulada:${opId}` },
+        transaction: t,
+      });
+      if (already) {
+        throw new ProductionInputError("Esa producción ya fue anulada");
+      }
+      const storeId = await getDefaultStockStoreId({ transaction: t });
+      for (const row of rows) {
+        const qty = num(row.quantity);
+        const reverse = row.type === "salida" ? qty : -qty;
+        await adjustStoreStock(storeId, row.productId, reverse, {
+          transaction: t,
+          allowNegative: false,
+        });
+        await InventoryMovement.create(
+          {
+            productId: row.productId,
+            type: reverse >= 0 ? "entrada" : "salida",
+            reason: reverse >= 0 ? "AJUSTE_ENTRADA" : "AJUSTE_SALIDA",
+            quantity: Math.abs(qty),
+            description: `Anulación de producción ${opId}`,
+            price: row.price ?? null,
+            referenceType: `produccion_anulada:${opId}`,
+            referenceId: row.id,
+            createdBy: user.accountId,
+            date: new Date(),
+          },
+          { transaction: t },
+        );
+      }
+      return { opId, movimientos: rows.length };
     });
+    return res.json({ ok: true, message: "Producción anulada", ...out });
+  } catch (error) {
+    const status = error instanceof ProductionInputError ? error.status : 400;
+    const safe = error?.message && !/sql|sequelize/i.test(String(error.message));
+    const message = error instanceof ProductionInputError
+      ? error.message
+      : (safe ? error.message : "No se pudo anular la producción");
+    if (!(error instanceof ProductionInputError)) {
+      console.error("anularProduccion error:", error);
+    }
+    return res.status(status).json({ ok: false, message });
   }
 };
 

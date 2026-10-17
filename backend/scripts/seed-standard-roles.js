@@ -6,7 +6,7 @@
  * - Quita Profesional → Proveedor (cuentas migradas)
  * - Corre al arrancar el backend (ensureOwnerAndProgrammerRoles)
  *
- * Uso (desde AppsWeb/tienda/backend):
+ * Uso (desde AppsWeb/eddeli/backend):
  *   node scripts/seed-standard-roles.js
  *   node scripts/seed-standard-roles.js --dry-run
  *   npm run db:seed:roles

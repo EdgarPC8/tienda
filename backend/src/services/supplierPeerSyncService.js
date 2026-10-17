@@ -1342,17 +1342,6 @@ export async function pushClientOrderToPeer(orderId) {
     err.status = 400;
     throw err;
   }
-  if (
-    order.peerSourceApp &&
-    String(order.peerSourceApp).trim().toLowerCase() === String(peer.key).toLowerCase()
-  ) {
-    const err = new Error(
-      "No se puede reenviar este pedido al mismo sistema del que vino",
-    );
-    err.status = 400;
-    throw err;
-  }
-
   const baseUrl = normalizeBaseUrl(peer.baseUrl);
   const secret = PEER_SYNC_SECRET;
 
@@ -1377,6 +1366,23 @@ export async function pushClientOrderToPeer(orderId) {
     const err = new Error("El pedido no tiene ítems enviables");
     err.status = 400;
     throw err;
+  }
+
+  // Vino del peer: devolver correcciones de precio/cantidad al pedido origen.
+  if (
+    order.peerSourceApp &&
+    String(order.peerSourceApp).trim().toLowerCase() === String(peer.key).toLowerCase()
+  ) {
+    return pushOriginRevisionToPeer({
+      order,
+      peer,
+      baseUrl,
+      secret,
+      items,
+      originKind: "supplier_order",
+      originOrderId: Number(order.peerSourceOrderId),
+      remoteKind: "client_order",
+    });
   }
 
   const payloadHash = hashPeerPayloadItems(items);
@@ -2010,17 +2016,6 @@ export async function pushSupplierOrderToPeer(supplierOrderId) {
     throw err;
   }
 
-  if (
-    order.peerSourceApp &&
-    String(order.peerSourceApp).trim().toLowerCase() === String(peer.key).toLowerCase()
-  ) {
-    const err = new Error(
-      "No se puede reenviar este pedido al mismo sistema del que vino",
-    );
-    err.status = 400;
-    throw err;
-  }
-
   const baseUrl = normalizeBaseUrl(peer.baseUrl);
   const secret = PEER_SYNC_SECRET;
 
@@ -2046,6 +2041,23 @@ export async function pushSupplierOrderToPeer(supplierOrderId) {
     const err = new Error("El pedido no tiene ítems enviables (todos deben tener producto)");
     err.status = 400;
     throw err;
+  }
+
+  // Vino del peer (ej. EdDeli→Tienda): devolver precios corregidos al pedido cliente origen.
+  if (
+    order.peerSourceApp &&
+    String(order.peerSourceApp).trim().toLowerCase() === String(peer.key).toLowerCase()
+  ) {
+    return pushOriginRevisionToPeer({
+      order,
+      peer,
+      baseUrl,
+      secret,
+      items,
+      originKind: "client_order",
+      originOrderId: Number(order.peerSourceOrderId),
+      remoteKind: "supplier_order",
+    });
   }
 
   const payloadHash = hashPeerPayloadItems(items);
@@ -2160,4 +2172,273 @@ export async function pushSupplierOrderToPeer(supplierOrderId) {
           ? `Pedido actualizado. Estado remoto: ${peerAcceptLabel(peerAcceptStatus)}`
           : `Pedido enviado. Estado remoto: ${peerAcceptLabel(peerAcceptStatus)}`),
   };
+}
+
+/**
+ * Empuja correcciones de precio/cantidad al pedido ORIGEN en el sistema par
+ * (cuando este pedido local nació de un enlace peer).
+ */
+async function pushOriginRevisionToPeer({
+  order,
+  peer,
+  baseUrl,
+  secret,
+  items,
+  originKind,
+  originOrderId,
+}) {
+  if (!Number.isFinite(originOrderId) || originOrderId <= 0) {
+    const err = new Error(
+      "Este pedido enlazado no tiene id de origen; no se pueden devolver los precios",
+    );
+    err.status = 400;
+    throw err;
+  }
+
+  const payloadHash = hashPeerPayloadItems(items);
+  let remote;
+  try {
+    const remoteUrl = `${baseUrl}/orders/peer-sync/origin-revision`;
+    const res = await fetch(remoteUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${secret}`,
+      },
+      body: JSON.stringify({
+        secret,
+        sourceApp: APP_KEY,
+        originKind,
+        originOrderId,
+        remoteOrderId: order.id,
+        items,
+      }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(
+        body?.message || `Error remoto HTTP ${res.status} → ${remoteUrl}`,
+      );
+      err.status = res.status;
+      throw err;
+    }
+    remote = body;
+  } catch (error) {
+    await markOriginPushFailure(order, peer.key, error);
+    throw error;
+  }
+
+  const patch = {
+    remoteSyncApp: peer.key,
+    remoteSyncStatus: remote?.unchanged ? "synced" : "synced_revision",
+    remoteSyncPayloadHash: payloadHash,
+    remotePeerAcceptStatus: remote?.peerAcceptStatus || "accepted",
+    remoteSyncError: null,
+    remoteSyncedAt: new Date(),
+  };
+  if (originKind === "client_order") {
+    patch.remoteSyncCustomerOrderId = originOrderId;
+  } else {
+    patch.remoteSyncSupplierOrderId = originOrderId;
+  }
+  await order.update(patch);
+
+  return {
+    ...remote,
+    revision: true,
+    skipped: !!remote?.unchanged,
+    unchanged: !!remote?.unchanged,
+    peerAcceptStatus: remote?.peerAcceptStatus || "accepted",
+    remotePeerAcceptStatus: remote?.peerAcceptStatus || "accepted",
+    message:
+      remote?.message ||
+      (remote?.unchanged
+        ? "Sin cambios: el origen ya tenía los mismos precios"
+        : `Precios/cantidades actualizados en ${peerAppLabel(peer.key) || peer.key}`),
+  };
+}
+
+function matchPeerLine(localItem, remoteRow) {
+  const pid = Number(localItem.productId) || null;
+  const rPid = Number(remoteRow.productId) || null;
+  if (pid && rPid && pid === rPid) return true;
+  const b1 = String(
+    localItem.remoteBarcode || localItem.ERP_inventory_product?.barcode || "",
+  ).replace(/\D/g, "");
+  const b2 = String(remoteRow.barcode || "").replace(/\D/g, "");
+  if (b1 && b2 && b1 === b2) return true;
+  const s1 = String(
+    localItem.remoteSku || localItem.ERP_inventory_product?.sku || "",
+  )
+    .trim()
+    .toLowerCase();
+  const s2 = String(remoteRow.sku || "").trim().toLowerCase();
+  if (s1 && s2 && s1 === s2) return true;
+  const n1 = normalizeName(
+    localItem.remoteName || localItem.ERP_inventory_product?.name || "",
+  );
+  const n2 = normalizeName(remoteRow.name || "");
+  return Boolean(n1 && n2 && n1 === n2);
+}
+
+/**
+ * Aplica en ESTE sistema la revisión de precios enviada por el par
+ * sobre el pedido origen (cliente o proveedor).
+ */
+export async function applyPeerOriginRevision({
+  secret,
+  originKind,
+  originOrderId,
+  items = [],
+  sourceApp,
+}) {
+  await ensurePeerSyncSchema();
+  if (String(secret || "").trim() !== PEER_SYNC_SECRET) {
+    const err = new Error("Secreto de enlace inválido");
+    err.status = 401;
+    throw err;
+  }
+  const id = Number(originOrderId);
+  if (!Number.isFinite(id) || id <= 0) {
+    const err = new Error("originOrderId inválido");
+    err.status = 400;
+    throw err;
+  }
+  if (!Array.isArray(items) || !items.length) {
+    const err = new Error("Sin ítems para revisar");
+    err.status = 400;
+    throw err;
+  }
+
+  const kind = String(originKind || "").trim();
+  if (kind === "client_order") {
+    const order = await Order.findByPk(id, {
+      include: [{ model: OrderItem, as: "ERP_order_items" }],
+    });
+    if (!order) {
+      const err = new Error(`Pedido cliente origen #${id} no encontrado`);
+      err.status = 404;
+      throw err;
+    }
+    let updated = 0;
+    let skippedPaid = 0;
+    await sequelize.transaction(async (t) => {
+      for (const row of items) {
+        const local = (order.ERP_order_items || []).find((it) => matchPeerLine(it, row));
+        if (!local) continue;
+        if (local.paidAt || local.deliveredAt) {
+          skippedPaid += 1;
+          continue;
+        }
+        const nextPrice = Number(row.price ?? row.unitPrice ?? 0);
+        const nextQty = Number(row.quantity || local.quantity || 0);
+        const priceChanged = Number(local.price) !== nextPrice;
+        const qtyChanged = Number(local.quantity) !== nextQty;
+        if (!priceChanged && !qtyChanged) continue;
+        await local.update(
+          {
+            price: nextPrice,
+            quantity: nextQty > 0 ? nextQty : local.quantity,
+            soldQty: nextQty > 0 ? nextQty : local.soldQty,
+          },
+          { transaction: t },
+        );
+        updated += 1;
+      }
+      if (updated > 0) {
+        const noteTag = `[peer-revision:${String(sourceApp || "app").toLowerCase()}]`;
+        const notes = String(order.notes || "");
+        await order.update(
+          {
+            notes: notes.includes(noteTag)
+              ? notes
+              : [notes, noteTag, "Precios actualizados desde sistema enlazado"]
+                  .filter(Boolean)
+                  .join(" · "),
+          },
+          { transaction: t },
+        );
+      }
+    });
+    return {
+      originKind: kind,
+      originOrderId: id,
+      updated: updated > 0,
+      unchanged: updated === 0,
+      updatedLines: updated,
+      skippedPaid,
+      peerAcceptStatus: order.peerAcceptStatus || "accepted",
+      message:
+        updated > 0
+          ? `Pedido cliente #${id}: ${updated} línea(s) con precio/cantidad actualizados${
+              skippedPaid ? ` (${skippedPaid} ya cobradas/entregadas sin tocar)` : ""
+            }`
+          : skippedPaid
+            ? `Pedido cliente #${id}: sin cambios (líneas ya cobradas/entregadas)`
+            : `Pedido cliente #${id}: sin cambios de precio`,
+    };
+  }
+
+  if (kind === "supplier_order") {
+    const order = await SupplierOrder.findByPk(id, {
+      include: [{ model: SupplierOrderItem, as: "ERP_supplier_order_items" }],
+    });
+    if (!order) {
+      const err = new Error(`Pedido proveedor origen #${id} no encontrado`);
+      err.status = 404;
+      throw err;
+    }
+    let updated = 0;
+    await sequelize.transaction(async (t) => {
+      for (const row of items) {
+        const local = (order.ERP_supplier_order_items || []).find((it) =>
+          matchPeerLine(it, row),
+        );
+        if (!local) continue;
+        const nextPrice = Number(row.price ?? row.unitPrice ?? 0);
+        const nextQty = Number(row.quantity || local.quantity || 0);
+        const priceChanged = Number(local.unitPrice) !== nextPrice;
+        const qtyChanged = Number(local.quantity) !== nextQty;
+        if (!priceChanged && !qtyChanged) continue;
+        await local.update(
+          {
+            unitPrice: nextPrice,
+            quantity: nextQty > 0 ? nextQty : local.quantity,
+          },
+          { transaction: t },
+        );
+        updated += 1;
+      }
+      if (updated > 0) {
+        const noteTag = `[peer-revision:${String(sourceApp || "app").toLowerCase()}]`;
+        const notes = String(order.notes || "");
+        await order.update(
+          {
+            notes: notes.includes(noteTag)
+              ? notes
+              : [notes, noteTag, "Precios actualizados desde sistema enlazado"]
+                  .filter(Boolean)
+                  .join(" · "),
+          },
+          { transaction: t },
+        );
+      }
+    });
+    return {
+      originKind: kind,
+      originOrderId: id,
+      updated: updated > 0,
+      unchanged: updated === 0,
+      updatedLines: updated,
+      peerAcceptStatus: order.peerAcceptStatus || "accepted",
+      message:
+        updated > 0
+          ? `Pedido proveedor #${id}: ${updated} línea(s) con precio/cantidad actualizados`
+          : `Pedido proveedor #${id}: sin cambios de precio`,
+    };
+  }
+
+  const err = new Error("originKind inválido (client_order | supplier_order)");
+  err.status = 400;
+  throw err;
 }

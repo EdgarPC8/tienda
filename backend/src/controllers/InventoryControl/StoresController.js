@@ -4,9 +4,19 @@ import fs from "fs";
 import path from "path";
 import fsp from "fs/promises";
 import fileDirName from "../../libs/file-dirname.js";
-import { mediaSubfolder } from "../../services/appSettingsService.js";
-import { Store } from "../../models/Inventory.js";
+import {
+  mediaSubfolder,
+  getAppSettingsSync,
+  isMultiStockEnabled,
+} from "../../services/appSettingsService.js";
+import { Store, InventoryBatch, StoreProduct } from "../../models/Inventory.js";
+import { StoreStock } from "../../models/StoreStock.js";
+import { CashRegister } from "../../models/CashRegister.js";
+import { CashShift } from "../../models/CashShift.js";
+import { RecurringExpenseTemplate } from "../../models/Finance.js";
+import { sequelize } from "../../database/connection.js";
 import { notifyOk, notifyFail } from "../../services/notifyRaptorSolutions.js";
+import { syncProductStockFromStores } from "../../services/storeStockService.js";
 
 const { __dirname } = fileDirName(import.meta);
 
@@ -227,6 +237,61 @@ export const updateStore = async (req, res) => {
       "isActive" in updates ? updates.isActive : row.isActive !== false && row.isActive !== 0;
     if (!nextActive) {
       updates.isVisible = false;
+      const principalId = getAppSettingsSync()?.principalStoreId ?? null;
+      if (principalId != null && Number(principalId) === Number(id)) {
+        notifyFail(
+          "store.update_failed",
+          "No se puede desactivar el local enlazado en Configuración → Local",
+          { req, httpStatus: 409, extra: { storeId: id, reason: "principal_store" } },
+        );
+        return res.status(409).json({
+          message:
+            "Este local está enlazado en Configuración → Local (SRI). No se puede desactivar ni ocultar. Cambiá el enlace ahí antes.",
+        });
+      }
+      // Modo un solo local: no dejar el sistema sin ninguna sucursal propia activa
+      if (!isMultiStockEnabled()) {
+        const otherPropia = await Store.count({
+          where: {
+            id: { [Op.ne]: id },
+            locationKind: "propia",
+            isActive: true,
+          },
+        });
+        if (row.locationKind === "propia" && otherPropia === 0) {
+          notifyFail(
+            "store.update_failed",
+            "Debe quedar al menos una sucursal propia activa",
+            { req, httpStatus: 409, extra: { storeId: id, reason: "last_propia" } },
+          );
+          return res.status(409).json({
+            message:
+              "En modo un solo local debe quedar al menos una sucursal propia activa (turno y caja).",
+          });
+        }
+      }
+    }
+
+    // Local enlazado: tampoco permitir solo ocultarlo (isVisible=false) si sigue activo
+    if ("isVisible" in updates && updates.isVisible === false) {
+      const principalId = getAppSettingsSync()?.principalStoreId ?? null;
+      const stayingActive =
+        "isActive" in updates ? updates.isActive : row.isActive !== false && row.isActive !== 0;
+      if (
+        stayingActive &&
+        principalId != null &&
+        Number(principalId) === Number(id)
+      ) {
+        notifyFail(
+          "store.update_failed",
+          "No se puede ocultar el local enlazado en Configuración → Local",
+          { req, httpStatus: 409, extra: { storeId: id, reason: "principal_visible" } },
+        );
+        return res.status(409).json({
+          message:
+            "El local enlazado en Configuración → Local debe permanecer visible. Los demás sí se pueden ocultar.",
+        });
+      }
     }
 
     if ("name" in updates && updates.name != null) updates.name = String(updates.name).trim();
@@ -322,27 +387,194 @@ export const getStoreById = async (req, res) => {
 
 export const deleteStore = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = Number(req.params.id);
+    const transferToStoreIdRaw =
+      req.body?.transferToStoreId ?? req.query?.transferToStoreId ?? null;
+    const transferToStoreId =
+      transferToStoreIdRaw != null && transferToStoreIdRaw !== ""
+        ? Number(transferToStoreIdRaw)
+        : null;
+
     const row = await Store.findByPk(id);
     if (!row) {
       notifyFail("store.delete_failed", `Store #${id} no encontrado`, { req, httpStatus: 404 });
       return res.status(404).json({ message: "Store no encontrado" });
     }
 
-    if (row.imageUrl) {
-      const used = await isImageInUseElsewhere(row.imageUrl, row.id);
-      if (!used) safeUnlink(imagePath(row.imageUrl));
+    const principalStoreId = getAppSettingsSync()?.principalStoreId ?? null;
+    const isPrincipal =
+      principalStoreId != null && Number(principalStoreId) === Number(id);
+
+    const [stockRows, stockQty, openShifts, registers, recurring, productsLinked, otherInventory] =
+      await Promise.all([
+        StoreStock.count({ where: { storeId: id } }),
+        StoreStock.sum("quantity", { where: { storeId: id } }),
+        CashShift.count({ where: { storeId: id, status: "open" } }),
+        CashRegister.count({ where: { storeId: id } }),
+        RecurringExpenseTemplate.count({ where: { storeId: id } }),
+        StoreProduct.count({ where: { storeId: id } }),
+        Store.findAll({
+          where: {
+            id: { [Op.ne]: id },
+            locationKind: { [Op.in]: ["propia", "bodega"] },
+            isActive: true,
+          },
+          attributes: ["id", "name", "locationKind"],
+          order: [["id", "ASC"]],
+          limit: 20,
+        }),
+      ]);
+
+    const qty = Number(stockQty) || 0;
+    const blockers = [];
+    if (isPrincipal) {
+      blockers.push({
+        code: "principal",
+        message:
+          "Es el local vinculado a Facturación SRI. Cambialo en Configuración → Local antes de eliminarlo.",
+      });
+    }
+    if (openShifts > 0) {
+      blockers.push({
+        code: "open_shift",
+        message: `Tiene ${openShifts} turno(s) de caja abierto(s). Cerralos primero.`,
+      });
+    }
+    if (qty > 0 && !(Number.isFinite(transferToStoreId) && transferToStoreId > 0)) {
+      blockers.push({
+        code: "stock",
+        message: `Tiene stock (${qty % 1 === 0 ? qty : qty.toFixed(2)} uds). Elegí a qué local pasarlo.`,
+      });
+    }
+    if (otherInventory.length === 0 && (qty > 0 || stockRows > 0)) {
+      blockers.push({
+        code: "last_inventory",
+        message: "No hay otro local activo (propia/bodega) para recibir el stock.",
+      });
     }
 
-    await row.destroy();
-    notifyOk("store.deleted", `Local #${id}`, { storeId: id });
-    res.json({ message: "Store eliminado" });
+    // Enlaces informativos (se pueden limpiar al borrar si hay destino o están en 0)
+    const links = [];
+    if (stockRows > 0) links.push(`${stockRows} fila(s) de stock`);
+    if (registers > 0) links.push(`${registers} caja(s) POS`);
+    if (recurring > 0) links.push(`${recurring} egreso(s) recurrente(s)`);
+    if (productsLinked > 0) links.push(`${productsLinked} producto(s) asignado(s)`);
+
+    if (blockers.length) {
+      notifyFail("store.delete_failed", blockers[0].message, {
+        req,
+        httpStatus: 409,
+        extra: { storeId: id, blockers },
+      });
+      return res.status(409).json({
+        message: blockers.map((b) => b.message).join(" "),
+        blockers,
+        links,
+        transferCandidates: otherInventory,
+      });
+    }
+
+    const targetId =
+      Number.isFinite(transferToStoreId) && transferToStoreId > 0
+        ? transferToStoreId
+        : otherInventory[0]?.id || null;
+
+    if (targetId && Number(targetId) === Number(id)) {
+      return res.status(400).json({ message: "El local destino no puede ser el mismo." });
+    }
+
+    if (qty > 0 && !targetId) {
+      return res.status(409).json({
+        message: "Elegí un local destino para pasar el stock antes de eliminar.",
+        transferCandidates: otherInventory,
+      });
+    }
+
+    await sequelize.transaction(async (t) => {
+      if (targetId && (qty > 0 || stockRows > 0)) {
+        const stocks = await StoreStock.findAll({
+          where: { storeId: id },
+          transaction: t,
+        });
+        const touchedProducts = new Set();
+        for (const s of stocks) {
+          const q = Number(s.quantity) || 0;
+          touchedProducts.add(s.productId);
+          if (q === 0) {
+            await s.destroy({ transaction: t });
+            continue;
+          }
+          const [dest] = await StoreStock.findOrCreate({
+            where: { storeId: targetId, productId: s.productId },
+            defaults: { quantity: 0 },
+            transaction: t,
+          });
+          await dest.update(
+            { quantity: (Number(dest.quantity) || 0) + q },
+            { transaction: t },
+          );
+          await s.destroy({ transaction: t });
+        }
+        await InventoryBatch.update(
+          { storeId: targetId },
+          { where: { storeId: id }, transaction: t },
+        );
+        for (const productId of touchedProducts) {
+          await syncProductStockFromStores(productId, { transaction: t });
+        }
+      } else {
+        await StoreStock.destroy({ where: { storeId: id }, transaction: t });
+        await InventoryBatch.update(
+          { storeId: null },
+          { where: { storeId: id }, transaction: t },
+        );
+      }
+
+      await StoreProduct.destroy({ where: { storeId: id }, transaction: t });
+      await CashRegister.destroy({ where: { storeId: id }, transaction: t });
+      await RecurringExpenseTemplate.update(
+        { storeId: null },
+        { where: { storeId: id }, transaction: t },
+      );
+      // Historial de turnos: soltar FK sin borrar movimientos
+      await CashShift.update(
+        { storeId: null },
+        { where: { storeId: id }, transaction: t },
+      );
+
+      if (row.imageUrl) {
+        const used = await isImageInUseElsewhere(row.imageUrl, row.id);
+        if (!used) safeUnlink(imagePath(row.imageUrl));
+      }
+
+      await row.destroy({ transaction: t });
+    });
+
+    notifyOk("store.deleted", `Local #${id}`, {
+      storeId: id,
+      transferToStoreId: targetId || null,
+    });
+    res.json({
+      message: targetId
+        ? "Local eliminado. El stock se pasó al local elegido."
+        : "Local eliminado",
+      transferToStoreId: targetId || null,
+    });
   } catch (error) {
+    console.error("deleteStore", error);
+    const msg =
+      error?.original?.sqlMessage ||
+      error?.message ||
+      "Error al eliminar Store";
     notifyFail("store.delete_failed", `Error al eliminar Store #${req.params.id}`, {
       error,
       req,
       httpStatus: 500,
     });
-    res.status(500).json({ message: "Error al eliminar Store", error });
+    res.status(500).json({
+      message:
+        "No se pudo eliminar el local. Puede estar enlazado a stock, turnos o cajas. Probá pasar el stock a otro local o desactivarlo.",
+      detail: msg,
+    });
   }
 };

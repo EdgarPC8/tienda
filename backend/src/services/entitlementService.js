@@ -79,11 +79,19 @@ function featureIsUnlocked(status) {
 }
 
 /**
- * Side-effects: Store/Tienda no soportan multistock (solo EdDeli vía gestor).
- * Siempre fuerza multiStockEnabled=false.
+ * Side-effects: el gestor BLOQUEA / DESBLOQUEA; no enciende la opción por el cliente.
+ * - multi_stock bloqueado → fuerza multiStockEnabled=false
+ * - multi_stock desbloqueado → no toca el flag (el cliente lo activa en Configuración)
  */
-async function applyFeatureSideEffects(_features) {
-  await updateAppSettings({ multiStockEnabled: false });
+async function applyFeatureSideEffects(features) {
+  if (!Array.isArray(features)) return;
+
+  const multi = features.find((f) => f && f.key === "multi_stock");
+  if (!multi) return;
+
+  if (!featureIsUnlocked(multi.status)) {
+    await updateAppSettings({ multiStockEnabled: false });
+  }
 }
 
 export async function getEntitlementResponse() {
@@ -146,7 +154,7 @@ export async function saveEntitlement(rawPayload, source = "gestor_push") {
   return getEntitlementResponse();
 }
 
-/** Al arrancar: Store/Tienda siempre un solo local. */
+/** Al arrancar: las 3 apps usan un solo local (multistock off). */
 export async function enforceEntitlementSideEffectsOnBoot() {
   try {
     await updateAppSettings({ multiStockEnabled: false });

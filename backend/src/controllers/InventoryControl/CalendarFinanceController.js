@@ -417,6 +417,58 @@ function shapePosSaleDetail(o) {
  * GET /finance/calendar-year?year=2026
  * Totales por mes del año (misma lógica que el calendario diario).
  */
+/**
+ * GET /finance/calendar-range?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+ * Totales por mes dentro del rango (uno o ambos extremos).
+ */
+export const getCalendarRangeSummary = async (req, res) => {
+  try {
+    const startRaw = req.query.startDate;
+    const endRaw = req.query.endDate;
+    if (!startRaw && !endRaw) {
+      return res.status(400).json({ message: "Indica startDate y/o endDate (YYYY-MM-DD)" });
+    }
+
+    let start;
+    let end;
+    if (startRaw && isValidDate(parseISO(String(startRaw).slice(0, 10)))) {
+      start = startOfDay(parseISO(String(startRaw).slice(0, 10)));
+    } else {
+      start = startOfDay(new Date(2000, 0, 1));
+    }
+    if (endRaw && isValidDate(parseISO(String(endRaw).slice(0, 10)))) {
+      const endD = parseISO(String(endRaw).slice(0, 10));
+      end = endOfDay(endD < start ? start : endD);
+    } else {
+      end = endOfDay(new Date());
+    }
+    if (end < start) end = endOfDay(start);
+
+    const [orders, expenses] = await Promise.all([
+      fetchOrdersInRange(start, end, { light: true }),
+      fetchExpensesInRange(start, end),
+    ]);
+
+    const days = {};
+    addOrdersToDays(days, orders);
+    addPosSalesToDays(days, orders);
+    await applyCalendarIncomeDays(days, start, end);
+    addExpensesToDays(days, expenses);
+
+    const months = aggregateDaysToMonths(days);
+
+    return res.json({
+      startDate: format(start, "yyyy-MM-dd"),
+      endDate: format(end, "yyyy-MM-dd"),
+      months,
+      totals: sumYearTotals(months),
+    });
+  } catch (error) {
+    console.error("getCalendarRangeSummary:", error);
+    return res.status(500).json({ message: "Error al cargar resumen del período" });
+  }
+};
+
 export const getCalendarYearSummary = async (req, res) => {
   try {
     const year = Number(req.query.year);

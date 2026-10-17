@@ -48,6 +48,7 @@ import {
   pushSupplierOrderToPeerHandler,
   getPeerOrderStatusHandler,
   applyPeerAcceptStatusHandler,
+  applyPeerOriginRevisionHandler,
   updateCustomerPeerLinkHandler,
   getPeerAcceptOrderHandler,
   acceptPeerSupplierOrderHandler,
@@ -63,6 +64,7 @@ import {
 } from "../controllers/InventoryControl/SupplierProductCodeController.js";
 import {
   getSupplierOrders,
+  checkSupplierInvoiceDuplicate,
   createSupplierOrder,
   updateSupplierOrder,
   addSupplierOrderItem,
@@ -208,6 +210,7 @@ router.post("/suppliers/:id/peer-secret", isAuthenticated, generateSupplierPeerS
 
 router.post("/peer-sync/supplier-orders", receivePeerSupplierOrderHandler);
 router.post("/peer-sync/customer-orders", receivePeerCustomerOrderHandler);
+router.post("/peer-sync/origin-revision", applyPeerOriginRevisionHandler);
 router.get("/peer-sync/status", getPeerOrderStatusHandler);
 router.post("/peer-sync/accept-status", applyPeerAcceptStatusHandler);
 router.put("/customers/:id/peer-link", isAuthenticated, updateCustomerPeerLinkHandler);
@@ -245,6 +248,7 @@ router.get("/supplier-product-codes/resolve", isAuthenticated, resolveSupplierPr
 router.post("/supplier-product-codes/upsert", isAuthenticated, upsertSupplierProductCodes);
 router.delete("/supplier-product-codes/:id", isAuthenticated, deleteSupplierProductCode);
 
+router.get("/supplier-orders/check-invoice", isAuthenticated, checkSupplierInvoiceDuplicate);
 router.get("/supplier-orders", isAuthenticated, getSupplierOrders);
 router.post("/supplier-orders", isAuthenticated, createSupplierOrder);
 router.post("/supplier-orders/:id/items", isAuthenticated, addSupplierOrderItem);

@@ -1,8 +1,8 @@
 import { Op } from "sequelize";
 import { sequelize } from "../database/connection.js";
-import { InventoryProduct, Store } from "../models/Inventory.js";
+import { InventoryBatch, InventoryProduct, Store } from "../models/Inventory.js";
 import { StoreStock } from "../models/StoreStock.js";
-import { getAppSettingsSync, isMultiStockEnabled } from "./appSettingsService.js";
+import { isMultiStockEnabled } from "./appSettingsService.js";
 
 const BODEGA_NAME = "Bodega";
 

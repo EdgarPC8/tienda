@@ -1,11 +1,6 @@
 import { verifyJWT, getHeaderToken } from "../../libs/jwt.js";
 
-import {
-  InventoryMovement,
-  InventoryProduct,
-  InventoryUnit,
-  Store,
-} from "../../models/Inventory.js";
+import { InventoryMovement, InventoryProduct, Store } from "../../models/Inventory.js";
 import { Customer, Order, OrderItem } from "../../models/Orders.js";
 import { Income, ItemGroupItem, Payment } from "../../models/Finance.js";
 import { findOpenShiftForAccount } from "./ShiftController.js";
@@ -793,7 +788,6 @@ export const getPosSales = async (req, res) => {
         remoteSyncStatus: order.remoteSyncStatus || null,
         remoteSyncSupplierOrderId: order.remoteSyncSupplierOrderId || null,
         remoteSyncApp: order.remoteSyncApp || null,
-        remotePeerAcceptStatus: order.remotePeerAcceptStatus || null,
         items,
         subtotal: inv?.subtotal != null ? Number(inv.subtotal) : Number(subtotal.toFixed(2)),
         ice: Number(Number(ice || 0).toFixed(2)),
@@ -1348,14 +1342,6 @@ export const markItemAsPaid = async (req, res) => {
 
       if (!item) return { status: 404, body: { message: "Item not found" } };
       if (item.paidAt) return { status: 400, body: { message: "Este ítem ya está pagado" } };
-      if (item.ERP_order?.peerAcceptStatus === "pending_accept") {
-        return {
-          status: 400,
-          body: {
-            message: "Este pedido llegó del sistema enlazado: aceptalo y enlazá los productos antes de cobrarlo o marcarlo como pagado",
-          },
-        };
-      }
 
       // ✅ Cobrar por vendido (soldQty). Si no existe soldQty, cobra por quantity (compat).
       const billableQty = getBillableQty(item);
@@ -1781,16 +1767,6 @@ export const markOrderAsPaid = async (req, res) => {
       });
       return res.status(400).json({ message: 'El pedido ya está marcado como pagado' });
     }
-    if (order.peerAcceptStatus === "pending_accept") {
-      notifyFail("order.mark_paid_failed", "Pedido enlazado pendiente de aceptación", {
-        req,
-        httpStatus: 400,
-        extra: { orderId: id },
-      });
-      return res.status(400).json({
-        message: "Este pedido llegó del sistema enlazado: aceptalo y enlazá los productos antes de cobrarlo o marcarlo como pagado",
-      });
-    }
 
     const now = new Date();
     const accountId = req.user?.accountId ?? null;
@@ -2198,19 +2174,6 @@ export const updateOrderStatus = async (req, res) => {
     if (!order) {
       notifyFail("order.status_change_failed", `Pedido #${id} no encontrado`, { req, httpStatus: 404 });
       return res.status(404).json({ message: 'Pedido no encontrado' });
-    }
-    if (
-      order.peerAcceptStatus === "pending_accept" &&
-      (status === "pagado" || status === "entregado")
-    ) {
-      notifyFail("order.status_change_failed", "Pedido enlazado pendiente de aceptación", {
-        req,
-        httpStatus: 400,
-        extra: { orderId: id },
-      });
-      return res.status(400).json({
-        message: "Este pedido llegó del sistema enlazado: aceptalo y enlazá los productos antes de cobrarlo o marcarlo como pagado",
-      });
     }
 
     order.status = status;

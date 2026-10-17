@@ -6,6 +6,7 @@ import {
   collectRecipeIngredientPriceAlerts,
   applyIngredientPriceAlerts,
 } from "../../services/genericIngredientCostService.js";
+import { quoteGramLine } from "../../services/productionGramsService.js";
 
 const safeDiv = (a, b) => (b > 0 ? a / b : 0);
 
@@ -126,6 +127,7 @@ export const getRecipeCosting = async (req, res) => {
       });
 
     const recipeExistsCache = new Map();
+    const costWarnings = [];
     const productHasRecipe = async (productId) => {
       if (recipeExistsCache.has(productId)) return recipeExistsCache.get(productId);
       const lines = await fetchRecipe(productId);
@@ -321,19 +323,36 @@ export const getRecipeCosting = async (req, res) => {
               gramosUsados = baseQty * std;
             }
 
-            const resolved = await resolveIngredientUnitCost(raw);
-            const precioPorGramo =
-              resolved.unitCost > 0
-                ? resolved.unitCost
-                : safeDiv(Number(raw.price || 0), Number(raw.netWeight || 0));
+            const gramsQuote = isGr ? await quoteGramLine(raw, baseQty) : null;
+            const resolved = gramsQuote
+              ? {
+                  unitCost: gramsQuote.pricePerGram,
+                  source: gramsQuote.missingPrice
+                    ? "sin-precio-proveedor"
+                    : `proveedor:${gramsQuote.sourceName}`,
+                }
+              : await resolveIngredientUnitCost(raw);
+            if (gramsQuote?.missingPrice) {
+              costWarnings.push(
+                `${gramsQuote.sourceName} no tiene precio de proveedor. El costo de ${nombre} no se calcula como $0,00.`,
+              );
+            }
+            const precioPorGramo = gramsQuote?.missingPrice
+              ? null
+              : gramsQuote
+                ? gramsQuote.pricePerGram
+                : resolved.unitCost > 0
+                  ? resolved.unitCost
+                  : safeDiv(Number(raw.price || 0), Number(raw.netWeight || 0));
             const precioNeto = Number(raw.price || 0);
             const pesoNetoGramos = Number(raw.netWeight || 0);
-            const valor = precioPorGramo * gramosUsados;
-
-            node.cost.subtotalInsumos += valor;
+            const valor = precioPorGramo == null ? null : precioPorGramo * gramosUsados;
+            if (valor != null) {
+              node.cost.subtotalInsumos += valor;
+              node.directSubtotal.totalValor += valor;
+            }
             node.cost.totalPesoEnMasaGr += gramosUsados;
             node.directSubtotal.totalPesoEnMasaGr += gramosUsados;
-            node.directSubtotal.totalValor += valor;
 
             node.directItems.push({
               nombre,
@@ -344,7 +363,7 @@ export const getRecipeCosting = async (req, res) => {
               pesoNeto: pesoNetoGramos,
               pesoEnMasa: gramosUsados,
               precioUnitBase: precioPorGramo,
-              valor: Number(valor.toFixed(6)),
+              valor: valor == null ? null : Number(valor.toFixed(6)),
               isQuantityInGrams: isGr,
               standardWeightGrams: Number(raw.standardWeightGrams || 0),
               costSource: resolved.source,
@@ -360,7 +379,7 @@ export const getRecipeCosting = async (req, res) => {
               pesoNeto: pesoNetoGramos,
               pesoEnMasa: gramosUsados,
               precioUnitBase: precioPorGramo,
-              valor: Number(valor.toFixed(6)),
+              valor: valor == null ? null : Number(valor.toFixed(6)),
               isQuantityInGrams: isGr,
               standardWeightGrams: Number(raw.standardWeightGrams || 0),
               notas: isGr
@@ -426,14 +445,16 @@ export const getRecipeCosting = async (req, res) => {
     const subtotalInsumos = Number(tree.cost.subtotalInsumos.toFixed(2));
     const subtotalMateriales = Number(tree.cost.subtotalMateriales.toFixed(2));
     const subtotalTodos = Number((subtotalInsumos + subtotalMateriales).toFixed(2));
+    const sinCostoConocido = costWarnings.length > 0 && subtotalTodos <= 0;
 
-    const extras = subtotalInsumos * extrasPercent;
-    const baseConExtras = subtotalInsumos + extras;
-    const labor = baseConExtras * laborPercent;
-    const totalLote = baseConExtras + labor;
+    const extras = sinCostoConocido ? null : subtotalInsumos * extrasPercent;
+    const baseConExtras = sinCostoConocido ? null : subtotalInsumos + extras;
+    const labor = sinCostoConocido ? null : baseConExtras * laborPercent;
+    const totalLote = sinCostoConocido ? null : baseConExtras + labor;
 
-    const costoUnitario =
-      effectiveProducedQty > 0
+    const costoUnitario = sinCostoConocido
+      ? null
+      : effectiveProducedQty > 0
         ? Number((totalLote / effectiveProducedQty).toFixed(4))
         : 0;
 
@@ -481,9 +502,9 @@ export const getRecipeCosting = async (req, res) => {
         }
 
         const costoPorUnidadPadre =
-          unidadesPosiblesParent > 0
+          !sinCostoConocido && unidadesPosiblesParent > 0 && totalLote != null
             ? Number((totalLote / unidadesPosiblesParent).toFixed(4))
-            : 0;
+            : null;
 
         const parentPrice = Number(parent.price || 0);
         const parentDistributorPrice = Number(parent.distributorPrice || 0);
@@ -503,11 +524,11 @@ export const getRecipeCosting = async (req, res) => {
           parentPrice,
           parentDistributorPrice,
           gananciaVsDistribuidor:
-            parentDistributorPrice > 0
+            parentDistributorPrice > 0 && costoPorUnidadPadre != null
               ? Number((parentDistributorPrice - costoPorUnidadPadre).toFixed(4))
               : null,
           gananciaVsConsumidor:
-            parentPrice > 0
+            parentPrice > 0 && costoPorUnidadPadre != null
               ? Number((parentPrice - costoPorUnidadPadre).toFixed(4))
               : null,
           notaConsumo: `${gramosRawPorUnidadParent.toFixed(2)} g de ${product.name} por 1 ${parent.name}`,
@@ -519,9 +540,11 @@ export const getRecipeCosting = async (req, res) => {
     const precioConsumidor = Number(product.price || 0);
     const precioDistribuidor = Number(product.distributorPrice || 0);
     const gananciaConsumidor =
-      precioConsumidor > 0 ? Number((precioConsumidor - costoUnitario).toFixed(4)) : null;
+      precioConsumidor > 0 && costoUnitario != null
+        ? Number((precioConsumidor - costoUnitario).toFixed(4))
+        : null;
     const gananciaDistribuidor =
-      precioDistribuidor > 0
+      precioDistribuidor > 0 && costoUnitario != null
         ? Number((precioDistribuidor - costoUnitario).toFixed(4))
         : null;
 
@@ -544,15 +567,15 @@ export const getRecipeCosting = async (req, res) => {
         unidad: product.unitId === 1 ? "unidad" : "gramos",
       },
       totales: {
-        subtotalInsumos,
-        subtotalMateriales,
-        subtotal: subtotalTodos,
+        subtotalInsumos: sinCostoConocido ? null : subtotalInsumos,
+        subtotalMateriales: sinCostoConocido ? null : subtotalMateriales,
+        subtotal: sinCostoConocido ? null : subtotalTodos,
         extrasPercentInt: extrasPctInt,
-        extras: Number(extras.toFixed(2)),
-        baseConExtras: Number(baseConExtras.toFixed(2)),
+        extras: extras == null ? null : Number(extras.toFixed(2)),
+        baseConExtras: baseConExtras == null ? null : Number(baseConExtras.toFixed(2)),
         laborPercentInt: laborPctInt,
-        labor: Number(labor.toFixed(2)),
-        totalLote: Number(totalLote.toFixed(2)),
+        labor: labor == null ? null : Number(labor.toFixed(2)),
+        totalLote: totalLote == null ? null : Number(totalLote.toFixed(2)),
         producedQty: effectiveProducedQty,
         costoUnitario,
       },
@@ -578,6 +601,7 @@ export const getRecipeCosting = async (req, res) => {
       yieldInfo,
       notas:
         "Extras = % de INSUMOS; Mano de obra = % de (INSUMOS + EXTRAS). Materiales no entran en esa base. Cant. lote en 0 = automático (1 u. o suma de insumos en gramos).",
+      advertencias: [...new Set(costWarnings)],
     };
 
     let ingredientPriceAlerts = [];

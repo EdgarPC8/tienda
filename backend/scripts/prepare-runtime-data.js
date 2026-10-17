@@ -1,10 +1,9 @@
 /**
  * Preparación de datos / migraciones de runtime (NO es sync de esquema).
  * - Cajas por defecto
- * - Local Bodega o local único (según multiStock)
+ * - Local Bodega / local único
  * - Migrar stock global → bodega (si aplica)
  * - Fix FK expense referenceId
- * - Fix multistock off
  *
  * Uso: npm run db:prepare
  * Antes conviene: npm run db:sync
@@ -15,10 +14,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { sequelize } from "../src/database/connection.js";
 import "../src/database/registerEdDeliModels.js";
-import { loadAppSettings, getAppSettingsSync } from "../src/services/appSettingsService.js";
 import {
   ensureBodegaStore,
-  ensureSingleLocalOwnStore,
   migrateGlobalStockToBodega,
 } from "../src/services/storeStockService.js";
 import { seedDefaultCashRegistersForOwnStores } from "../src/models/CashRegister.js";
@@ -45,15 +42,9 @@ try {
   console.log("🔧 Preparando datos de runtime (bodega / cajas / stock / FK)…");
 
   await seedDefaultCashRegistersForOwnStores();
-  await loadAppSettings();
-  if (getAppSettingsSync()?.multiStockEnabled) {
-    await ensureBodegaStore();
-    await migrateGlobalStockToBodega();
-  } else {
-    await ensureSingleLocalOwnStore();
-  }
+  await ensureBodegaStore();
+  await migrateGlobalStockToBodega();
   await runScript("fix-expense-reference-fk.js");
-  await runScript("fix-multistock-off.js");
 
   console.log("✅ db:prepare OK");
   process.exit(0);

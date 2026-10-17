@@ -193,6 +193,7 @@ export async function executeOpenPresentation({
       name: presentation.name,
       stockAfter: round2(num(presentation.stock)),
     },
+    /** Compat respuesta 1 destino */
     target: targetResults[0] || null,
     targets: targetResults,
     storeId: stockStoreId,
@@ -201,6 +202,10 @@ export async function executeOpenPresentation({
   };
 }
 
+/**
+ * Si falta stock del producto suelto, abre pacas que lo contengan hasta cubrir el déficit.
+ * @returns {{ packsOpened: number, unitsGained: number }}
+ */
 export async function autoOpenPacksToCoverProduct({
   productId,
   deficitQty,

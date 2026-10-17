@@ -152,8 +152,6 @@ async function ensureGenericStoredInGrams(payload, existing = null) {
 }
 
 
-
-
 // controllers/ProductController.js (solo createProduct)
 // ✅ Copia y pega tal cual
 
@@ -786,6 +784,10 @@ export const deleteProduct = async (req, res) => {
   }
 };
 
+/**
+ * Resumen de ventas por producto (OrderItem) para la pestaña Revisión del catálogo.
+ * Query: days (0 = todo el historial), default 365.
+ */
 export const getProductSalesSummary = async (req, res) => {
   try {
     const daysRaw = req.query.days;

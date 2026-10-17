@@ -5,12 +5,233 @@ import { startOfDay, endOfDay, subMonths, format, addDays, differenceInDays, par
 
 import { InventoryMovement, InventoryProduct } from "../../models/Inventory.js";
 
-import { Income, Expense } from "../../models/Finance.js";
+import { Income, Expense, Payment } from "../../models/Finance.js";
 import {
   isWalkInPosOrder,
   walkInPosOrderExcludeWhere,
 } from "../../utils/posOrderUtils.js";
 import { buildFinanceDateWhere, buildFinanceDateColumnWhere } from "../../utils/financeDateUtils.js";
+import {
+  computePeriodReceivables,
+  computeStoreInventorySnapshot,
+  computeBusinessIndicatorsReport,
+  parseStoreIdsList,
+  resolveOrderItemStoreId,
+} from "../../services/financialReportService.js";
+import { CashShift } from "../../models/CashShift.js";
+import { Store } from "../../models/Inventory.js";
+
+const ORDER_INCOME_REF_TYPES = new Set(["order_item", "group_payment"]);
+
+async function enrichIncomeLinesForReport(incomeRows) {
+  if (!incomeRows?.length) return [];
+
+  const orderItemIds = [
+    ...new Set(
+      incomeRows
+        .filter((r) => r.referenceType === "order_item" && r.referenceId != null)
+        .map((r) => Number(r.referenceId))
+        .filter(Boolean),
+    ),
+  ];
+  const paymentIds = [
+    ...new Set(
+      incomeRows
+        .filter((r) => r.referenceType === "group_payment" && r.referenceId != null)
+        .map((r) => Number(r.referenceId))
+        .filter(Boolean),
+    ),
+  ];
+
+  const customerByOrderItemId = new Map();
+  const storeByOrderItemId = new Map();
+  if (orderItemIds.length) {
+    const items = await OrderItem.findAll({
+      where: { id: { [Op.in]: orderItemIds } },
+      attributes: ["id", "deliveredStoreId"],
+      include: [
+        {
+          model: Order,
+          as: "ERP_order",
+          attributes: ["customerId", "shiftId"],
+          include: [
+            { model: Customer, as: "ERP_customer", attributes: ["id", "name"] },
+            {
+              model: CashShift,
+              as: "shift",
+              attributes: ["storeId"],
+              required: false,
+              include: [
+                {
+                  model: Store,
+                  as: "store",
+                  attributes: ["id", "name", "locationKind"],
+                  required: false,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const deliveredStoreIds = [
+      ...new Set(
+        items
+          .map((it) => Number(it.deliveredStoreId))
+          .filter(Boolean),
+      ),
+    ];
+    const deliveredStores = deliveredStoreIds.length
+      ? await Store.findAll({
+          where: { id: { [Op.in]: deliveredStoreIds } },
+          attributes: ["id", "name", "locationKind"],
+          raw: true,
+        })
+      : [];
+    const storeById = new Map(
+      deliveredStores.map((s) => [Number(s.id), s]),
+    );
+    for (const it of items) {
+      const customer = it.ERP_order?.ERP_customer;
+      if (customer) {
+        customerByOrderItemId.set(it.id, {
+          customerId: customer.id,
+          customerName: customer.name,
+        });
+      }
+      const storeId = resolveOrderItemStoreId(it);
+      if (storeId) {
+        const shiftStore = it.ERP_order?.shift?.store;
+        const deliveredStore = storeById.get(Number(it.deliveredStoreId));
+        const store = deliveredStore || shiftStore;
+        storeByOrderItemId.set(it.id, {
+          storeId,
+          storeName: store?.name || `Local #${storeId}`,
+          storeLocationKind: store?.locationKind || null,
+        });
+      }
+    }
+  }
+
+  const customerByPaymentId = new Map();
+  const storeByCustomerId = new Map();
+  if (paymentIds.length) {
+    const payments = await Payment.findAll({
+      where: { id: { [Op.in]: paymentIds } },
+      attributes: ["id", "customerId"],
+      raw: true,
+    });
+    const customerIds = [...new Set(payments.map((p) => Number(p.customerId)).filter(Boolean))];
+    const customers = customerIds.length
+      ? await Customer.findAll({
+          where: { id: { [Op.in]: customerIds } },
+          attributes: ["id", "name"],
+          raw: true,
+        })
+      : [];
+    const customerById = new Map(customers.map((c) => [Number(c.id), c]));
+    for (const p of payments) {
+      const customer = customerById.get(Number(p.customerId));
+      if (customer) {
+        customerByPaymentId.set(Number(p.id), {
+          customerId: customer.id,
+          customerName: customer.name,
+        });
+      }
+    }
+
+    const paymentCustomerIds = [...customerById.keys()];
+    if (paymentCustomerIds.length) {
+      const customerItems = await OrderItem.findAll({
+        attributes: ["id", "deliveredStoreId"],
+        include: [
+          {
+            model: Order,
+            as: "ERP_order",
+            attributes: ["customerId"],
+            where: { customerId: { [Op.in]: paymentCustomerIds } },
+            include: [
+              {
+                model: CashShift,
+                as: "shift",
+                attributes: ["storeId"],
+                required: false,
+                include: [
+                  {
+                    model: Store,
+                    as: "store",
+                    attributes: ["id", "name", "locationKind"],
+                    required: false,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        order: [["id", "DESC"]],
+      });
+      for (const it of customerItems) {
+        const customerId = Number(it.ERP_order?.customerId);
+        if (!customerId || storeByCustomerId.has(customerId)) continue;
+        const storeId = resolveOrderItemStoreId(it);
+        if (!storeId) continue;
+        const shiftStore = it.ERP_order?.shift?.store;
+        storeByCustomerId.set(customerId, {
+          storeId,
+          storeName: shiftStore?.name || `Local #${storeId}`,
+          storeLocationKind: shiftStore?.locationKind || null,
+        });
+      }
+    }
+  }
+
+  return incomeRows.map((r) => {
+    const base = {
+      id: r.id,
+      date: r.date,
+      concept: r.concept,
+      category: r.category ?? "Sin categoría",
+      amount: Number(Number(r.amount || 0).toFixed(2)),
+      counterpartyName: r.counterpartyName,
+      referenceType: r.referenceType || null,
+      referenceId: r.referenceId != null ? Number(r.referenceId) : null,
+      isOrderIncome: ORDER_INCOME_REF_TYPES.has(r.referenceType),
+      customerId: null,
+      customerName: r.counterpartyName || null,
+      storeId: null,
+      storeName: null,
+      storeLocationKind: null,
+    };
+
+    if (r.referenceType === "order_item" && r.referenceId != null) {
+      const info = customerByOrderItemId.get(Number(r.referenceId));
+      if (info) {
+        base.customerId = info.customerId;
+        base.customerName = info.customerName;
+      }
+      const storeInfo = storeByOrderItemId.get(Number(r.referenceId));
+      if (storeInfo) {
+        base.storeId = storeInfo.storeId;
+        base.storeName = storeInfo.storeName;
+        base.storeLocationKind = storeInfo.storeLocationKind;
+      }
+    } else if (r.referenceType === "group_payment" && r.referenceId != null) {
+      const info = customerByPaymentId.get(Number(r.referenceId));
+      if (info) {
+        base.customerId = info.customerId;
+        base.customerName = info.customerName;
+        const storeInfo = storeByCustomerId.get(Number(info.customerId));
+        if (storeInfo) {
+          base.storeId = storeInfo.storeId;
+          base.storeName = storeInfo.storeName;
+          base.storeLocationKind = storeInfo.storeLocationKind;
+        }
+      }
+    }
+
+    return base;
+  });
+}
 
 export const getExpensesForChart = async (req, res) => {
   try {
@@ -89,6 +310,7 @@ export const getExpensesForChart = async (req, res) => {
       order: [["date", "ASC"]],
     });
 
+    // Enriquecer nombre de producto solo cuando el gasto apunta a un producto de inventario
     const productIds = [
       ...new Set(
         expenses
@@ -155,7 +377,9 @@ export const getOrdersForCharts = async (req, res) => {
     const { start, end } = req.query;
 
     const where = {};
-    if (start || end) {
+    if (!start && !end) {
+      where.createdAt = { [Op.between]: [startOfDay(subMonths(new Date(), 12)), endOfDay(new Date())] };
+    } else if (start || end) {
       const s = start ? startOfDay(parseISO(start)) : undefined;
       const e = end ? endOfDay(parseISO(end)) : undefined;
       if (s && e) where.createdAt = { $between: [s, e] };
@@ -464,27 +688,26 @@ export const getIncomeExpenseBreakdown = async (req, res) => {
       const [incomeRows, expenseRows] = await Promise.all([
         Income.findAll({
           where: commonWhere,
-          attributes: ["id", "date", "concept", "category", "amount", "counterpartyName"],
+          attributes: [
+            "id",
+            "date",
+            "concept",
+            "category",
+            "amount",
+            "counterpartyName",
+            "referenceType",
+            "referenceId",
+          ],
           order: [["date", "DESC"], ["id", "DESC"]],
         }),
         Expense.findAll({
           where: commonWhere,
           attributes: ["id", "date", "concept", "category", "amount", "counterpartyName", "referenceId"],
-          include: [
-            { model: InventoryProduct, as: "ERP_inventory_product", attributes: ["name"], required: false },
-          ],
           order: [["date", "DESC"], ["id", "DESC"]],
         }),
       ]);
 
-      payload.incomeLines = incomeRows.map((r) => ({
-        id: r.id,
-        date: r.date,
-        concept: r.concept,
-        category: r.category ?? "Sin categoría",
-        amount: round2(r.amount),
-        counterpartyName: r.counterpartyName,
-      }));
+      payload.incomeLines = await enrichIncomeLinesForReport(incomeRows);
 
       payload.expenseLines = expenseRows.map((r) => ({
         id: r.id,
@@ -493,7 +716,7 @@ export const getIncomeExpenseBreakdown = async (req, res) => {
         category: r.category ?? "Sin categoría",
         amount: round2(r.amount),
         counterpartyName: r.counterpartyName,
-        productName: r.ERP_inventory_product?.name ?? null,
+        productName: null,
       }));
     }
 
@@ -882,9 +1105,31 @@ export const getOrderAnalytics = async (req, res) => {
   }
 };
 
+export const getFinancialProfitabilityReport = async (req, res) => {
+  try {
+    const { startDate, endDate, storeIds } = req.query || {};
+    const parsedStoreIds = parseStoreIdsList(storeIds);
+    const [receivables, inventory] = await Promise.all([
+      computePeriodReceivables({ startDate, endDate, storeIds: parsedStoreIds }),
+      computeStoreInventorySnapshot({
+        storeIds: parsedStoreIds.length ? parsedStoreIds : undefined,
+        locationKinds: ["propia"],
+      }),
+    ]);
 
-
-import { computeBusinessIndicatorsReport } from "../../services/financialReportService.js";
+    return res.json({
+      range: { startDate: startDate || null, endDate: endDate || null },
+      receivables,
+      inventory,
+    });
+  } catch (error) {
+    console.error("Error en getFinancialProfitabilityReport:", error);
+    return res.status(500).json({
+      message: "Error al obtener reporte de rentabilidad",
+      error: String(error?.message || error),
+    });
+  }
+};
 
 /** GET /finance/business-indicators — tabla de indicadores del reporte financiero. */
 export const getBusinessIndicatorsReport = async (req, res) => {
@@ -900,3 +1145,4 @@ export const getBusinessIndicatorsReport = async (req, res) => {
     });
   }
 };
+

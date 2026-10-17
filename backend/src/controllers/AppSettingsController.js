@@ -7,6 +7,7 @@ import {
 } from "../services/appSettingsService.js";
 import { getTimeStatus } from "../services/timeStatusService.js";
 import { notifyOk, notifyFail } from "../services/notifyRaptorSolutions.js";
+import { getFeatureGate } from "../services/entitlementService.js";
 import { unifyStockToSingleLocal, linkStoreToSriBilling } from "../services/storeStockService.js";
 
 const IANA_TIMEZONE_RE = /^[A-Za-z_]+\/[A-Za-z_]+(?:\/[A-Za-z_]+)?$/;
@@ -112,24 +113,32 @@ export async function putAppSettings(req, res) {
     }
 
     if ("multiStockEnabled" in patch) {
-      // Store/Tienda: un solo local. Multistock solo aplica en EdDeli (gestor).
       const wantOn = asBool(patch.multiStockEnabled, false);
       const currentOn = asBool(getAppSettingsSync()?.multiStockEnabled, false);
+      const isProgrammer = req.user?.loginRol === "Propietario" || req.user?.loginRol === "Programador";
 
-      if (wantOn) {
-        notifyFail(
-          "app.settings_update_failed",
-          "Multistock no disponible en esta instalación",
-          {
-            req,
-            httpStatus: 403,
-            extra: { reason: "multi_stock_not_supported" },
-          },
-        );
-        return res.status(403).json({
-          message:
-            "Esta instalación opera con un solo local. Varios locales (multistock) no está disponible.",
-        });
+      if (wantOn && !currentOn) {
+        const gate = await getFeatureGate("multi_stock");
+        if (gate.present) {
+          const ok =
+            gate.status === "active" ||
+            (gate.status === "developer" && isProgrammer);
+          if (!ok) {
+            notifyFail(
+              "app.settings_update_failed",
+              "Multistock no desbloqueado por el gestor",
+              {
+                req,
+                httpStatus: 403,
+                extra: { reason: "multi_stock_locked", status: gate.status },
+              },
+            );
+            return res.status(403).json({
+              message:
+                "Multistock / varios locales aún no está desbloqueado para esta instalación.",
+            });
+          }
+        }
       }
 
       if (!wantOn && currentOn) {
@@ -166,7 +175,7 @@ export async function putAppSettings(req, res) {
         }
       }
 
-      patch.multiStockEnabled = false;
+      patch.multiStockEnabled = wantOn;
     }
 
     if ("principalStoreId" in b && patch.principalStoreId == null) {

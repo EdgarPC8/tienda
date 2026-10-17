@@ -1,7 +1,6 @@
 import { Supplier, SupplierProductCode } from "../../models/Orders.js";
 import { InventoryProduct } from "../../models/Inventory.js";
 import { notifyOk, notifyFail } from "../../services/notifyRaptorSolutions.js";
-import { Op } from "sequelize";
 
 let schemaReady = false;
 
@@ -17,29 +16,6 @@ function normalizeSupplierCode(raw) {
 
 function codeKey(raw) {
   return normalizeSupplierCode(raw).toLowerCase();
-}
-
-function normalizeProductBarcodeField(raw) {
-  const code = String(raw ?? "").replace(/\D/g, "").trim();
-  return code || null;
-}
-
-function looksLikeRetailBarcode(raw) {
-  const digits = normalizeProductBarcodeField(raw);
-  return digits.length >= 8 && digits.length <= 14;
-}
-
-/** Si el código del proveedor es EAN y el producto no tiene barcode, lo copia. */
-async function maybeSyncBarcodeFromSupplierCode(product, supplierCode) {
-  if (!product || product.barcode) return;
-  if (!looksLikeRetailBarcode(supplierCode)) return;
-  const normalized = normalizeProductBarcodeField(supplierCode);
-  if (!normalized) return;
-  const clash = await InventoryProduct.findOne({
-    where: { barcode: normalized, id: { [Op.ne]: product.id } },
-  });
-  if (clash) return;
-  await product.update({ barcode: normalized });
 }
 
 export const listSupplierProductCodes = async (req, res) => {
@@ -67,12 +43,17 @@ export const listSupplierProductCodes = async (req, res) => {
   }
 };
 
-/** Lista plana de todos los códigos (escáner en caja). */
 export const listAllSupplierProductCodes = async (req, res) => {
   try {
     await ensureSchema();
     const rows = await SupplierProductCode.findAll({
-      attributes: ["supplierCode", "productId"],
+      include: [
+        {
+          model: InventoryProduct,
+          as: "ERP_inventory_product",
+          attributes: ["id", "name", "sku", "barcode"],
+        },
+      ],
       order: [["supplierCode", "ASC"]],
     });
     res.json({ codes: rows });
@@ -167,7 +148,6 @@ export const upsertSupplierProductCodes = async (req, res) => {
         });
       }
       saved.push(row);
-      await maybeSyncBarcodeFromSupplierCode(product, supplierCode);
     }
 
     notifyOk("supplier_product_code.upserted", `Códigos proveedor #${supplierId}`, {

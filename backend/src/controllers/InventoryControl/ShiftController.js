@@ -525,6 +525,7 @@ async function buildShiftResponse(shift) {
 
 export async function getActiveShift(req, res) {
   try {
+    await ensureCashShiftDifferenceColumns();
     const { accountId } = req.user;
     const shift = await findOpenShiftForAccount(accountId);
     if (!shift) return res.json(null);
@@ -537,6 +538,7 @@ export async function getActiveShift(req, res) {
 
 export async function getShifts(req, res) {
   try {
+    await ensureCashShiftDifferenceColumns();
     const { accountId, loginRol } = req.user;
     const limit = Math.min(Number(req.query.limit) || 30, 100);
     const where = ADMIN_ROLES.has(loginRol) ? {} : { accountId };
@@ -567,6 +569,7 @@ export async function getShifts(req, res) {
 
 export async function getShiftById(req, res) {
   try {
+    await ensureCashShiftDifferenceColumns();
     const { accountId, loginRol } = req.user;
     const shift = await CashShift.findByPk(req.params.id, {
       include: [
@@ -1452,6 +1455,7 @@ function addDaySummaries(target, source) {
 /** GET /shifts/reports/weekly — resumen de 7 días (lunes a domingo). */
 export async function getWeeklyShiftReport(req, res) {
   try {
+    await ensureCashShiftDifferenceColumns();
     const { loginRol } = req.user;
     if (!ADMIN_ROLES.has(loginRol)) {
       return res.status(403).json({ message: "Solo administradores pueden ver el reporte semanal." });
@@ -1553,6 +1557,7 @@ export async function getWeeklyShiftReport(req, res) {
 /** GET /shifts/reports/daily — salidas y ventas POS de la fecha elegida (solo admin/programador). */
 export async function getDailyShiftReport(req, res) {
   try {
+    await ensureCashShiftDifferenceColumns();
     const { loginRol } = req.user;
     if (!ADMIN_ROLES.has(loginRol)) {
       return res.status(403).json({ message: "Solo administradores pueden ver el reporte diario." });

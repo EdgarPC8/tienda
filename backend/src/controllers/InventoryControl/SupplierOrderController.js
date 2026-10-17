@@ -14,6 +14,50 @@ import { getHeaderToken, verifyJWT } from "../../libs/jwt.js";
 import { notifyOk, notifyFail } from "../../services/notifyRaptorSolutions.js";
 import { ensureInventoryBatchesSchema } from "./BatchController.js";
 
+/** Normaliza Nº factura para comparar duplicados. */
+function normalizeInvoiceNumber(raw) {
+  return String(raw || "")
+    .trim()
+    .replace(/\s+/g, "")
+    .toUpperCase()
+    .slice(0, 80);
+}
+
+/**
+ * Busca otra compra del mismo proveedor con el mismo Nº de factura.
+ * @returns {Promise<null|{id:number,date:*,invoiceNumber:string}>}
+ */
+async function findDuplicateSupplierInvoice({
+  supplierId,
+  invoiceNumber,
+  excludeOrderId = null,
+}) {
+  const inv = normalizeInvoiceNumber(invoiceNumber);
+  if (!inv || !supplierId) return null;
+  const where = {
+    supplierId: Number(supplierId),
+    invoiceNumber: { [Op.ne]: null },
+  };
+  if (excludeOrderId) where.id = { [Op.ne]: Number(excludeOrderId) };
+  const rows = await SupplierOrder.findAll({
+    where,
+    attributes: ["id", "date", "invoiceNumber", "status", "receivedAt"],
+    order: [["id", "DESC"]],
+    limit: 40,
+  });
+  const hit = rows.find(
+    (r) => normalizeInvoiceNumber(r.invoiceNumber) === inv,
+  );
+  if (!hit) return null;
+  return {
+    id: hit.id,
+    date: hit.date,
+    invoiceNumber: hit.invoiceNumber,
+    status: hit.status,
+    receivedAt: hit.receivedAt,
+  };
+}
+
 function parseCalendarDate(value) {
   const s = String(value || "").trim();
   if (!s) {
@@ -348,6 +392,20 @@ async function formatSupplierOrdersList(orders) {
   return attachInstallmentsToRows(rowsWithPaid, instMap);
 }
 
+/** GET /orders/supplier-orders/check-invoice?supplierId=&invoiceNumber=&excludeId= */
+export const checkSupplierInvoiceDuplicate = async (req, res) => {
+  try {
+    const dup = await findDuplicateSupplierInvoice({
+      supplierId: req.query.supplierId,
+      invoiceNumber: req.query.invoiceNumber,
+      excludeOrderId: req.query.excludeId || null,
+    });
+    return res.json({ duplicate: Boolean(dup), existing: dup });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Error al verificar factura" });
+  }
+};
+
 export const getSupplierOrders = async (req, res) => {
   try {
     await ensureSupplierOrderItemLotSchema();
@@ -391,8 +449,15 @@ export const createSupplierOrder = async (req, res) => {
     await ensurePaymentScheduleSchema();
     const token = getHeaderToken(req);
     await verifyJWT(token);
-    const { supplierId, date, notes, items = [], paymentInstallments, invoiceNumber } =
-      req.body || {};
+    const {
+      supplierId,
+      date,
+      notes,
+      items = [],
+      paymentInstallments,
+      invoiceNumber,
+      forceDuplicateInvoice,
+    } = req.body || {};
 
     if (!supplierId || !date || !Array.isArray(items) || items.length === 0) {
       notifyFail("supplier_order.create_failed", "Proveedor, fecha e ítems son requeridos", {
@@ -409,6 +474,19 @@ export const createSupplierOrder = async (req, res) => {
     }
 
     const invoiceNumberClean = String(invoiceNumber || "").trim().slice(0, 80) || null;
+    if (invoiceNumberClean && !forceDuplicateInvoice) {
+      const dup = await findDuplicateSupplierInvoice({
+        supplierId,
+        invoiceNumber: invoiceNumberClean,
+      });
+      if (dup) {
+        return res.status(409).json({
+          code: "DUPLICATE_INVOICE",
+          message: `Ya existe la compra #${dup.id} con la factura ${dup.invoiceNumber} de este proveedor. ¿Confirmás registrar otra igual?`,
+          existing: dup,
+        });
+      }
+    }
 
     const orderId = await sequelize.transaction(async (t) => {
       const order = await SupplierOrder.create(
@@ -454,8 +532,17 @@ export const updateSupplierOrder = async (req, res) => {
     await ensureSupplierOrderItemLotSchema();
     await ensurePaymentScheduleSchema();
     const { id } = req.params;
-    const { supplierId, date, notes, items, receivedAt, paidAt, paymentInstallments, invoiceNumber } =
-      req.body || {};
+    const {
+      supplierId,
+      date,
+      notes,
+      items,
+      receivedAt,
+      paidAt,
+      paymentInstallments,
+      invoiceNumber,
+      forceDuplicateInvoice,
+    } = req.body || {};
     const order = await SupplierOrder.findByPk(id);
     if (!order) {
       notifyFail("supplier_order.update_failed", `Pedido proveedor #${id} no encontrado`, {
@@ -463,6 +550,24 @@ export const updateSupplierOrder = async (req, res) => {
         httpStatus: 404,
       });
       return res.status(404).json({ message: "Pedido no encontrado" });
+    }
+
+    if (invoiceNumber !== undefined && !forceDuplicateInvoice) {
+      const invoiceNumberClean = String(invoiceNumber || "").trim().slice(0, 80) || null;
+      if (invoiceNumberClean) {
+        const dup = await findDuplicateSupplierInvoice({
+          supplierId: supplierId || order.supplierId,
+          invoiceNumber: invoiceNumberClean,
+          excludeOrderId: order.id,
+        });
+        if (dup) {
+          return res.status(409).json({
+            code: "DUPLICATE_INVOICE",
+            message: `Ya existe la compra #${dup.id} con la factura ${dup.invoiceNumber} de este proveedor. ¿Confirmás guardar con el mismo número?`,
+            existing: dup,
+          });
+        }
+      }
     }
 
     const isReceived = Boolean(order.receivedAt);
@@ -1087,16 +1192,6 @@ export const markSupplierOrderPaid = async (req, res) => {
         httpStatus: 400,
       });
       return res.status(400).json({ message: "El pedido ya fue marcado como pagado" });
-    }
-    if (order.peerAcceptStatus === "pending_accept") {
-      notifyFail(
-        "supplier_order.mark_paid_failed",
-        "Debés aceptar y enlazar los productos del pedido enlazado antes de pagarlo",
-        { req, httpStatus: 400 },
-      );
-      return res.status(400).json({
-        message: "Este pedido llegó del sistema enlazado: aceptalo y enlazá los productos antes de pagarlo",
-      });
     }
 
     const instMap = await loadSupplierInstallmentsMap([order.id]);

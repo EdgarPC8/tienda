@@ -10,6 +10,7 @@ import {
   getPeerAcceptCustomerOrderDetail,
   getPeerOrderStatusBySource,
   applyRemotePeerAcceptStatus,
+  applyPeerOriginRevision,
 } from "../../services/supplierPeerSyncService.js";
 import { Customer } from "../../models/Orders.js";
 
@@ -98,6 +99,27 @@ export const applyPeerAcceptStatusHandler = async (req, res) => {
     console.error("applyPeerAcceptStatus:", error);
     return res.status(error.status || 500).json({
       message: error.message || "Error al guardar estado de aceptación peer",
+    });
+  }
+};
+
+/** POST /orders/peer-sync/origin-revision — el par devolvió precios/cantidades corregidos. */
+export const applyPeerOriginRevisionHandler = async (req, res) => {
+  try {
+    await ensurePeerSyncSchema();
+    const secret = extractBearer(req) || req.body?.secret;
+    const result = await applyPeerOriginRevision({
+      secret,
+      sourceApp: req.body?.sourceApp,
+      originKind: req.body?.originKind,
+      originOrderId: req.body?.originOrderId,
+      items: req.body?.items || [],
+    });
+    return res.json(result);
+  } catch (error) {
+    console.error("applyPeerOriginRevision:", error);
+    return res.status(error.status || 500).json({
+      message: error.message || "Error al aplicar revisión de precios del sistema par",
     });
   }
 };

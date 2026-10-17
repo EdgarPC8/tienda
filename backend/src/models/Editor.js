@@ -111,7 +111,7 @@ export const EditorTemplateLayer = sequelize.define(
     // id lógico estable (IMPORTANTE para cambiar plantilla y reusar overrides)
     key: { type: DataTypes.STRING(120), allowNull: false },
 
-    type: { type: DataTypes.ENUM("image", "text", "shape"), allowNull: false },
+    type: { type: DataTypes.ENUM("image", "text", "shape", "svg"), allowNull: false },
 
     x: { type: DataTypes.INTEGER, defaultValue: 0 },
     y: { type: DataTypes.INTEGER, defaultValue: 0 },

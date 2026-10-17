@@ -498,7 +498,7 @@ export function prepareBackupForRestore(jsonData) {
       if (next.showPublicStoresVitrina === undefined || next.showPublicStoresVitrina === null) {
         next.showPublicStoresVitrina = true;
       }
-      // Store: un solo local (aunque el backup venga de Eddeli con multistock).
+      // Las 3 apps: un solo local. Aunque el backup traiga multistock, se fuerza off.
       next.multiStockEnabled = false;
       return next;
     });
@@ -778,6 +778,7 @@ export async function listStoredBackups() {
       modifiedAt: st.mtime.toISOString(),
       counts: {},
       totalRows: null,
+      // Heurística: archivo con contenido. Validación real al fijar/subir/recargar.
       valid: st.size > 2,
     });
   }

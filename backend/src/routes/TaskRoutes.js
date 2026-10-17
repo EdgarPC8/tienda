@@ -6,9 +6,11 @@ import {
   deleteTaskItem,
   deleteTaskPlan,
   executeTaskOpenBox,
+  executeTaskProduction,
   getMyTaskItems,
   getTaskAssignees,
   getTaskPlans,
+  previewTaskProduction,
   publishTaskPlan,
   updateTaskItemStatus,
   updateTaskPlan,
@@ -27,5 +29,7 @@ router.get("/my-items", isAuthenticated, getMyTaskItems);
 router.put("/items/:id/status", isAuthenticated, updateTaskItemStatus);
 router.delete("/items/:id", isAuthenticated, deleteTaskItem);
 router.post("/items/:id/execute-open-box", isAuthenticated, executeTaskOpenBox);
+router.get("/items/:id/production-preview", isAuthenticated, previewTaskProduction);
+router.post("/items/:id/execute-production", isAuthenticated, executeTaskProduction);
 
 export default router;

@@ -59,7 +59,7 @@ export function isValidCountsPayload(input) {
 /** Acepta arqueo por denominación (Admin/Propietario) o solo total (empleados). */
 export function resolveCashFromBody(body = {}) {
   const { cashCounts, cashTotal } = body;
-  if (cashCounts && typeof cashCounts === "object") {
+    if (cashCounts && typeof cashCounts === "object") {
     const counts = normalizeCashCounts(cashCounts);
     const total = computeCashTotal(counts);
     if (total >= 0) return { counts, total };

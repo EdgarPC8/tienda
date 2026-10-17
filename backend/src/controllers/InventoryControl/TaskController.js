@@ -5,6 +5,15 @@ import { Account } from "../../models/Account.js";
 import { Users } from "../../models/Users.js";
 import { Roles } from "../../models/Roles.js";
 import { InventoryProduct, InventoryMovement } from "../../models/Inventory.js";
+import { getStoreStockQty } from "../../services/storeStockService.js";
+import {
+  applyProductionPlan,
+  formatGrams,
+  packagingOpenEnabled,
+  parseProductionQuantity,
+  planProduction,
+  ProductionInputError,
+} from "../../services/productionGramsService.js";
 import { Notifications } from "../../models/Notifications.js";
 import { sendNotificationToUser } from "../../sockets/notificationSocket.js";
 import { notifyOk, notifyFail } from "../../services/notifyRaptorSolutions.js";
@@ -532,5 +541,136 @@ export const executeTaskOpenBox = async (req, res) => {
       extra: { itemId: id },
     });
     res.status(400).json({ message: error.message });
+  }
+};
+
+async function loadProduceTask(req, id) {
+  const item = await TaskItem.findByPk(id);
+  if (!item) {
+    const error = new Error("Tarea no encontrada.");
+    error.status = 404;
+    throw error;
+  }
+  const userId = Number(req.user?.userId || 0);
+  if (!isAdminRole(req) && Number(item.assignedUserId) !== userId) {
+    const error = new Error("No autorizado para esta tarea.");
+    error.status = 403;
+    throw error;
+  }
+  if (item.actionType !== "produce") {
+    const error = new Error("Esta tarea no es de producción.");
+    error.status = 400;
+    throw error;
+  }
+  const payload = parseActionPayload(item);
+  const productId = Number(payload?.productId);
+  const quantity = parseProductionQuantity(payload?.quantity);
+  return { item, productId, quantity, userId };
+}
+
+export const previewTaskProduction = async (req, res) => {
+  try {
+    const { item, productId, quantity } = await loadProduceTask(req, req.params.id);
+    if (item.status === "done") {
+      return res.status(400).json({ message: "Esta producción ya fue registrada." });
+    }
+    const plan = await planProduction(productId, quantity);
+    res.json(plan);
+  } catch (error) {
+    const status = error instanceof ProductionInputError ? error.status : error.status || 400;
+    res.status(status).json({ message: error.message || "No se pudo simular la producción." });
+  }
+};
+
+export const executeTaskProduction = async (req, res) => {
+  try {
+    const { item, productId, quantity, userId } = await loadProduceTask(req, req.params.id);
+    if (item.status === "done") {
+      return res.status(400).json({ message: "Esta producción ya fue registrada." });
+    }
+    if (req.body?.mermas || req.body?.autocompletarStock || req.body?.merma || req.body?.autocompletar) {
+      return res.status(400).json({ message: "Desde la tarea solo se puede abrir el empaque indicado." });
+    }
+    const abrirEmpaques = Array.isArray(req.body?.abrirEmpaques) ? req.body.abrirEmpaques : [];
+    if (abrirEmpaques.length && !packagingOpenEnabled()) {
+      return res.status(400).json({ message: "La apertura de empaques está desactivada en Configuración" });
+    }
+
+    const opId = `PF-${Date.now()}-${Math.floor(Math.random() * 1e5)}`;
+    const movementDate = new Date();
+    const referenceType = `produccion_op:${opId}`;
+    const resumen = await sequelize.transaction(async (t) => {
+      const plan = await planProduction(productId, quantity, { transaction: t });
+      const mov = async ({ productId: pid, type, reason, quantity: qty, description, price }) =>
+        InventoryMovement.create(
+          {
+            productId: pid,
+            type,
+            reason,
+            quantity: Number(qty),
+            description,
+            price: price ?? null,
+            referenceType,
+            referenceId: null,
+            createdBy: req.user?.accountId || null,
+            date: movementDate,
+          },
+          { transaction: t },
+        );
+      await applyProductionPlan(plan, {
+        transaction: t,
+        allowAutocomplete: false,
+        opId,
+        mov,
+        abrirEmpaques,
+        mermas: [],
+        referenceType,
+        accountId: req.user?.accountId || null,
+        movementDate,
+      });
+      const stockProducto = Number(await getStoreStockQty(plan.storeId, plan.id, { transaction: t })) || 0;
+      const insumos = [];
+      for (const node of plan.requiere || []) {
+        if (node?.kind !== "gramos" || !node.generico) continue;
+        const gramos = Number(await getStoreStockQty(plan.storeId, node.id, { transaction: t })) || 0;
+        insumos.push({ id: node.id, nombre: node.producto, gramos });
+      }
+      const queda = insumos.length
+        ? insumos.map((row) => `${row.nombre}: quedan ${formatGrams(row.gramos)} g`).join(". ")
+        : "Sin insumo genérico en la receta.";
+      const resultNote = `Salieron ${plan.cantidadDeseada} de ${plan.producto}. Ahora hay ${formatGrams(stockProducto)}. ${queda}`;
+      await item.update(
+        {
+          status: "done",
+          checkedAt: new Date(),
+          checkedByUserId: userId || item.assignedUserId,
+          resultNote,
+        },
+        { transaction: t },
+      );
+      return {
+        opId,
+        producto: plan.producto,
+        cantidad: plan.cantidadDeseada,
+        stockProducto,
+        insumos,
+        resultNote,
+        advertencias: plan.advertencias || [],
+      };
+    });
+    notifyOk("task_item.production_executed", `Producción tarea #${item.id}`, {
+      taskItemId: item.id,
+      opId: resumen.opId,
+    });
+    res.status(201).json({ ok: true, taskItemId: item.id, ...resumen });
+  } catch (error) {
+    const status = error instanceof ProductionInputError ? error.status : error.status || 400;
+    notifyFail("task_item.production_failed", error.message, {
+      error,
+      req,
+      httpStatus: status,
+      extra: { itemId: req.params.id },
+    });
+    res.status(status).json({ message: error.message || "No se pudo registrar la producción." });
   }
 };

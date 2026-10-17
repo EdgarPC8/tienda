@@ -2,7 +2,7 @@
  * Asegura roles Propietario + Programador (y tipazos raros).
  * Misma lógica que al arrancar el backend (ensureOwnerAndProgrammerRoles).
  *
- * Uso (desde AppsWeb/tienda/backend):
+ * Uso (desde AppsWeb/eddeli/backend):
  *   node scripts/fix-owner-programmer-roles.js
  *   node scripts/fix-owner-programmer-roles.js --dry-run
  *   npm run db:fix:owner-roles

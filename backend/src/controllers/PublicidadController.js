@@ -406,10 +406,14 @@ export const createCampaign = async (req, res) => {
 
     const full = await loadCampaign(row.id);
     const json = campaignToJson(full);
-    if (json.status === "active") {
-      await notifyPublicidadCampaignUpdated(json);
+    try {
+      if (json.status === "active") {
+        await notifyPublicidadCampaignUpdated(json);
+      }
+      notifyOk("publicidad_campaign.created", "Campaña creada", { campaignId: json.id });
+    } catch (notifyErr) {
+      console.error("createCampaign notify:", notifyErr);
     }
-    notifyOk("publicidad_campaign.created", "Campaña creada", { campaignId: json.id });
     res.status(201).json({
       ...json,
       message: "Campaña creada y guardada correctamente",
@@ -468,21 +472,25 @@ export const updateCampaign = async (req, res) => {
 
     const full = await loadCampaign(row.id);
     const json = campaignToJson(full);
-    if (json.status === "active") {
-      await notifyPublicidadCampaignUpdated(json);
-    } else {
-      const devices = await PublicidadDevice.findAll({
-        where: { campaignId: json.id },
-        attributes: ["deviceId"],
-      });
-      for (const d of devices) {
-        notifyPublicidadDeviceUpdated(d.deviceId, {
-          campaignId: json.id,
-          reason: "campaign_inactive",
+    try {
+      if (json.status === "active") {
+        await notifyPublicidadCampaignUpdated(json);
+      } else {
+        const devices = await PublicidadDevice.findAll({
+          where: { campaignId: json.id },
+          attributes: ["deviceId"],
         });
+        for (const d of devices) {
+          notifyPublicidadDeviceUpdated(d.deviceId, {
+            campaignId: json.id,
+            reason: "campaign_inactive",
+          });
+        }
       }
+      notifyOk("publicidad_campaign.updated", `Campaña #${json.id}`, { campaignId: json.id });
+    } catch (notifyErr) {
+      console.error("updateCampaign notify:", notifyErr);
     }
-    notifyOk("publicidad_campaign.updated", `Campaña #${json.id}`, { campaignId: json.id });
     res.json({
       ...json,
       message: "Campaña actualizada correctamente",

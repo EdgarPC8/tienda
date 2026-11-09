@@ -57,6 +57,28 @@ function isGenericIngredient(product) {
   return Boolean(product?.isGenericIngredient) && !product?.genericProductId;
 }
 
+function pickCatalogPackPrice(product, costMode = "supplier") {
+  const sale = Number(product?.price) || 0;
+  const supplier = Number(product?.supplierPrice) || 0;
+  if (costMode === "sale") return sale > 0 ? sale : supplier;
+  return supplier > 0 ? supplier : sale;
+}
+
+/** Precio por gramo desde catálogo del propio insumo (sin empaque en stock). */
+function catalogPricePerGram(ingredient, costMode = "supplier") {
+  const unitPrice = pickCatalogPackPrice(ingredient, costMode);
+  if (!(unitPrice > 0)) return 0;
+  const net = Number(ingredient.netWeight) || 0;
+  const std = Number(ingredient.standardWeightGrams) || 0;
+  if (Number(ingredient.unitId) === 1) {
+    const grams = std > 0 ? std : net;
+    return grams > 0 ? unitPrice / grams : 0;
+  }
+  if (net > 1) return unitPrice / net;
+  if (std > 1) return unitPrice / std;
+  return unitPrice;
+}
+
 function normalizeOpens(raw) {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -91,7 +113,7 @@ function assertPackagingActionsAllowed({ abrirEmpaques, mermas, autocompletar })
   return { opens, wastes };
 }
 
-async function listOpenablePacks(ingredientId, storeId, transaction) {
+async function listOpenablePacks(ingredientId, storeId, transaction, { costMode = "supplier" } = {}) {
   const linked = await InventoryProduct.findAll({
     where: {
       isGenericIngredient: false,
@@ -108,7 +130,7 @@ async function listOpenablePacks(ingredientId, storeId, transaction) {
     const stock = await storeQty(storeId, product.id, transaction);
     const whole = Math.floor(stock + 1e-9);
     if (whole < 1) continue;
-    const price = Number(product.supplierPrice) || 0;
+    const price = pickCatalogPackPrice(product, costMode);
     packs.push({
       productId: product.id,
       nombre: product.name,
@@ -564,32 +586,56 @@ export function autocompleteAllowed(user, requested) {
   return true;
 }
 
-export async function quoteGramLine(ingredient, gramsNeeded, { transaction, storeId } = {}) {
+export async function quoteGramLine(
+  ingredient,
+  gramsNeeded,
+  { transaction, storeId, costMode = "supplier" } = {},
+) {
   if (!ingredient) return null;
+  const mode = costMode === "sale" ? "sale" : "supplier";
   const sid = storeId || (await getDefaultStockStoreId({ transaction }));
   if (!isGenericIngredient(ingredient)) {
-    const grams = Number(ingredient.standardWeightGrams) || 0;
-    const supplierPrice = Number(ingredient.supplierPrice) || 0;
-    const pricePerGram = supplierPrice > 0 && grams > 0 ? supplierPrice / grams : 0;
+    const grams =
+      Number(ingredient.standardWeightGrams) || Number(ingredient.netWeight) || 0;
+    const unitPrice = pickCatalogPackPrice(ingredient, mode);
+    const pricePerGram = catalogPricePerGram(ingredient, mode);
     return {
       sourceId: ingredient.id,
       sourceName: ingredient.name,
       gramsPerUnit: grams > 0 ? grams : 1,
-      supplierPrice,
+      supplierPrice: unitPrice,
       pricePerGram,
       missingPrice: !(pricePerGram > 0),
+      costMode: mode,
     };
   }
-  const packs = await listOpenablePacks(ingredient.id, sid, transaction);
+  // Preferir costo ya materializado en el genérico (última compra aplicada: ej. $39/45360 g).
+  // Si no, usar empaque con stock; si tampoco, catálogo.
+  const catalogPg = catalogPricePerGram(ingredient, mode);
+  const packs = await listOpenablePacks(ingredient.id, sid, transaction, { costMode: mode });
   const priced = packs.find((pack) => !pack.sinPrecio) || null;
+
+  if (mode === "supplier" && catalogPg > 0) {
+    return {
+      sourceId: priced?.productId || ingredient.id,
+      sourceName: priced?.nombre || ingredient.name,
+      gramsPerUnit: priced?.gramosPorEmpaque || Number(gramsNeeded) || 1,
+      supplierPrice: pickCatalogPackPrice(ingredient, mode),
+      pricePerGram: catalogPg,
+      missingPrice: false,
+      costMode: mode,
+    };
+  }
+
   if (!priced) {
     return {
       sourceId: ingredient.id,
       sourceName: ingredient.name,
       gramsPerUnit: Number(gramsNeeded) || 0,
-      supplierPrice: 0,
-      pricePerGram: 0,
-      missingPrice: true,
+      supplierPrice: pickCatalogPackPrice(ingredient, mode),
+      pricePerGram: catalogPg,
+      missingPrice: !(catalogPg > 0),
+      costMode: mode,
     };
   }
   return {
@@ -599,5 +645,6 @@ export async function quoteGramLine(ingredient, gramsNeeded, { transaction, stor
     supplierPrice: priced.precioProveedor,
     pricePerGram: priced.costoPorGramo,
     missingPrice: false,
+    costMode: mode,
   };
 }

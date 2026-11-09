@@ -496,12 +496,49 @@ export const RecurringExpenseTemplate = sequelize.define("ERP_finance_recurring_
     labelColor: { type: DataTypes.STRING(7), allowNull: true },
     startDate: { type: DataTypes.DATEONLY, allowNull: true },
     endDate: { type: DataTypes.DATEONLY, allowNull: true },
+    /** indefinite = se genera siempre; limited = solo N plazos entre start/end */
+    durationMode: {
+      type: DataTypes.ENUM("indefinite", "limited"),
+      allowNull: false,
+      defaultValue: "indefinite",
+    },
+    /** Cantidad de cuotas/periodos cuando durationMode=limited (ej. 3 meses). */
+    occurrenceCount: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    /** Si true, avisos/pagos se entienden cubiertos con ingresos (entrada) del negocio. */
+    coverFromIncome: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
+    /** Total del plan a plazos (entrada + cuotas). Null = usa baseAmount por periodo. */
+    totalAmount: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+    },
+    /** Pago inicial (entrada) al empezar el plan. */
+    entryAmount: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+      defaultValue: 0,
+    },
+    /**
+     * Si true: con entrada, la 1ª cuota cae el mismo mes de inicio.
+     * Si false (default): las cuotas arrancan el mes siguiente a la entrada.
+     */
+    firstInstallmentSameMonth: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
 
   baseAmount: {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: false,
     defaultValue: 0,
-    comment: "Monto fijo o estimado de referencia",
+    comment: "Monto fijo o estimado de referencia / cuota mensual",
   },
 
   dueDayOfMonth: {
@@ -547,6 +584,7 @@ export const RecurringExpenseTemplate = sequelize.define("ERP_finance_recurring_
     { fields: ["storeId"] },
     { fields: ["isActive"] },
     { fields: ["frequency"] },
+    { fields: ["durationMode"] },
   ],
 });
 
@@ -563,7 +601,19 @@ export const RecurringExpenseOccurrence = sequelize.define("ERP_finance_recurrin
   periodKey: {
     type: DataTypes.STRING(20),
     allowNull: false,
-    comment: "2026-06 | 2026-Q2 | 2026",
+    comment: "entrada | 2026-06 | 2026-Q2 | 2026",
+  },
+
+  sequence: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: "Orden en el plan (1=entrada o 1ª cuota)",
+  },
+
+  kind: {
+    type: DataTypes.ENUM("entry", "installment", "final", "recurring"),
+    allowNull: false,
+    defaultValue: "recurring",
   },
 
   dueDate: {

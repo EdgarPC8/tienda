@@ -5,7 +5,11 @@ import { Account } from "../../models/Account.js";
 import { Users } from "../../models/Users.js";
 import { Roles } from "../../models/Roles.js";
 import { InventoryProduct, InventoryMovement } from "../../models/Inventory.js";
-import { getStoreStockQty } from "../../services/storeStockService.js";
+import {
+  getDefaultStockStoreId,
+  getStoreStockQty,
+  setStoreStockAbsolute,
+} from "../../services/storeStockService.js";
 import {
   applyProductionPlan,
   formatGrams,
@@ -33,23 +37,28 @@ const parseActionPayload = (item) => {
   }
 };
 
-let produceActionReady = null;
-async function ensureProduceActionType() {
-  if (produceActionReady) return produceActionReady;
-  produceActionReady = (async () => {
+let actionTypeEnumReady = null;
+async function ensureTaskActionTypeEnum() {
+  if (actionTypeEnumReady) return actionTypeEnumReady;
+  actionTypeEnumReady = (async () => {
     const rawName = TaskItem.getTableName();
     const table = typeof rawName === "string" ? rawName : rawName.tableName;
     const [cols] = await sequelize.query(`SHOW COLUMNS FROM \`${table}\` LIKE 'actionType'`);
     const type = String(cols?.[0]?.Type || "");
-    if (type.includes("produce")) return;
+    if (type.includes("stock_count") && type.includes("produce")) return;
     await sequelize.query(
-      `ALTER TABLE \`${table}\` MODIFY \`actionType\` ENUM('none','open_box','produce') NOT NULL DEFAULT 'none'`,
+      `ALTER TABLE \`${table}\` MODIFY \`actionType\` ENUM('none','open_box','produce','stock_count') NOT NULL DEFAULT 'none'`,
     );
   })().catch((error) => {
-    produceActionReady = null;
+    actionTypeEnumReady = null;
     throw error;
   });
-  return produceActionReady;
+  return actionTypeEnumReady;
+}
+
+/** @deprecated alias */
+async function ensureProduceActionType() {
+  return ensureTaskActionTypeEnum();
 }
 
 async function openBoxForTaskPayload(payload, t, taskItemId) {
@@ -194,6 +203,18 @@ function normalizeProducePayload(raw, idx) {
   return { productId, quantity };
 }
 
+function normalizeStockCountPayload(raw, idx) {
+  const productId = Number(raw?.productId);
+  if (!Number.isInteger(productId) || productId <= 0) {
+    throw new Error(`La tarea #${idx + 1} de conteo necesita un producto.`);
+  }
+  const storeId = Number(raw?.storeId);
+  return {
+    productId,
+    storeId: Number.isInteger(storeId) && storeId > 0 ? storeId : null,
+  };
+}
+
 function normalizePlanItems(items) {
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error("Debes agregar al menos una tarea.");
@@ -204,10 +225,18 @@ function normalizePlanItems(items) {
       throw new Error(`La tarea #${idx + 1} requiere título y usuario asignado.`);
     }
     const payload = row.actionPayload && typeof row.actionPayload === "object" ? row.actionPayload : null;
-    const actionType = row.actionType === "open_box" || row.actionType === "produce" ? row.actionType : "none";
+    const actionType =
+      row.actionType === "open_box" ||
+      row.actionType === "produce" ||
+      row.actionType === "stock_count"
+        ? row.actionType
+        : "none";
     let actionPayload = null;
     if (actionType === "open_box") actionPayload = payload ? JSON.stringify(payload) : null;
     if (actionType === "produce") actionPayload = JSON.stringify(normalizeProducePayload(payload, idx));
+    if (actionType === "stock_count") {
+      actionPayload = JSON.stringify(normalizeStockCountPayload(payload, idx));
+    }
     return {
       title: row.title.trim(),
       description: row.description?.trim() || null,
@@ -444,7 +473,36 @@ export const getMyTaskItems = async (req, res) => {
     if (wa !== wb) return wa - wb;
     return Number(a.priority || 0) - Number(b.priority || 0);
   });
-  res.json(items);
+
+  // Enriquecer conteos con nombre y stock actual del sistema.
+  const defaultStoreId = await getDefaultStockStoreId().catch(() => null);
+  const enriched = [];
+  for (const row of items) {
+    const plain = row.toJSON ? row.toJSON() : row;
+    if (plain.actionType === "stock_count") {
+      const payload = parseActionPayload(plain) || {};
+      const productId = Number(payload.productId);
+      if (productId > 0) {
+        const product = await InventoryProduct.findByPk(productId, {
+          attributes: ["id", "name", "stock"],
+        });
+        const storeId =
+          Number(payload.storeId) > 0 ? Number(payload.storeId) : defaultStoreId;
+        const systemStock =
+          storeId != null
+            ? Number(await getStoreStockQty(storeId, productId)) || 0
+            : Number(product?.stock || 0);
+        plain.stockCountMeta = {
+          productId,
+          productName: product?.name || null,
+          storeId: storeId || null,
+          systemStock,
+        };
+      }
+    }
+    enriched.push(plain);
+  }
+  res.json(enriched);
 };
 
 export const updateTaskItemStatus = async (req, res) => {
@@ -477,6 +535,11 @@ export const updateTaskItemStatus = async (req, res) => {
   if (item.actionType === "produce" && nextStatus === "done") {
     return res.status(400).json({
       message: "Esta tarea se cumple registrando la producción, no solo con el check.",
+    });
+  }
+  if (item.actionType === "stock_count" && nextStatus === "done") {
+    return res.status(400).json({
+      message: "Esta tarea se cumple registrando el conteo de stock, no solo con el check.",
     });
   }
   await item.update({
@@ -672,5 +735,114 @@ export const executeTaskProduction = async (req, res) => {
       extra: { itemId: req.params.id },
     });
     res.status(status).json({ message: error.message || "No se pudo registrar la producción." });
+  }
+};
+
+export const executeTaskStockCount = async (req, res) => {
+  try {
+    await ensureTaskActionTypeEnum();
+    const { id } = req.params;
+    const item = await TaskItem.findByPk(id);
+    if (!item) {
+      return res.status(404).json({ message: "Tarea no encontrada." });
+    }
+    const userId = Number(req.user?.userId || 0);
+    if (!isAdminRole(req) && Number(item.assignedUserId) !== userId) {
+      return res.status(403).json({ message: "No autorizado para esta tarea." });
+    }
+    if (item.actionType !== "stock_count") {
+      return res.status(400).json({ message: "Esta tarea no es de conteo de stock." });
+    }
+    if (item.status === "done") {
+      return res.status(400).json({ message: "Este conteo ya fue registrado." });
+    }
+
+    const payload = parseActionPayload(item) || {};
+    const productId = Number(payload.productId);
+    const countedQty = Number(req.body?.countedQty);
+    if (!Number.isFinite(productId) || productId <= 0) {
+      return res.status(400).json({ message: "La tarea no tiene producto de conteo." });
+    }
+    if (!Number.isFinite(countedQty) || countedQty < 0) {
+      return res.status(400).json({ message: "Indicá la cantidad contada (0 o más)." });
+    }
+
+    const result = await sequelize.transaction(async (t) => {
+      const product = await InventoryProduct.findByPk(productId, {
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+      });
+      if (!product) throw Object.assign(new Error("Producto no encontrado."), { status: 404 });
+
+      const storeId =
+        Number(payload.storeId) > 0
+          ? Number(payload.storeId)
+          : await getDefaultStockStoreId({ transaction: t });
+      const stockAntes = Number(await getStoreStockQty(storeId, productId, { transaction: t })) || 0;
+      const stockNuevo = countedQty;
+
+      await setStoreStockAbsolute(storeId, productId, stockNuevo, {
+        transaction: t,
+        allowNegative: false,
+      });
+
+      const reason =
+        stockNuevo > stockAntes
+          ? "AJUSTE_ENTRADA"
+          : stockNuevo < stockAntes
+            ? "AJUSTE_SALIDA"
+            : "AJUSTE_ENTRADA";
+
+      await InventoryMovement.create(
+        {
+          productId,
+          type: "ajuste",
+          reason,
+          quantity: stockNuevo,
+          description: `[TAREA] Conteo físico: sistema ${stockAntes} → contado ${stockNuevo}`,
+          price: null,
+          referenceType: "task_stock_count",
+          referenceId: item.id,
+          createdBy: req.user?.accountId || null,
+          date: new Date(),
+        },
+        { transaction: t },
+      );
+
+      const resultNote = `Conteo ${product.name}: sistema ${formatGrams(stockAntes)} → contado ${formatGrams(stockNuevo)}.`;
+      await item.update(
+        {
+          status: "done",
+          checkedAt: new Date(),
+          checkedByUserId: userId || item.assignedUserId,
+          resultNote,
+        },
+        { transaction: t },
+      );
+
+      return {
+        productId,
+        productName: product.name,
+        storeId,
+        stockAntes,
+        stockNuevo,
+        resultNote,
+      };
+    });
+
+    notifyOk("task_item.stock_count_executed", `Conteo tarea #${id}`, {
+      taskItemId: Number(id),
+      ...result,
+    });
+    res.json({ ok: true, taskItemId: Number(id), ...result });
+  } catch (error) {
+    const status = error.status || 400;
+    notifyFail("task_item.stock_count_failed", error.message, {
+      error,
+      req,
+      httpStatus: status,
+      extra: { itemId: req.params.id },
+    });
+    res.status(status).json({ message: error.message || "No se pudo registrar el conteo." });
   }
 };

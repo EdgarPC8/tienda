@@ -251,6 +251,11 @@ function itemPackLotFields(row = {}) {
   return { packKey, packName, lotCode, expiresAt, manufacturedAt };
 }
 
+/**
+ * Arma el payload de una línea. Si el descuento supera el subtotal solo por
+ * redondeo de centavos (típico en XML SRI), lo ajusta y devuelve `roundingNote`.
+ * @returns {{ payload: object, roundingNote: string|null }}
+ */
 function buildItemCreatePayload(orderId, row) {
   const productId = Number(row.productId);
   const quantity = toNum(row.quantity);
@@ -261,19 +266,42 @@ function buildItemCreatePayload(orderId, row) {
   if (unitPrice < 0) throw new Error("El precio unitario no puede ser negativo");
   const discountRaw = row.discount ?? 0;
   if (!Number.isFinite(Number(discountRaw))) throw new Error("Descuento inválido");
-  const discount = Math.max(0, Number(discountRaw));
-  if (discount > quantity * unitPrice + 0.0001) {
-    throw new Error("El descuento no puede superar el subtotal");
+  const lineGross = quantity * unitPrice;
+  let discount = Math.max(0, Number(discountRaw));
+  let roundingNote = null;
+  const lineCents = Math.round(lineGross * 100);
+  const discCents = Math.round(discount * 100);
+  if (discCents > lineCents) {
+    // Hasta 1¢ de holgura por redondeo de factura (P.U. con muchos decimales vs desc. en centavos).
+    if (discCents <= lineCents + 1) {
+      const before = discount;
+      discount = Math.max(0, Number(lineGross.toFixed(6)));
+      roundingNote =
+        `Producto #${productId}: el descuento ($${before.toFixed(2)}) superaba por ~1¢ el subtotal ` +
+        `cantidad×P.U. ($${lineGross.toFixed(4)} → $${(lineCents / 100).toFixed(2)} redondeado). ` +
+        `Es normal en facturas SRI: el descuento viene en centavos y el precio unitario sin IVA tiene más decimales. ` +
+        `Se ajustó el descuento al subtotal de la línea para poder guardar.`;
+    } else {
+      throw new Error(
+        `El descuento ($${discount.toFixed(2)}) no puede superar el subtotal de la línea ` +
+          `(cantidad × P.U. = $${lineGross.toFixed(2)}). ` +
+          `Si viene de una factura, revisá el descuento o el precio unitario: a veces el descuento ` +
+          `está redondeado a centavos y el P.U. trae más decimales (diferencia de 1¢).`,
+      );
+    }
   }
   const lot = itemPackLotFields(row);
   return {
-    orderId,
-    productId,
-    quantity,
-    unitPrice,
-    discount,
-    taxRate: Math.max(0, toNum(row.taxRate, 0)),
-    ...lot,
+    payload: {
+      orderId,
+      productId,
+      quantity,
+      unitPrice,
+      discount,
+      taxRate: Math.max(0, toNum(row.taxRate, 0)),
+      ...lot,
+    },
+    roundingNote,
   };
 }
 
@@ -488,6 +516,7 @@ export const createSupplierOrder = async (req, res) => {
       }
     }
 
+    const discountWarnings = [];
     const orderId = await sequelize.transaction(async (t) => {
       const order = await SupplierOrder.create(
         {
@@ -501,7 +530,8 @@ export const createSupplierOrder = async (req, res) => {
       );
 
       for (const row of items) {
-        const payload = buildItemCreatePayload(order.id, row);
+        const { payload, roundingNote } = buildItemCreatePayload(order.id, row);
+        if (roundingNote) discountWarnings.push(roundingNote);
         const product = await InventoryProduct.findByPk(payload.productId, { transaction: t });
         if (!product) throw new Error(`Producto #${payload.productId} no encontrado`);
         await SupplierOrderItem.create(payload, { transaction: t });
@@ -515,7 +545,11 @@ export const createSupplierOrder = async (req, res) => {
 
     const full = await SupplierOrder.findByPk(orderId, { include: orderIncludes });
     notifyOk("supplier_order.created", "Pedido a proveedor creado", { supplierOrderId: orderId });
-    res.status(201).json((await formatSupplierOrdersList([full]))[0]);
+    const [formatted] = await formatSupplierOrdersList([full]);
+    res.status(201).json({
+      ...formatted,
+      warnings: discountWarnings.length ? discountWarnings : undefined,
+    });
   } catch (error) {
     console.error("createSupplierOrder:", error);
     notifyFail("supplier_order.create_failed", error.message || "Error al crear pedido a proveedor", {
@@ -631,8 +665,10 @@ export const updateSupplierOrder = async (req, res) => {
 
         const normalized = [];
         const newQtyByProduct = new Map();
+        const discountWarnings = [];
         for (const row of items) {
-          const payload = buildItemCreatePayload(order.id, row);
+          const { payload, roundingNote } = buildItemCreatePayload(order.id, row);
+          if (roundingNote) discountWarnings.push(roundingNote);
           if (payload.unitPrice < 0) throw new Error("Precio unitario inválido");
           normalized.push(payload);
           newQtyByProduct.set(
@@ -640,6 +676,8 @@ export const updateSupplierOrder = async (req, res) => {
             toNum(newQtyByProduct.get(payload.productId)) + payload.quantity
           );
         }
+        // Se reutiliza al armar la respuesta (fuera de la transacción).
+        req._supplierDiscountWarnings = discountWarnings;
 
         const allProductIds = new Set([
           ...oldQtyByProduct.keys(),
@@ -711,9 +749,17 @@ export const updateSupplierOrder = async (req, res) => {
       notifyOk("supplier_order.updated", `Pedido proveedor #${id} (corrección post-recibo)`, {
         supplierOrderId: Number(id),
       });
-      return res.json((await formatSupplierOrdersList([full]))[0]);
+      {
+        const [formattedOut] = await formatSupplierOrdersList([full]);
+        const warnings = req._supplierDiscountWarnings;
+        return res.json({
+          ...formattedOut,
+          warnings: warnings?.length ? warnings : undefined,
+        });
+      }
     }
 
+    const discountWarnings = [];
     await sequelize.transaction(async (t) => {
       await order.update(
         {
@@ -736,7 +782,8 @@ export const updateSupplierOrder = async (req, res) => {
       if (!isReceived && Array.isArray(items)) {
         await SupplierOrderItem.destroy({ where: { orderId: order.id }, transaction: t });
         for (const row of items) {
-          const payload = buildItemCreatePayload(order.id, row);
+          const { payload, roundingNote } = buildItemCreatePayload(order.id, row);
+          if (roundingNote) discountWarnings.push(roundingNote);
           await SupplierOrderItem.create(payload, { transaction: t });
         }
       }
@@ -762,7 +809,13 @@ export const updateSupplierOrder = async (req, res) => {
       );
     }
     notifyOk("supplier_order.updated", `Pedido proveedor #${id}`, { supplierOrderId: Number(id) });
-    res.json((await formatSupplierOrdersList([full]))[0]);
+    {
+      const [formattedOut] = await formatSupplierOrdersList([full]);
+      res.json({
+        ...formattedOut,
+        warnings: discountWarnings.length ? discountWarnings : undefined,
+      });
+    }
   } catch (error) {
     console.error("updateSupplierOrder:", error);
     notifyFail("supplier_order.update_failed", error.message || "Error al actualizar pedido", {
@@ -906,6 +959,7 @@ async function reverseReceivedStockForSupplierOrder(order, user, transaction) {
     }
   }
 
+  // Movimientos de entrada de esta compra (ya no aplica el pedido)
   await InventoryMovement.destroy({
     where: {
       referenceType: "supplier_order",
@@ -934,6 +988,7 @@ async function reverseReceivedStockForSupplierOrder(order, user, transaction) {
       const reverseQty = toNum(qtyByBatchId.get(batchId));
       const initial = toNum(batch.quantityInitial);
       const remaining = toNum(batch.quantityRemaining);
+      // Lote sin consumo posterior: eliminarlo completo.
       if (Math.abs(initial - remaining) < 1e-6 && Math.abs(initial - reverseQty) < 1e-6) {
         await batch.destroy({ transaction });
         continue;

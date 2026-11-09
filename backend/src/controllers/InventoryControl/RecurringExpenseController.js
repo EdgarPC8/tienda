@@ -23,6 +23,14 @@ import {
   CATEGORY_LABELS,
   FREQUENCY_LABELS,
   AMOUNT_TYPE_LABELS,
+  DURATION_LABELS,
+  isLimitedDuration,
+  computeEndDateFromCount,
+  resolveTemplateWindow,
+  shouldAutoDeactivateLimited,
+  buildLimitedPaymentPlan,
+  usesPaymentPlan,
+  OCCURRENCE_KIND_LABELS,
 } from "../../utils/recurringExpenseUtils.js";
 import {
   createAndPushNotification,
@@ -69,16 +77,82 @@ async function ensureRecurringColumns() {
   if (!names.has("endDate")) {
     await sequelize.query("ALTER TABLE ERP_finance_recurring_templates ADD COLUMN endDate DATE NULL");
   }
+  if (!names.has("durationMode")) {
+    await sequelize.query(
+      "ALTER TABLE ERP_finance_recurring_templates ADD COLUMN durationMode ENUM('indefinite','limited') NOT NULL DEFAULT 'indefinite'",
+    );
+  }
+  if (!names.has("occurrenceCount")) {
+    await sequelize.query(
+      "ALTER TABLE ERP_finance_recurring_templates ADD COLUMN occurrenceCount INT NULL",
+    );
+  }
+  if (!names.has("coverFromIncome")) {
+    await sequelize.query(
+      "ALTER TABLE ERP_finance_recurring_templates ADD COLUMN coverFromIncome TINYINT(1) NOT NULL DEFAULT 1",
+    );
+  }
+  if (!names.has("totalAmount")) {
+    await sequelize.query(
+      "ALTER TABLE ERP_finance_recurring_templates ADD COLUMN totalAmount DECIMAL(10,2) NULL",
+    );
+  }
+  if (!names.has("entryAmount")) {
+    await sequelize.query(
+      "ALTER TABLE ERP_finance_recurring_templates ADD COLUMN entryAmount DECIMAL(10,2) NULL DEFAULT 0",
+    );
+  }
+  if (!names.has("firstInstallmentSameMonth")) {
+    await sequelize.query(
+      "ALTER TABLE ERP_finance_recurring_templates ADD COLUMN firstInstallmentSameMonth TINYINT(1) NOT NULL DEFAULT 0",
+    );
+  }
+  const [occCols] = await sequelize.query("SHOW COLUMNS FROM ERP_finance_recurring_occurrences");
+  const occNames = new Set(occCols.map((c) => c.Field));
+  if (!occNames.has("sequence")) {
+    await sequelize.query(
+      "ALTER TABLE ERP_finance_recurring_occurrences ADD COLUMN sequence INT NULL",
+    );
+  }
+  if (!occNames.has("kind")) {
+    await sequelize.query(
+      "ALTER TABLE ERP_finance_recurring_occurrences ADD COLUMN kind ENUM('entry','installment','final','recurring') NOT NULL DEFAULT 'recurring'",
+    );
+  }
   schemaReady = true;
 }
 
 function mapTemplateRow(row) {
   const t = row.toJSON ? row.toJSON() : row;
+  const limited = isLimitedDuration(t);
+  const win = resolveTemplateWindow(t);
+  let durationLabel = DURATION_LABELS.indefinite;
+  if (limited) {
+    const n = Number(t.occurrenceCount) || null;
+    const entry = Number(t.entryAmount) || 0;
+    if (entry > 0.009 && n) {
+      durationLabel = `Entrada + ${n} cuota${n === 1 ? "" : "s"}`;
+    } else if (n) {
+      durationLabel = `${n} plazo${n === 1 ? "" : "s"}`;
+    } else if (win.end) {
+      durationLabel = `Hasta ${win.end}`;
+    } else {
+      durationLabel = DURATION_LABELS.limited;
+    }
+  }
+  const planPreview = limited ? buildLimitedPaymentPlan(t) : [];
   return {
     ...t,
     categoryLabel: CATEGORY_LABELS[t.category] || t.category,
     frequencyLabel: FREQUENCY_LABELS[t.frequency] || t.frequency,
     amountTypeLabel: AMOUNT_TYPE_LABELS[t.amountType] || t.amountType,
+    durationMode: limited ? "limited" : "indefinite",
+    durationLabel,
+    planPreview: planPreview.map((r) => ({
+      ...r,
+      kindLabel: OCCURRENCE_KIND_LABELS[r.kind] || r.kind,
+      dueDate: r.dueDate instanceof Date ? r.dueDate.toISOString() : r.dueDate,
+    })),
     store: t.store || null,
     storeName: t.store?.name || (t.storeId ? `Local #${t.storeId}` : "General"),
   };
@@ -91,8 +165,21 @@ function mapOccurrenceRow(row) {
     o.status === "paid"
       ? roundMoney(o.actualAmount ?? o.expectedAmount)
       : roundMoney(o.actualAmount ?? o.expectedAmount);
+  const kind = o.kind || (o.periodKey === "entrada" ? "entry" : "recurring");
+  let kindLabel = OCCURRENCE_KIND_LABELS[kind] || kind;
+  if (kind === "entry") kindLabel = "Entrada";
+  else if (kind === "final") kindLabel = "Cuota final";
+  else if (kind === "installment") {
+    const seq = Number(o.sequence);
+    const hasEntry = Number(tpl?.entryAmount) > 0.009;
+    const cuotaNum =
+      Number.isFinite(seq) && seq > 0 ? (hasEntry ? Math.max(1, seq - 1) : seq) : null;
+    kindLabel = cuotaNum != null ? `Cuota ${cuotaNum}` : "Cuota";
+  }
   return {
     ...o,
+    kind,
+    kindLabel,
     template: tpl,
     displayName: tpl?.name || "Egreso recurrente",
     storeName: tpl?.storeName || "General",
@@ -114,7 +201,69 @@ async function ensureOccurrencesForTemplates(templates, accountId, t) {
   let created = 0;
   for (const template of templates) {
     if (!template.isActive) continue;
-    const keys = periodKeysToEnsure(template);
+
+    if (shouldAutoDeactivateLimited(template)) {
+      await template.update({ isActive: false }, { transaction: t });
+      continue;
+    }
+
+    // Plan a plazos (entrada + cuotas) para plantillas limited con Nº de plazos.
+    if (isLimitedDuration(template) && Number(template.occurrenceCount) > 0) {
+      const plan = buildLimitedPaymentPlan(template);
+      const planKeys = new Set(plan.map((r) => r.periodKey));
+      for (const row of plan) {
+        const exists = await RecurringExpenseOccurrence.findOne({
+          where: { templateId: template.id, periodKey: row.periodKey },
+          transaction: t,
+        });
+        if (exists) {
+          // Actualizar monto/fecha/kind si aún está pendiente
+          if (exists.status === "pending") {
+            await exists.update(
+              {
+                dueDate: row.dueDate,
+                expectedAmount: row.expectedAmount,
+                sequence: row.sequence,
+                kind: row.kind,
+              },
+              { transaction: t },
+            );
+          }
+          continue;
+        }
+        await RecurringExpenseOccurrence.create(
+          {
+            templateId: template.id,
+            periodKey: row.periodKey,
+            dueDate: row.dueDate,
+            expectedAmount: row.expectedAmount,
+            sequence: row.sequence,
+            kind: row.kind,
+            status: "pending",
+            createdBy: accountId,
+          },
+          { transaction: t },
+        );
+        created += 1;
+      }
+      // Quitar cuotas pendientes que ya no pertenecen al plan (ej. mensual del mismo mes
+      // cuando la entrada mueve las cuotas al mes siguiente).
+      const stale = await RecurringExpenseOccurrence.findAll({
+        where: {
+          templateId: template.id,
+          status: "pending",
+          periodKey: { [Op.notIn]: [...planKeys] },
+        },
+        transaction: t,
+      });
+      for (const occ of stale) {
+        await occ.destroy({ transaction: t });
+      }
+      continue;
+    }
+
+    const generateAllLimited = isLimitedDuration(template);
+    const keys = periodKeysToEnsure(template, undefined, { generateAllLimited });
     for (const periodKey of keys) {
       const exists = await RecurringExpenseOccurrence.findOne({
         where: { templateId: template.id, periodKey },
@@ -123,14 +272,14 @@ async function ensureOccurrencesForTemplates(templates, accountId, t) {
       if (exists) continue;
 
       const dueDate = computeDueDate(template, periodKey);
-      // Crear también si ya venció este período: el usuario debe verla en el mes actual.
-
       await RecurringExpenseOccurrence.create(
         {
           templateId: template.id,
           periodKey,
           dueDate,
           expectedAmount: roundMoney(template.baseAmount),
+          sequence: null,
+          kind: "recurring",
           status: "pending",
           createdBy: accountId,
         },
@@ -140,6 +289,160 @@ async function ensureOccurrencesForTemplates(templates, accountId, t) {
     }
   }
   return created;
+}
+
+/** Normaliza duración: indefinida o N plazos desde startDate. */
+function resolveDurationFields(body, frequency) {
+  const modeRaw = String(body.durationMode || "").toLowerCase();
+  const count = Math.floor(Number(body.occurrenceCount) || 0);
+  let durationMode =
+    modeRaw === "limited" || modeRaw === "indefinite"
+      ? modeRaw
+      : count > 0 || body.endDate
+        ? "limited"
+        : "indefinite";
+
+  let startDate = dateOnlyOrNull(body.startDate);
+  let endDate = dateOnlyOrNull(body.endDate);
+  let occurrenceCount = null;
+  const coverFromIncome = body.coverFromIncome !== false && body.coverFromIncome !== 0;
+
+  const totalAmount =
+    body.totalAmount != null && body.totalAmount !== ""
+      ? roundMoney(body.totalAmount)
+      : null;
+  const entryAmount =
+    body.entryAmount != null && body.entryAmount !== ""
+      ? Math.max(0, roundMoney(body.entryAmount))
+      : 0;
+  const firstInstallmentSameMonth = Boolean(body.firstInstallmentSameMonth);
+
+  if (durationMode === "indefinite") {
+    occurrenceCount = null;
+    endDate = null;
+  } else {
+    if (!startDate) {
+      startDate = dateOnlyOrNull(new Date()) || format(new Date(), "yyyy-MM-dd");
+    }
+    occurrenceCount = count > 0 ? count : null;
+    if (!occurrenceCount && !endDate) {
+      const err = new Error("Indicá cuántos plazos/cuotas mensuales (ej. 3)");
+      err.statusCode = 400;
+      throw err;
+    }
+    if (totalAmount != null && entryAmount > totalAmount + 0.009) {
+      const err = new Error("La entrada no puede superar el total del plan");
+      err.statusCode = 400;
+      throw err;
+    }
+    // endDate desde el plan (entrada + cuotas)
+    if (occurrenceCount) {
+      const plan = buildLimitedPaymentPlan({
+        frequency,
+        dueDayOfMonth: body.dueDayOfMonth,
+        dueMonth: body.dueMonth,
+        startDate,
+        occurrenceCount,
+        totalAmount: totalAmount ?? 0,
+        entryAmount,
+        baseAmount: body.baseAmount,
+        firstInstallmentSameMonth,
+      });
+      const last = plan[plan.length - 1];
+      if (last?.dueDate) {
+        endDate = dateOnlyOrNull(last.dueDate);
+      } else if (!endDate) {
+        endDate = computeEndDateFromCount(
+          { frequency, dueDayOfMonth: body.dueDayOfMonth, dueMonth: body.dueMonth, startDate },
+          startDate,
+          occurrenceCount,
+        );
+      }
+    }
+    if (startDate && endDate && endDate < startDate) {
+      const err = new Error("La fecha final es anterior al inicio");
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
+  let suggestedBaseAmount = null;
+  if (durationMode === "limited" && occurrenceCount) {
+    const plan = buildLimitedPaymentPlan({
+      frequency,
+      dueDayOfMonth: body.dueDayOfMonth,
+      dueMonth: body.dueMonth,
+      startDate,
+      occurrenceCount,
+      totalAmount: totalAmount ?? 0,
+      entryAmount,
+      baseAmount: body.baseAmount,
+      firstInstallmentSameMonth,
+    });
+    const installment = plan.find((r) => r.kind === "installment" || r.kind === "final");
+    if (installment) suggestedBaseAmount = installment.expectedAmount;
+  }
+
+  return {
+    durationMode,
+    startDate,
+    endDate,
+    occurrenceCount,
+    coverFromIncome,
+    totalAmount: durationMode === "limited" ? totalAmount : null,
+    entryAmount: durationMode === "limited" ? entryAmount : 0,
+    firstInstallmentSameMonth: durationMode === "limited" ? firstInstallmentSameMonth : false,
+    suggestedBaseAmount,
+  };
+}
+
+async function registerOccurrencePayment({ occ, tpl, user, amount, date, note, transaction: t }) {
+  const payAmount = roundMoney(amount ?? occ.actualAmount ?? occ.expectedAmount ?? tpl.baseAmount);
+  if (payAmount <= 0) {
+    const err = new Error("Monto inválido");
+    err.statusCode = 400;
+    throw err;
+  }
+  const payDate = toFinanceDateTime(date || new Date());
+  const storeLabel = tpl.store?.name ? ` — ${tpl.store.name}` : "";
+  const coverTag = tpl.coverFromIncome !== false ? " · c/ingresos" : "";
+  const kindTag =
+    occ.kind === "entry"
+      ? "Entrada"
+      : occ.kind === "final"
+        ? "Cuota final"
+        : occ.periodKey === "entrada"
+          ? "Entrada"
+          : occ.periodKey;
+  const concept = `${tpl.name}${storeLabel} · ${kindTag}${coverTag}`.slice(0, 250);
+
+  const expense = await Expense.create(
+    {
+      date: payDate,
+      amount: payAmount,
+      concept,
+      category: expenseCategoryFor(tpl.category),
+      status: "paid",
+      referenceType: "recurring_occurrence",
+      referenceId: occ.id,
+      counterpartyName: tpl.providerName || null,
+      createdBy: user.accountId,
+    },
+    { transaction: t },
+  );
+
+  await occ.update(
+    {
+      status: "paid",
+      actualAmount: payAmount,
+      paidDate: payDate,
+      expenseId: expense.id,
+      note: note?.trim() || occ.note,
+    },
+    { transaction: t },
+  );
+
+  return { expense, payAmount };
 }
 
 async function syncRemindersForPending() {
@@ -186,10 +489,14 @@ async function syncRemindersForPending() {
           ? `Vence hoy: ${tpl.name}`
           : `Próximo pago: ${tpl.name}`;
 
+    const coverHint =
+      tpl.coverFromIncome !== false
+        ? " Cubrir con ingresos (entrada) del negocio."
+        : "";
     const message =
       days < 0
-        ? `${tpl.name}${storeLabel} venció hace ${Math.abs(days)} día(s). Monto ref.: ${amt}.`
-        : `${tpl.name}${storeLabel} vence en ${days} día(s) (${format(new Date(occ.dueDate), "d MMM yyyy", { locale: es })}). Monto ref.: ${amt}.`;
+        ? `${tpl.name}${storeLabel} venció hace ${Math.abs(days)} día(s). Monto ref.: ${amt}.${coverHint}`
+        : `${tpl.name}${storeLabel} vence en ${days} día(s) (${format(new Date(occ.dueDate), "d MMM yyyy", { locale: es })}). Monto ref.: ${amt}.${coverHint}`;
 
     const sourceKey = `recurring_due:${occ.id}:${format(now, "yyyy-MM-dd")}`;
 
@@ -389,15 +696,7 @@ export const createRecurringTemplate = async (req, res) => {
       return res.status(400).json({ message: "Indica un nombre" });
     }
 
-    const baseAmount = roundMoney(body.baseAmount);
-    if (baseAmount < 0) {
-      notifyFail("recurring_template.create_failed", "Monto inválido", { req, httpStatus: 400 });
-      return res.status(400).json({ message: "Monto inválido" });
-    }
-
     const frequency = ALLOWED_FREQ.has(body.frequency) ? body.frequency : "monthly";
-    const startDate = dateOnlyOrNull(body.startDate);
-    const endDate = dateOnlyOrNull(body.endDate);
 
     if (frequency === "annual" && !body.dueMonth) {
       notifyFail("recurring_template.create_failed", "Indica el mes de vencimiento anual", {
@@ -405,6 +704,38 @@ export const createRecurringTemplate = async (req, res) => {
         httpStatus: 400,
       });
       return res.status(400).json({ message: "Indica el mes de vencimiento anual" });
+    }
+
+    let duration;
+    try {
+      duration = resolveDurationFields(body, frequency);
+    } catch (e) {
+      notifyFail("recurring_template.create_failed", e.message, { req, httpStatus: 400 });
+      return res.status(e.statusCode || 400).json({ message: e.message });
+    }
+
+    let baseAmount = roundMoney(body.baseAmount);
+    if (!(baseAmount > 0) && duration.suggestedBaseAmount) {
+      baseAmount = roundMoney(duration.suggestedBaseAmount);
+    }
+    if (baseAmount < 0) {
+      notifyFail("recurring_template.create_failed", "Monto inválido", { req, httpStatus: 400 });
+      return res.status(400).json({ message: "Monto inválido" });
+    }
+
+    const hasEntry = Number(duration.entryAmount) > 0.009;
+    const entryActionRaw = String(body.entryAction || "").toLowerCase();
+    let entryAction = "pending";
+    if (hasEntry) {
+      if (entryActionRaw === "pay" || body.payEntryNow === true || body.payEntryNow === "true") {
+        entryAction = "pay";
+      } else if (
+        entryActionRaw === "omit" ||
+        body.omitEntryNow === true ||
+        body.omitEntryNow === "true"
+      ) {
+        entryAction = "omit";
+      }
     }
 
     const template = await sequelize.transaction(async (t) => {
@@ -424,8 +755,14 @@ export const createRecurringTemplate = async (req, res) => {
               : Math.min(31, Math.max(1, Number(body.dueDayOfMonth) || 5)),
           dueMonth: frequency === "annual" ? Number(body.dueMonth) : null,
           labelColor: normalizeHex(body.labelColor),
-          startDate,
-          endDate,
+          startDate: duration.startDate,
+          endDate: duration.endDate,
+          durationMode: duration.durationMode,
+          occurrenceCount: duration.occurrenceCount,
+          coverFromIncome: duration.coverFromIncome,
+          totalAmount: duration.totalAmount,
+          entryAmount: duration.entryAmount,
+          firstInstallmentSameMonth: Boolean(duration.firstInstallmentSameMonth),
           providerName: body.providerName?.trim() || null,
           note: body.note?.trim() || null,
           reminderDaysBefore: Math.max(0, Number(body.reminderDaysBefore) || 7),
@@ -436,6 +773,39 @@ export const createRecurringTemplate = async (req, res) => {
       );
 
       await ensureOccurrencesForTemplates([row], user.accountId, t);
+
+      if (entryAction !== "pending") {
+        const entryOcc = await RecurringExpenseOccurrence.findOne({
+          where: { templateId: row.id, periodKey: "entrada" },
+          transaction: t,
+        });
+        if (entryOcc && entryOcc.status === "pending") {
+          if (entryAction === "pay") {
+            const fullTpl = await RecurringExpenseTemplate.findByPk(row.id, {
+              include: [{ model: Store, as: "store", attributes: ["id", "name"], required: false }],
+              transaction: t,
+            });
+            await registerOccurrencePayment({
+              occ: entryOcc,
+              tpl: fullTpl,
+              user,
+              amount: entryOcc.expectedAmount,
+              date: body.entryPaidAt || duration.startDate || new Date(),
+              note: body.entryNote || "Entrada al crear plan",
+              transaction: t,
+            });
+          } else if (entryAction === "omit") {
+            await entryOcc.update(
+              {
+                status: "skipped",
+                note: body.entryNote || "Entrada externa (no sale del negocio)",
+              },
+              { transaction: t },
+            );
+          }
+        }
+      }
+
       return row;
     });
 
@@ -446,7 +816,11 @@ export const createRecurringTemplate = async (req, res) => {
     notifyOk("recurring_template.created", "Plantilla recurrente creada", {
       template: mapTemplateRow(full),
     });
-    res.status(201).json(mapTemplateRow(full));
+    res.status(201).json({
+      ...mapTemplateRow(full),
+      entryPaid: entryAction === "pay",
+      entryOmitted: entryAction === "omit",
+    });
   } catch (err) {
     console.error("createRecurringTemplate error:", err);
     notifyFail("recurring_template.create_failed", "Error al crear plantilla", {
@@ -484,8 +858,6 @@ export const updateRecurringTemplate = async (req, res) => {
       updates.frequency = ALLOWED_FREQ.has(body.frequency) ? body.frequency : template.frequency;
     }
     if (body.labelColor !== undefined) updates.labelColor = normalizeHex(body.labelColor);
-    if (body.startDate !== undefined) updates.startDate = dateOnlyOrNull(body.startDate);
-    if (body.endDate !== undefined) updates.endDate = dateOnlyOrNull(body.endDate);
     if (body.baseAmount != null) updates.baseAmount = roundMoney(body.baseAmount);
     if (body.dueDayOfMonth != null) {
       const freq = updates.frequency || template.frequency;
@@ -502,16 +874,90 @@ export const updateRecurringTemplate = async (req, res) => {
     }
     if (body.isActive !== undefined) updates.isActive = Boolean(body.isActive);
 
-    const nextStart = updates.startDate !== undefined ? updates.startDate : template.startDate;
-    const nextEnd = updates.endDate !== undefined ? updates.endDate : template.endDate;
-    if (nextStart && nextEnd && String(nextEnd).slice(0, 10) < String(nextStart).slice(0, 10)) {
-      return res.status(400).json({ message: "La fecha final es anterior al inicio" });
+    if (
+      body.durationMode !== undefined ||
+      body.occurrenceCount !== undefined ||
+      body.startDate !== undefined ||
+      body.endDate !== undefined ||
+      body.coverFromIncome !== undefined ||
+      body.totalAmount !== undefined ||
+      body.entryAmount !== undefined ||
+      body.firstInstallmentSameMonth !== undefined
+    ) {
+      try {
+        const freq = updates.frequency || template.frequency;
+        const duration = resolveDurationFields(
+          {
+            durationMode: body.durationMode ?? template.durationMode,
+            occurrenceCount:
+              body.occurrenceCount !== undefined ? body.occurrenceCount : template.occurrenceCount,
+            startDate: body.startDate !== undefined ? body.startDate : template.startDate,
+            endDate: body.endDate !== undefined ? body.endDate : template.endDate,
+            coverFromIncome:
+              body.coverFromIncome !== undefined ? body.coverFromIncome : template.coverFromIncome,
+            dueDayOfMonth: updates.dueDayOfMonth ?? template.dueDayOfMonth,
+            dueMonth: updates.dueMonth !== undefined ? updates.dueMonth : template.dueMonth,
+            // Importante: sin esto al editar se perdían entrada/total (quedaban 0/null)
+            totalAmount:
+              body.totalAmount !== undefined ? body.totalAmount : template.totalAmount,
+            entryAmount:
+              body.entryAmount !== undefined ? body.entryAmount : template.entryAmount,
+            firstInstallmentSameMonth:
+              body.firstInstallmentSameMonth !== undefined
+                ? body.firstInstallmentSameMonth
+                : template.firstInstallmentSameMonth,
+            baseAmount:
+              updates.baseAmount != null
+                ? updates.baseAmount
+                : body.baseAmount != null
+                  ? body.baseAmount
+                  : template.baseAmount,
+          },
+          freq,
+        );
+        updates.durationMode = duration.durationMode;
+        updates.startDate = duration.startDate;
+        updates.endDate = duration.endDate;
+        updates.occurrenceCount = duration.occurrenceCount;
+        updates.coverFromIncome = duration.coverFromIncome;
+        updates.totalAmount = duration.totalAmount;
+        updates.entryAmount = duration.entryAmount;
+        updates.firstInstallmentSameMonth = duration.firstInstallmentSameMonth;
+        if (duration.suggestedBaseAmount && updates.baseAmount == null) {
+          updates.baseAmount = duration.suggestedBaseAmount;
+        }
+      } catch (e) {
+        return res.status(e.statusCode || 400).json({ message: e.message });
+      }
     }
+
+    // Al editar: omitir entrada pendiente si la marcó como externa
+    const omitEntryOnUpdate =
+      (body.omitEntryNow === true ||
+        body.omitEntryNow === "true" ||
+        String(body.entryAction || "").toLowerCase() === "omit") &&
+      Number(updates.entryAmount ?? template.entryAmount) > 0.009;
 
     await sequelize.transaction(async (t) => {
       await template.update(updates, { transaction: t });
+      await template.reload({ transaction: t });
       if (template.isActive) {
         await ensureOccurrencesForTemplates([template], user.accountId, t);
+      }
+      if (omitEntryOnUpdate) {
+        const entryOcc = await RecurringExpenseOccurrence.findOne({
+          where: { templateId: template.id, periodKey: "entrada", status: "pending" },
+          transaction: t,
+        });
+        if (entryOcc) {
+          await entryOcc.update(
+            {
+              status: "skipped",
+              note: body.entryNote || "Entrada externa (no sale del negocio)",
+            },
+            { transaction: t },
+          );
+        }
       }
     });
 
@@ -631,53 +1077,20 @@ export const payRecurringOccurrence = async (req, res) => {
     }
 
     const body = req.body || {};
-    const payAmount = roundMoney(
-      body.amount ?? occ.actualAmount ?? occ.expectedAmount ?? tpl.baseAmount
-    );
-    if (payAmount <= 0) {
-      notifyFail("recurring_occurrence.pay_failed", "Monto inválido", {
-        req,
-        httpStatus: 400,
-        extra: { occurrenceId: occ.id },
+
+    await sequelize.transaction(async (t) => {
+      await registerOccurrencePayment({
+        occ,
+        tpl,
+        user,
+        amount: body.amount,
+        date: body.date,
+        note: body.note,
+        transaction: t,
       });
-      return res.status(400).json({ message: "Monto inválido" });
-    }
-
-    const payDate = toFinanceDateTime(body.date || new Date());
-    const storeLabel = tpl.store?.name ? ` — ${tpl.store.name}` : "";
-    const concept = `${tpl.name}${storeLabel} (${occ.periodKey})`;
-
-    const result = await sequelize.transaction(async (t) => {
-      const expense = await Expense.create(
-        {
-          date: payDate,
-          amount: payAmount,
-          concept,
-          category: expenseCategoryFor(tpl.category),
-          status: "paid",
-          referenceType: "recurring_occurrence",
-          referenceId: occ.id,
-          counterpartyName: tpl.providerName || null,
-          createdBy: user.accountId,
-        },
-        { transaction: t }
-      );
-
-      await occ.update(
-        {
-          status: "paid",
-          actualAmount: payAmount,
-          paidDate: payDate,
-          expenseId: expense.id,
-          note: body.note?.trim() || occ.note,
-        },
-        { transaction: t }
-      );
-
-      return { occurrence: occ, expense };
     });
 
-    const full = await RecurringExpenseOccurrence.findByPk(result.occurrence.id, {
+    const full = await RecurringExpenseOccurrence.findByPk(occ.id, {
       include: [
         {
           model: RecurringExpenseTemplate,
@@ -687,12 +1100,18 @@ export const payRecurringOccurrence = async (req, res) => {
       ],
     });
 
-    notifyOk("recurring_occurrence.paid", `Ocurrencia pagada #${result.occurrence.id}`, {
-      occurrence: mapOccurrenceRow(full),
+    const mapped = mapOccurrenceRow(full);
+    notifyOk("recurring_occurrence.paid", `Ocurrencia pagada #${occ.id}`, {
+      occurrence: mapped,
     });
     res.json({
-      message: "Pago registrado en finanzas",
-      occurrence: mapOccurrenceRow(full),
+      message:
+        mapped.kind === "entry"
+          ? "Entrada registrada en finanzas"
+          : mapped.kind === "final"
+            ? "Cuota final registrada en finanzas"
+            : "Pago registrado en finanzas",
+      occurrence: mapped,
     });
   } catch (err) {
     console.error("payRecurringOccurrence error:", err);

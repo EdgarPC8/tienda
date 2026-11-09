@@ -5,8 +5,11 @@ import {
   resolveIngredientUnitCost,
   collectRecipeIngredientPriceAlerts,
   applyIngredientPriceAlerts,
+  proposeGenericCostFromLinkedPurchases,
+  resolvePackProposalForCosting,
 } from "../../services/genericIngredientCostService.js";
 import { quoteGramLine } from "../../services/productionGramsService.js";
+import { ensureProductRoleFlagsSchema } from "../../utils/productRoleFlags.js";
 
 const safeDiv = (a, b) => (b > 0 ? a / b : 0);
 
@@ -90,6 +93,7 @@ async function validateRecipeLine({
 
 export const getRecipeCosting = async (req, res) => {
   try {
+    await ensureProductRoleFlagsSchema();
     const productFinalId = Number(req.params.productFinalId);
     if (!Number.isFinite(productFinalId) || productFinalId <= 0) {
       return res.status(400).json({ message: "productFinalId inválido" });
@@ -104,6 +108,8 @@ export const getRecipeCosting = async (req, res) => {
     const queryProducedQty = Number.isFinite(Number(req.query.producedQty))
       ? Number(req.query.producedQty)
       : 0;
+    const costMode =
+      String(req.query.costMode || "").toLowerCase() === "sale" ? "sale" : "supplier";
 
     const extrasPercent = extrasPctInt / 100;
     const laborPercent = laborPctInt / 100;
@@ -142,6 +148,11 @@ export const getRecipeCosting = async (req, res) => {
       return productHasRecipe(raw.id);
     };
 
+    /**
+     * Convierte la cantidad configurada en la receta al multiplicador del hijo.
+     * - Masa/producto en unidades (unitId=1): gramos → fracción del lote; unidades → N lotes.
+     * - Masa/producto en gramos: gramos → g tal cual; unidades → N × peso del lote (o std).
+     */
     const resolveChildMult = async (raw, baseQty, isGr) => {
       if (raw.unitId === 1) {
         if (isGr) {
@@ -155,7 +166,12 @@ export const getRecipeCosting = async (req, res) => {
       }
       if (isGr) return baseQty;
       const std = Number(raw.standardWeightGrams || 0);
-      return baseQty * std;
+      if (std > 0) return baseQty * std;
+      if (await isComposedProduct(raw)) {
+        const { grams: batchGrams } = await computeProducedGrams(raw.id);
+        if (batchGrams > 0) return baseQty * batchGrams;
+      }
+      return baseQty;
     };
 
     const computeProducedGrams = async (productId) => {
@@ -196,6 +212,10 @@ export const getRecipeCosting = async (req, res) => {
           unitId: p.unitId,
           unidad,
           mult: Number(mult) || 1,
+          price: Number(p.price || 0),
+          supplierPrice: Number(p.supplierPrice || 0),
+          isGenericIngredient: Boolean(p.isGenericIngredient && !p.genericProductId),
+          genericProductId: p.genericProductId || null,
         },
         children: [],
         cost: {
@@ -235,7 +255,7 @@ export const getRecipeCosting = async (req, res) => {
         if (!(await isComposedProduct(raw))) {
           if (isMaterial) {
             const unidadesUsadas = baseQty;
-            const resolved = await resolveIngredientUnitCost(raw);
+            const resolved = await resolveIngredientUnitCost(raw, { costMode });
             const precioPorUnidad =
               resolved.unitCost > 0
                 ? resolved.unitCost
@@ -250,6 +270,12 @@ export const getRecipeCosting = async (req, res) => {
             node.directSubtotal.totalValor += valor;
 
             node.directItems.push({
+              productId: raw.id,
+              isGenericIngredient: Boolean(raw.isGenericIngredient && !raw.genericProductId),
+              genericProductId: raw.genericProductId || null,
+              price: Number(raw.price || 0),
+              supplierPrice: Number(raw.supplierPrice || 0),
+              unitId: raw.unitId,
               nombre,
               tipo: "material",
               unidadBase: "unidad",
@@ -276,10 +302,40 @@ export const getRecipeCosting = async (req, res) => {
               notas: `Material · ${resolved.source || "price/netWeight"}`,
             });
           } else if (Number(raw.unitId) === 1 && !isGr) {
-            // Insumo por unidad (ej. huevo): costo desde empaque enlazado o supplierPrice
+            // Insumo por unidad (ej. huevo): $/u desde catálogo aplicado o empaque
             const unidadesUsadas = baseQty;
-            const resolved = await resolveIngredientUnitCost(raw);
-            const precioPorUnidad = resolved.unitCost;
+            const isGenericLeaf = Boolean(
+              raw.isGenericIngredient && !raw.genericProductId,
+            );
+            let packProposal = null;
+            if (isGenericLeaf && costMode !== "sale") {
+              try {
+                packProposal = await resolvePackProposalForCosting(raw.id);
+              } catch {
+                packProposal = null;
+              }
+            }
+            const resolved = await resolveIngredientUnitCost(raw, { costMode });
+            const packUnitPrice = Number(packProposal?.packUnitPrice || 0);
+            const packQty = Number(packProposal?.qtyIntoGeneric || 0);
+            const catalogUnit = Number(raw.supplierPrice || 0);
+            // Preferir lo aplicado en el genérico; si no, propuesta del empaque
+            const precioPorUnidad =
+              costMode !== "sale" && catalogUnit > 0
+                ? catalogUnit
+                : Number(packProposal?.proposedCost || 0) > 0
+                  ? Number(packProposal.proposedCost)
+                  : resolved.unitCost > 0
+                    ? resolved.unitCost
+                    : 0;
+            // Precio neto = valor del empaque (cubeta $4.10), no el $/u
+            const precioNeto =
+              costMode === "sale"
+                ? Number(raw.price || 0)
+                : packUnitPrice > 0
+                  ? packUnitPrice
+                  : Number(raw.price || 0);
+            const contenidoEmpaque = packQty > 0 ? packQty : 1;
             const valor = precioPorUnidad * unidadesUsadas;
 
             node.cost.subtotalInsumos += valor;
@@ -287,17 +343,30 @@ export const getRecipeCosting = async (req, res) => {
             node.directSubtotal.totalValor += valor;
 
             node.directItems.push({
+              productId: raw.id,
+              isGenericIngredient: isGenericLeaf,
+              genericProductId: raw.genericProductId || null,
+              price: Number(raw.price || 0),
+              supplierPrice: Number(raw.supplierPrice || 0),
+              packUnitPrice: packUnitPrice > 0 ? packUnitPrice : null,
+              presentationName: packProposal?.presentationName || null,
+              unitId: raw.unitId,
               nombre,
               tipo: "insumo",
               unidadBase: "unidad",
               consumo: unidadesUsadas,
-              precioNeto: precioPorUnidad,
-              pesoNeto: 1,
+              precioNeto,
+              pesoNeto: contenidoEmpaque,
               pesoEnMasa: unidadesUsadas,
               precioUnitBase: precioPorUnidad,
               valor: Number(valor.toFixed(6)),
               isQuantityInGrams: false,
-              costSource: resolved.source,
+              costSource:
+                catalogUnit > 0
+                  ? `catalog:${packProposal?.presentationName || "supplierPrice"}`
+                  : packProposal?.proposedCost > 0
+                    ? `lastPurchase:${packProposal.presentationName || "pack"}`
+                    : resolved.source,
             });
 
             node.rows.push({
@@ -306,13 +375,19 @@ export const getRecipeCosting = async (req, res) => {
               nombreProductoFinal: p.name,
               nombreInsumo: nombre,
               tipo: "insumo",
-              precioNeto: precioPorUnidad,
-              pesoNeto: 1,
+              precioNeto,
+              pesoNeto: contenidoEmpaque,
               cantidadUsada: unidadesUsadas,
               precioUnitBase: precioPorUnidad,
               valor: Number(valor.toFixed(6)),
               isQuantityInGrams: false,
-              notas: `Insumo/u · ${resolved.source || "supplierPrice"}`,
+              notas: `Insumo/u · ${
+                catalogUnit > 0
+                  ? `catalog:${packProposal?.presentationName || "supplierPrice"}`
+                  : packProposal?.proposedCost > 0
+                    ? `lastPurchase:${packProposal.presentationName || "pack"}`
+                    : resolved.source || "supplierPrice"
+              }`,
             });
           } else {
             let gramosUsados = 0;
@@ -323,29 +398,70 @@ export const getRecipeCosting = async (req, res) => {
               gramosUsados = baseQty * std;
             }
 
-            const gramsQuote = isGr ? await quoteGramLine(raw, baseQty) : null;
+            const gramsQuote = isGr
+              ? await quoteGramLine(raw, baseQty, { costMode })
+              : null;
             const resolved = gramsQuote
               ? {
                   unitCost: gramsQuote.pricePerGram,
                   source: gramsQuote.missingPrice
-                    ? "sin-precio-proveedor"
-                    : `proveedor:${gramsQuote.sourceName}`,
+                    ? costMode === "sale"
+                      ? "sin-precio-venta"
+                      : "sin-precio-proveedor"
+                    : `${costMode}:${gramsQuote.sourceName}`,
                 }
-              : await resolveIngredientUnitCost(raw);
+              : await resolveIngredientUnitCost(raw, { costMode });
             if (gramsQuote?.missingPrice) {
               costWarnings.push(
-                `${gramsQuote.sourceName} no tiene precio de proveedor. El costo de ${nombre} no se calcula como $0,00.`,
+                costMode === "sale"
+                  ? `${gramsQuote.sourceName} no tiene precio de venta usable. El costo de ${nombre} no se calcula como $0,00.`
+                  : `${gramsQuote.sourceName} no tiene precio de proveedor. El costo de ${nombre} no se calcula como $0,00.`,
               );
             }
-            const precioPorGramo = gramsQuote?.missingPrice
-              ? null
-              : gramsQuote
-                ? gramsQuote.pricePerGram
-                : resolved.unitCost > 0
-                  ? resolved.unitCost
-                  : safeDiv(Number(raw.price || 0), Number(raw.netWeight || 0));
-            const precioNeto = Number(raw.price || 0);
-            const pesoNetoGramos = Number(raw.netWeight || 0);
+            // Precio neto = empaque aplicado (o última compra); $/g = supplierPrice del genérico.
+            const isGenericLeaf = Boolean(
+              raw.isGenericIngredient && !raw.genericProductId,
+            );
+            let packProposal = null;
+            if (isGenericLeaf && costMode !== "sale") {
+              try {
+                packProposal = await resolvePackProposalForCosting(raw.id);
+              } catch {
+                packProposal = null;
+              }
+            }
+            const proposedPg = Number(packProposal?.proposedCost || 0);
+            const catalogPg = Number(raw.supplierPrice || 0);
+            const precioPorGramo =
+              costMode !== "sale" && catalogPg > 0
+                ? catalogPg
+                : gramsQuote?.missingPrice
+                  ? proposedPg > 0
+                    ? proposedPg
+                    : null
+                  : proposedPg > 0
+                    ? proposedPg
+                    : gramsQuote
+                      ? gramsQuote.pricePerGram
+                      : resolved.unitCost > 0
+                        ? resolved.unitCost
+                        : safeDiv(Number(raw.price || 0), Number(raw.netWeight || 0));
+            const sale = Number(raw.price || 0);
+            const packUnitPrice = Number(packProposal?.packUnitPrice || 0);
+            const precioNeto =
+              costMode === "sale"
+                ? sale
+                : packUnitPrice > 0
+                  ? packUnitPrice
+                  : Number(gramsQuote?.supplierPrice || 0) > 1
+                    ? Number(gramsQuote.supplierPrice)
+                    : sale;
+            const pesoNetoGramos =
+              Number(packProposal?.qtyIntoGeneric || 0) > 0
+                ? Number(packProposal.qtyIntoGeneric)
+                : Number(raw.netWeight || 0) > 0
+                  ? Number(raw.netWeight)
+                  : Number(gramsQuote?.gramsPerUnit || 0);
             const valor = precioPorGramo == null ? null : precioPorGramo * gramosUsados;
             if (valor != null) {
               node.cost.subtotalInsumos += valor;
@@ -355,6 +471,14 @@ export const getRecipeCosting = async (req, res) => {
             node.directSubtotal.totalPesoEnMasaGr += gramosUsados;
 
             node.directItems.push({
+              productId: raw.id,
+              isGenericIngredient: isGenericLeaf,
+              genericProductId: raw.genericProductId || null,
+              price: Number(raw.price || 0),
+              supplierPrice: Number(raw.supplierPrice || 0),
+              packUnitPrice: packUnitPrice > 0 ? packUnitPrice : null,
+              presentationName: packProposal?.presentationName || null,
+              unitId: raw.unitId,
               nombre,
               tipo: "insumo",
               unidadBase: "gramos",
@@ -366,7 +490,12 @@ export const getRecipeCosting = async (req, res) => {
               valor: valor == null ? null : Number(valor.toFixed(6)),
               isQuantityInGrams: isGr,
               standardWeightGrams: Number(raw.standardWeightGrams || 0),
-              costSource: resolved.source,
+              costSource:
+                catalogPg > 0
+                  ? `catalog:${packProposal?.presentationName || "supplierPrice"}`
+                  : proposedPg > 0
+                    ? `lastPurchase:${packProposal?.presentationName || "pack"}`
+                    : resolved.source,
             });
 
             node.rows.push({
@@ -383,7 +512,13 @@ export const getRecipeCosting = async (req, res) => {
               isQuantityInGrams: isGr,
               standardWeightGrams: Number(raw.standardWeightGrams || 0),
               notas: isGr
-                ? `Cantidad en g/ml · ${resolved.source || "cost"}`
+                ? `Cantidad en g/ml · ${
+                    catalogPg > 0
+                      ? `catalog:${packProposal?.presentationName || "supplierPrice"}`
+                      : proposedPg > 0
+                        ? `lastPurchase:${packProposal?.presentationName || "pack"}`
+                        : resolved.source || "cost"
+                  }`
                 : `Unidades → g · ${resolved.source || "cost"}`,
             });
           }
@@ -426,31 +561,65 @@ export const getRecipeCosting = async (req, res) => {
     const product = await fetchProduct(productFinalId);
     const batchYield = await computeProducedGrams(productFinalId);
 
-    let effectiveProducedQty = queryProducedQty;
-    let producedQtyAuto = false;
+    // 0 = lote vacío (todo en cero). Ya no se convierte 0 → 1 automáticamente.
+    let effectiveProducedQty = queryProducedQty > 0 ? queryProducedQty : 0;
+    const producedQtyAuto = false;
 
-    if (effectiveProducedQty <= 0) {
-      producedQtyAuto = true;
-      if (product.unitId === 1) {
-        effectiveProducedQty = 1;
-      } else {
-        effectiveProducedQty = batchYield.grams > 0 ? batchYield.grams : 1;
-      }
-    }
-
-    const rootMult = effectiveProducedQty || 1;
-    const tree = await buildCostNode(productFinalId, rootMult, []);
+    const rootMult = effectiveProducedQty;
+    const tree =
+      rootMult > 0
+        ? await buildCostNode(productFinalId, rootMult, [])
+        : {
+            info: {
+              id: product.id,
+              nombre: product.name,
+              type: product.type,
+              unitId: product.unitId,
+              unidad: product.unitId === 1 ? "unidad" : "gramos",
+              mult: 0,
+            },
+            children: [],
+            cost: {
+              subtotalInsumos: 0,
+              subtotalMateriales: 0,
+              totalPesoEnMasaGr: 0,
+              totalUnidadesMaterial: 0,
+              totalNodo: 0,
+              unitCost: 0,
+              unitCostLabel: product.unitId === 1 ? "/u" : "/g",
+            },
+            rows: [],
+            directItems: [],
+            directSubtotal: {
+              totalPesoEnMasaGr: 0,
+              totalUnidadesMaterial: 0,
+              totalValor: 0,
+            },
+          };
     const rows = tree.rows;
 
     const subtotalInsumos = Number(tree.cost.subtotalInsumos.toFixed(2));
     const subtotalMateriales = Number(tree.cost.subtotalMateriales.toFixed(2));
     const subtotalTodos = Number((subtotalInsumos + subtotalMateriales).toFixed(2));
-    const sinCostoConocido = costWarnings.length > 0 && subtotalTodos <= 0;
+    const emptyLot = effectiveProducedQty <= 0;
+    const sinCostoConocido =
+      !emptyLot && costWarnings.length > 0 && subtotalTodos <= 0;
 
-    const extras = sinCostoConocido ? null : subtotalInsumos * extrasPercent;
-    const baseConExtras = sinCostoConocido ? null : subtotalInsumos + extras;
-    const labor = sinCostoConocido ? null : baseConExtras * laborPercent;
-    const totalLote = sinCostoConocido ? null : baseConExtras + labor;
+    let extras = null;
+    let baseConExtras = null;
+    let labor = null;
+    let totalLote = null;
+    if (emptyLot) {
+      extras = 0;
+      baseConExtras = 0;
+      labor = 0;
+      totalLote = 0;
+    } else if (!sinCostoConocido) {
+      extras = subtotalInsumos * extrasPercent;
+      baseConExtras = subtotalInsumos + extras;
+      labor = baseConExtras * laborPercent;
+      totalLote = baseConExtras + labor;
+    }
 
     const costoUnitario = sinCostoConocido
       ? null
@@ -549,6 +718,9 @@ export const getRecipeCosting = async (req, res) => {
         : null;
 
     const summary = {
+      costMode,
+      costModeLabel:
+        costMode === "sale" ? "Precio de venta" : "Precio de proveedor",
       producto: {
         id: product.id,
         name: product.name,
@@ -600,7 +772,7 @@ export const getRecipeCosting = async (req, res) => {
       },
       yieldInfo,
       notas:
-        "Extras = % de INSUMOS; Mano de obra = % de (INSUMOS + EXTRAS). Materiales no entran en esa base. Cant. lote en 0 = automático (1 u. o suma de insumos en gramos).",
+        "Extras = % de INSUMOS; Mano de obra = % de (INSUMOS + EXTRAS). Materiales no entran en esa base. Cant. lote por defecto = 1; si es 0, todos los costos quedan en cero.",
       advertencias: [...new Set(costWarnings)],
     };
 
@@ -649,6 +821,27 @@ export const getIngredientPriceAlerts = async (req, res) => {
   }
 };
 
+/** Propuesta de costo genérico desde última compra o empaque forzado (?presentationId=). */
+export const getGenericCostProposal = async (req, res) => {
+  try {
+    const genericId = Number(req.params.genericId);
+    if (!Number.isFinite(genericId) || genericId <= 0) {
+      return res.status(400).json({ message: "genericId inválido" });
+    }
+    const presentationId = Number(req.query.presentationId);
+    const proposal = await proposeGenericCostFromLinkedPurchases(genericId, {
+      presentationId: presentationId > 0 ? presentationId : undefined,
+    });
+    return res.json({ proposal });
+  } catch (error) {
+    console.error("getGenericCostProposal error:", error);
+    return res.status(500).json({
+      message: "Error al calcular propuesta de costo",
+      detail: String(error?.message || error),
+    });
+  }
+};
+
 /** Aplica actualización de supplierPrice en genéricos seleccionados. */
 export const applyIngredientPriceAlertsController = async (req, res) => {
   try {
@@ -658,7 +851,10 @@ export const applyIngredientPriceAlertsController = async (req, res) => {
     if (!genericIds.length) {
       return res.status(400).json({ message: "genericIds requerido" });
     }
-    const applied = await applyIngredientPriceAlerts(genericIds);
+    const presentationId = Number(req.body?.presentationId);
+    const applied = await applyIngredientPriceAlerts(genericIds, {
+      presentationId: presentationId > 0 ? presentationId : undefined,
+    });
     notifyOk(
       "recipe.ingredient_prices_updated",
       `Precios actualizados: ${applied.length}`,

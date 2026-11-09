@@ -25,6 +25,7 @@ function employeeMay(method, path, user) {
   }
 
   if (/\/shifts(\/|$)/.test(path)) return true;
+  // Mis tareas + acciones (abrir caja, producción, conteo stock).
   if (/\/tasks\/(my-items|items\/)/.test(path)) return true;
 
   if (/\/notifications(\/|$)/.test(path)) return true;
@@ -32,6 +33,8 @@ function employeeMay(method, path, user) {
   if (m === "GET" && /\/news(\/|$)/.test(path)) return true;
 
   if (m === "GET" && /\/inventory\/(products|categories|units)(\/|$)/.test(path)) return true;
+  // Empleado: solo precio de venta + stock (vista Productos reducida).
+  if (m === "PATCH" && /\/inventory\/products\/\d+\/price-stock\/?$/.test(path)) return true;
   // Turno/caja: listar locales (y stock por local) para abrir en el local principal.
   if (m === "GET" && /\/inventory\/stores(\/|$)/.test(path)) return true;
   if (m === "GET" && /\/inventory\/(stores\/\d+\/stocks|products\/\d+\/store-stocks)/.test(path)) return true;

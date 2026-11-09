@@ -7,6 +7,7 @@ import {
   deleteTaskPlan,
   executeTaskOpenBox,
   executeTaskProduction,
+  executeTaskStockCount,
   getMyTaskItems,
   getTaskAssignees,
   getTaskPlans,
@@ -31,5 +32,6 @@ router.delete("/items/:id", isAuthenticated, deleteTaskItem);
 router.post("/items/:id/execute-open-box", isAuthenticated, executeTaskOpenBox);
 router.get("/items/:id/production-preview", isAuthenticated, previewTaskProduction);
 router.post("/items/:id/execute-production", isAuthenticated, executeTaskProduction);
+router.post("/items/:id/execute-stock-count", isAuthenticated, executeTaskStockCount);
 
 export default router;

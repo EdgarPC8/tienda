@@ -84,14 +84,129 @@ import { UserData } from "../models/UserData.js";
 import { AppSettings } from "../models/AppSettings.js";
 import { AppEntitlement } from "../models/AppEntitlement.js";
 import { SriBillingSettings, ElectronicInvoice } from "../models/SriBilling.js";
+import { AppNews } from "../models/AppNews.js";
+import {
+  PromoGroup,
+  PromoBenefit,
+  PromoMember,
+} from "../models/MarketingPromotions.js";
 
 export const backupFilePath = resolve(__dirname, "backup.json");
 export const backups = resolve(__dirname, "..", "backups");
 
+const APP_KEY_BY_PREFIX = {
+  eddeliapi: "eddeli",
+  storeapi: "store",
+  tiendaapi: "tienda",
+};
+
+const APP_KEY_BY_DB = {
+  softed: "eddeli",
+  eddeli: "eddeli",
+  store: "store",
+  tienda: "tienda",
+};
+
+const APP_LABELS = {
+  eddeli: "EdDeli",
+  store: "Store",
+  tienda: "Tienda",
+};
+
+/** Identidad de esta instalación (eddeli | store | tienda). */
+export function getBackupAppKey() {
+  const prefix = String(process.env.API_PREFIX || "")
+    .trim()
+    .toLowerCase();
+  if (APP_KEY_BY_PREFIX[prefix]) return APP_KEY_BY_PREFIX[prefix];
+  const db = String(process.env.DB_NAME || "")
+    .trim()
+    .toLowerCase();
+  if (APP_KEY_BY_DB[db]) return APP_KEY_BY_DB[db];
+  return "eddeli";
+}
+
+export function getBackupAppLabel(appKey = getBackupAppKey()) {
+  return APP_LABELS[appKey] || String(appKey || "app");
+}
+
+export function buildBackupMeta({ tableCounts } = {}) {
+  const app = getBackupAppKey();
+  const counts = tableCounts && typeof tableCounts === "object" ? tableCounts : {};
+  const tableKeys = BACKUP_TABLE_ENTRIES.map((e) => e.key);
+  return {
+    app,
+    appLabel: getBackupAppLabel(app),
+    dbName: String(process.env.DB_NAME || "").trim() || null,
+    apiPrefix: String(process.env.API_PREFIX || "").trim() || null,
+    exportedAt: new Date().toISOString(),
+    formatVersion: 2,
+    tableKeys,
+    tableCount: tableKeys.length,
+    rowCounts: counts,
+  };
+}
+
+export class BackupAppMismatchError extends Error {
+  constructor(message, details = {}) {
+    super(message);
+    this.name = "BackupAppMismatchError";
+    this.code = "BACKUP_APP_MISMATCH";
+    this.statusCode = 409;
+    this.details = details;
+  }
+}
+
 /**
- * Tablas EdDeli incluidas en backup.json (guardar / recargar BD).
- * Solo EdDeli: no incluye módulos SoftEd ajenos (quiz/form/alumni/cv) aunque
- * compartan la misma BD MySQL.
+ * Valida que el backup pertenezca a esta app.
+ * @param {object|null} meta
+ * @param {{ allowForeignApp?: boolean, allowMissingMeta?: boolean }} options
+ */
+export function assertBackupBelongsToThisApp(meta, options = {}) {
+  const allowForeignApp = Boolean(options.allowForeignApp);
+  const allowMissingMeta = options.allowMissingMeta !== false;
+  const expectedApp = getBackupAppKey();
+  const expectedLabel = getBackupAppLabel(expectedApp);
+
+  if (!meta || typeof meta !== "object" || !meta.app) {
+    if (allowMissingMeta) {
+      return {
+        ok: true,
+        legacy: true,
+        warning:
+          "Backup sin firma de origen (_meta). Se acepta por compatibilidad; los nuevos exports sí la incluyen.",
+        expectedApp,
+      };
+    }
+    const err = new BackupAppMismatchError(
+      `Este archivo no tiene firma de origen (_meta.app). Puede ser un backup viejo u de otra app. Confirmá que es de «${expectedLabel}» antes de continuar.`,
+      { expectedApp, expectedLabel, sourceApp: null, legacy: true },
+    );
+    err.code = "BACKUP_MISSING_META";
+    throw err;
+  }
+
+  const sourceApp = String(meta.app).trim().toLowerCase();
+  if (sourceApp !== expectedApp && !allowForeignApp) {
+    const sourceLabel = getBackupAppLabel(sourceApp);
+    throw new BackupAppMismatchError(
+      `Este backup es de «${sourceLabel}» (${sourceApp}) y esta app es «${expectedLabel}» (${expectedApp}). No se puede importar para no pisar datos de otra instalación.`,
+      {
+        expectedApp,
+        sourceApp,
+        sourceLabel,
+        expectedLabel,
+        exportedAt: meta.exportedAt || null,
+      },
+    );
+  }
+
+  return { ok: true, legacy: false, expectedApp, sourceApp };
+}
+
+/**
+ * Tablas incluidas en backup.json (guardar / recargar BD).
+ * No incluye módulos SoftEd ajenos (quiz/form/alumni/cv).
  */
 export const BACKUP_TABLE_ENTRIES = [
   { key: "Roles", model: Roles },
@@ -116,6 +231,9 @@ export const BACKUP_TABLE_ENTRIES = [
   { key: "CashShift", model: CashShift, sanitize: "CashShift" },
   { key: "CashShiftMovement", model: CashShiftMovement },
   { key: "Customer", model: Customer },
+  { key: "PromoGroup", model: PromoGroup },
+  { key: "PromoBenefit", model: PromoBenefit },
+  { key: "PromoMember", model: PromoMember },
   { key: "Order", model: Order },
   { key: "OrderItem", model: OrderItem },
   { key: "OrderPaymentInstallment", model: OrderPaymentInstallment },
@@ -161,6 +279,7 @@ export const BACKUP_TABLE_ENTRIES = [
   { key: "Logs", model: Logs },
   { key: "AppSettings", model: AppSettings },
   { key: "AppEntitlement", model: AppEntitlement },
+  { key: "AppNews", model: AppNews },
   { key: "SriBillingSettings", model: SriBillingSettings },
   { key: "ElectronicInvoice", model: ElectronicInvoice },
 ];
@@ -174,12 +293,18 @@ export function summarizeBackupData(data) {
   return counts;
 }
 
-/** Asegura que existan todas las claves del backup (arrays vacíos si faltan). */
+/** Asegura que existan todas las claves del backup (arrays vacíos si faltan). Conserva _meta. */
 export function ensureBackupShape(data) {
+  const meta =
+    data && typeof data === "object" && !Array.isArray(data) && data._meta
+      ? data._meta
+      : undefined;
   const out = data && typeof data === "object" && !Array.isArray(data) ? { ...data } : {};
   for (const { key } of BACKUP_TABLE_ENTRIES) {
     if (!Array.isArray(out[key])) out[key] = [];
   }
+  if (meta != null) out._meta = meta;
+  else delete out._meta;
   return out;
 }
 
@@ -212,8 +337,10 @@ const MOVEMENT_REASON_ALIASES = {
 /**
  * Parsea texto JSON de backup (archivo subido o backup.json).
  * Valida forma, normaliza claves y campos problemáticos.
+ * @param {string} content
+ * @param {{ allowForeignApp?: boolean, allowMissingMeta?: boolean }} [options]
  */
-export function parseBackupJsonContent(content) {
+export function parseBackupJsonContent(content, options = {}) {
   const stripped = String(content ?? "").replace(/^\uFEFF/, "").trim();
   if (!stripped) {
     throw new Error("El archivo está vacío");
@@ -227,14 +354,21 @@ export function parseBackupJsonContent(content) {
   }
 
   if (parsed && typeof parsed === "object" && parsed.backup && typeof parsed.backup === "object") {
+    const outerMeta = parsed._meta;
     parsed = parsed.backup;
+    if (outerMeta && !parsed._meta) parsed._meta = outerMeta;
   }
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error(
-      "El JSON debe ser un objeto con tablas EdDeli (Roles, Users, Account, InventoryProduct, Order, …)",
+      "El JSON debe ser un objeto con tablas (Roles, Users, Account, InventoryProduct, Order, …)",
     );
   }
+
+  const metaCheck = assertBackupBelongsToThisApp(parsed._meta, {
+    allowForeignApp: Boolean(options.allowForeignApp),
+    allowMissingMeta: options.allowMissingMeta !== false,
+  });
 
   const shaped = ensureBackupShape(parsed);
   const hasRows = BACKUP_TABLE_ENTRIES.some(
@@ -244,19 +378,56 @@ export function parseBackupJsonContent(content) {
     throw new Error("El backup no contiene datos en ninguna tabla reconocida");
   }
 
-  return prepareBackupForRestore(shaped);
+  const prepared = prepareBackupForRestore(shaped);
+  prepared._metaCheck = metaCheck;
+  return prepared;
 }
 
 /** Serializa backup en JSON compacto (más rápido y menos I/O que pretty-print). */
 function stringifyBackupPayload(normalized) {
-  return JSON.stringify(normalized);
+  const { _metaCheck, ...rest } = normalized || {};
+  void _metaCheck;
+  return JSON.stringify(rest);
+}
+
+/** Adjunta / refresca _meta sobre el payload de tablas. */
+export function withBackupMeta(data, { stampExport = true } = {}) {
+  const shaped = ensureBackupShape(data);
+  const tables = summarizeBackupData(shaped);
+  const fresh = buildBackupMeta({ tableCounts: tables });
+  const prevMeta =
+    shaped._meta && typeof shaped._meta === "object" ? { ...shaped._meta } : {};
+
+  if (stampExport) {
+    shaped._meta = fresh;
+  } else {
+    const app = String(prevMeta.app || fresh.app).toLowerCase();
+    shaped._meta = {
+      ...fresh,
+      ...prevMeta,
+      app,
+      appLabel: prevMeta.appLabel || getBackupAppLabel(app),
+      tableKeys: fresh.tableKeys,
+      tableCount: fresh.tableCount,
+      rowCounts: tables,
+      exportedAt: prevMeta.exportedAt || fresh.exportedAt,
+      importedAt: new Date().toISOString(),
+      importedIntoApp: getBackupAppKey(),
+    };
+  }
+  return shaped;
 }
 
 /** Escribe backup.json normalizado en disco. */
-export async function writeBackupToDisk(jsonData) {
-  const normalized = prepareBackupForRestore(ensureBackupShape(jsonData));
+export async function writeBackupToDisk(jsonData, { stampExport = false } = {}) {
+  const prepared = prepareBackupForRestore(ensureBackupShape(jsonData));
+  const normalized = withBackupMeta(prepared, { stampExport });
   await fs.writeFile(backupFilePath, stringifyBackupPayload(normalized), "utf8");
-  return { path: backupFilePath, tables: summarizeBackupData(normalized) };
+  return {
+    path: backupFilePath,
+    tables: summarizeBackupData(normalized),
+    meta: normalized._meta,
+  };
 }
 
 const sanitizeRows = (rows, config = {}) => {
@@ -445,9 +616,15 @@ export async function requireValidBackupFile() {
   return summary;
 }
 
-/** Evita FK rotas al restaurar backups viejos sin turnos de caja. */
+/** Evita FK rotas al restaurar backups viejos sin turnos de caja. Conserva _meta. */
 export function prepareBackupForRestore(jsonData) {
+  const meta =
+    jsonData && typeof jsonData === "object" && jsonData._meta
+      ? jsonData._meta
+      : undefined;
   const data = sanitizeBackupJsonFields({ ...jsonData });
+  if (meta != null) data._meta = meta;
+  else delete data._meta;
 
   const shifts = Array.isArray(data.CashShift) ? data.CashShift : [];
   const validShiftIds = new Set(shifts.map((s) => s?.id).filter((id) => id != null));
@@ -576,9 +753,25 @@ export async function ensureBackupFileExists() {
   return { created: true, path: backupFilePath };
 }
 
-/** Borra tablas, las recrea e importa backup.json (Comandos / scripts). */
+/**
+ * Borra tablas, las recrea e importa backup.json (Comandos / scripts).
+ *
+ * Importante: prepareTablesForRestore hace TRUNCATE/DROP fuera de la transacción
+ * de insertData. Si el import falla a mitad, la BD queda vacía y no se puede
+ * iniciar sesión. Por eso:
+ * 1) validamos el JSON (usuarios/cuentas) ANTES de vaciar;
+ * 2) si el insert falla, reintentamos el import desde el mismo backup.json.
+ */
 export async function recreateDatabaseFromBackup({ forceFull = false } = {}) {
-  await requireValidBackupFile();
+  const summary = await requireValidBackupFile();
+  const accountRows = summary.counts?.Account ?? 0;
+  const userRows = summary.counts?.Users ?? 0;
+  if (accountRows <= 0 || userRows <= 0) {
+    throw new Error(
+      `backup.json no tiene cuentas/usuarios (Account=${accountRows}, Users=${userRows}). ` +
+        "Abortando recarga para no dejar la app sin login.",
+    );
+  }
 
   const prep = await prepareTablesForRestore(BACKUP_TABLE_ENTRIES, { forceFull });
   console.log(
@@ -587,13 +780,38 @@ export async function recreateDatabaseFromBackup({ forceFull = false } = {}) {
       (prep.truncated?.length ? `, truncadas=${prep.truncated.length} tablas` : ""),
   );
 
-  const insertResult = await insertData();
+  let insertResult;
+  let recoveredAfterInsertError = false;
+  let previousError = null;
+  try {
+    insertResult = await insertData();
+  } catch (err) {
+    previousError = err;
+    console.error(
+      "❌ Import falló después de vaciar tablas. Reintentando desde backup.json…",
+      err?.message || err,
+    );
+    try {
+      insertResult = await insertData();
+      recoveredAfterInsertError = true;
+      console.log("✅ Reintento de import OK — login y datos restaurados.");
+    } catch (err2) {
+      throw new Error(
+        `Recarga falló y la BD puede quedar vacía (sin login). ` +
+          `Error: ${err?.message || err}. Reintento: ${err2?.message || err2}. ` +
+          "Subí de nuevo backup.json y volvé a Recargar BD, o pedí restauración manual.",
+      );
+    }
+  }
+
   return {
     ...insertResult,
     resetMode: prep.mode,
     tablesRecreated: prep.recreated || [],
     tablesTruncated: prep.truncated || [],
     schemaAudit: prep.schemaAudit,
+    recoveredAfterInsertError,
+    previousError: previousError ? String(previousError.message || previousError) : null,
   };
 }
 
@@ -705,7 +923,8 @@ export const saveBackup = async ({ updateMainBackup = true } = {}) => {
   try {
     const { backupData, warnings } = await fetchAllBackupTables();
 
-    const normalized = prepareBackupForRestore(ensureBackupShape(backupData));
+    const prepared = prepareBackupForRestore(ensureBackupShape(backupData));
+    const normalized = withBackupMeta(prepared, { stampExport: true });
     const counts = summarizeBackupData(normalized);
 
     await fs.mkdir(backups, { recursive: true });
@@ -713,8 +932,9 @@ export const saveBackup = async ({ updateMainBackup = true } = {}) => {
     const now = new Date();
     const pad = (n) => n.toString().padStart(2, "0");
     const timestamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+    const appKey = getBackupAppKey();
 
-    const backupFileName = `backup-${timestamp}.json`;
+    const backupFileName = `backup-${appKey}-${timestamp}.json`;
     const backupPath = resolve(backups, backupFileName);
 
     const payload = stringifyBackupPayload(normalized);
@@ -723,20 +943,26 @@ export const saveBackup = async ({ updateMainBackup = true } = {}) => {
       await fs.writeFile(backupFilePath, payload, "utf8");
     }
 
-    console.log("Backup guardado en:", backupPath);
+    console.log("Backup guardado en:", backupPath, "meta:", normalized._meta?.app);
     if (updateMainBackup) {
       console.log("backup.json principal actualizado:", backupFilePath);
     }
     console.log("Filas por tabla:", counts);
-    return { backupPath, counts, mainBackupUpdated: updateMainBackup, warnings };
+    return {
+      backupPath,
+      counts,
+      meta: normalized._meta,
+      mainBackupUpdated: updateMainBackup,
+      warnings,
+    };
   } catch (error) {
     console.error("Error al guardar el backup:", error);
     throw error;
   }
 };
 
-/** Acepta backup-FECHA.json y legacy backup-eddeli-FECHA.json */
-const STORED_BACKUP_NAME = /^backup(?:-eddeli)?-[\w\-:.]+\.json$/i;
+/** Acepta backup-FECHA.json, backup-app-FECHA.json y legacy backup-eddeli-FECHA.json */
+const STORED_BACKUP_NAME = /^backup(?:-(?:eddeli|store|tienda))?(?:-[\w\-:]+)+\.json$/i;
 
 /** Valida nombre y devuelve ruta absoluta dentro de src/backups/. */
 export function resolveStoredBackupPath(filename) {
@@ -831,12 +1057,15 @@ export async function getBackupsWorkbench() {
 }
 
 /** Copia un backup guardado a backup.json (fijo). */
-export async function setMainBackupFromStored(filename) {
+export async function setMainBackupFromStored(filename, options = {}) {
   const filePath = resolveStoredBackupPath(filename);
   await fs.access(filePath);
   const raw = await fs.readFile(filePath, "utf8");
-  const normalized = parseBackupJsonContent(raw);
-  return writeBackupToDisk(normalized);
+  const normalized = parseBackupJsonContent(raw, {
+    allowForeignApp: Boolean(options.allowForeignApp),
+    allowMissingMeta: options.allowMissingMeta !== false,
+  });
+  return writeBackupToDisk(normalized, { stampExport: false });
 }
 
 /** Elimina una copia en src/backups/ (no el backup.json fijo). */

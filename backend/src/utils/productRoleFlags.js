@@ -80,10 +80,16 @@ export function syncProductRoleFlags(payload, existing = null) {
 }
 
 let ensurePromise = null;
+let ensureVersionDone = 0;
+/** Subir al cambiar el backfill/reparación para forzar re-ejecución en procesos vivos. */
+const ROLE_FLAGS_ENSURE_VERSION = 2;
 
-/** ALTER + backfill una sola vez por proceso. */
+/** ALTER + backfill una sola vez por proceso (por versión). */
 export async function ensureProductRoleFlagsSchema() {
-  if (ensurePromise) return ensurePromise;
+  if (ensurePromise && ensureVersionDone === ROLE_FLAGS_ENSURE_VERSION) {
+    return ensurePromise;
+  }
+  ensureVersionDone = ROLE_FLAGS_ENSURE_VERSION;
   ensurePromise = (async () => {
     const cols = [
       { name: "isRaw", after: "isGenericIngredient" },
@@ -117,6 +123,34 @@ export async function ensureProductRoleFlagsSchema() {
           WHEN \`type\` = 'final' THEN 1 ELSE 0
         END
       WHERE \`isRaw\` = 0 AND \`isRecipe\` = 0 AND \`isSellable\` = 0
+    `);
+
+    // Reparar insumos genéricos creados con default isSellable=1 / isRaw=0.
+    // Solo Huevo puede ser Final + Insumo a la vez.
+    await sequelize.query(`
+      UPDATE \`ERP_inventory_products\`
+      SET \`isRaw\` = 1
+      WHERE (
+        \`type\` = 'raw'
+        OR (\`isGenericIngredient\` = 1 AND \`genericProductId\` IS NULL)
+      )
+      AND \`isRaw\` = 0
+    `);
+    await sequelize.query(`
+      UPDATE \`ERP_inventory_products\`
+      SET \`isSellable\` = 0
+      WHERE \`isGenericIngredient\` = 1
+        AND \`genericProductId\` IS NULL
+        AND \`type\` = 'raw'
+        AND \`isSellable\` = 1
+        AND LOWER(\`name\`) NOT LIKE '%huevo%'
+    `);
+    await sequelize.query(`
+      UPDATE \`ERP_inventory_products\`
+      SET \`isRaw\` = 1, \`isSellable\` = 1
+      WHERE \`isGenericIngredient\` = 1
+        AND \`genericProductId\` IS NULL
+        AND LOWER(\`name\`) LIKE '%huevo%'
     `);
 
     const [packCols] = await sequelize.query(

@@ -9,6 +9,7 @@ import {
   updateProduct,
   deleteProduct,
   patchProductStock,
+  patchProductPriceStock,
   getProductStoreStocks,
   getProductSalesSummary,
 } from '../controllers/InventoryControl/ProductController.js';
@@ -30,6 +31,7 @@ import {
   deleteRecipe,
   getRecipeCosting,
   getIngredientPriceAlerts,
+  getGenericCostProposal,
   applyIngredientPriceAlertsController,
 } from '../controllers/InventoryControl/RecipeController.js';
 
@@ -278,6 +280,7 @@ router.post('/products', isAuthenticated, edDeliUploadSingle, createProduct);   
 router.get('/products', isAuthenticated, getAllProducts);           // Obtener todos los productos
 router.get('/products-sales-summary', isAuthenticated, getProductSalesSummary);
 router.patch('/products/:id/stock', isAuthenticated, requireOwner, patchProductStock);
+router.patch('/products/:id/price-stock', isAuthenticated, patchProductPriceStock);
 router.get('/products/:id/store-stocks', isAuthenticated, getProductStoreStocks);
 router.put('/products/:id', isAuthenticated, edDeliUploadSingle, updateProduct);        // Editar producto
 router.delete('/products/:id', isAuthenticated, deleteProduct);     // Eliminar producto
@@ -321,6 +324,7 @@ router.post("/productions/anular", isAuthenticated, anularProduccion);
 // Costeo y alertas de precio (antes de :productFinalId)
 router.get('/recipes/getRecipeCosting/:productFinalId', isAuthenticated, getRecipeCosting);
 router.get('/recipes/ingredient-price-alerts/:productFinalId', isAuthenticated, getIngredientPriceAlerts);
+router.get('/recipes/ingredient-cost-proposal/:genericId', isAuthenticated, getGenericCostProposal);
 router.post('/recipes/ingredient-price-alerts/apply', isAuthenticated, applyIngredientPriceAlertsController);
 
 // Obtener receta de un producto final

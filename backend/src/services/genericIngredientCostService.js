@@ -33,7 +33,7 @@ export async function getLastPurchaseUnitPrice(productId, { transaction } = {}) 
   if (!(pid > 0)) return null;
 
   const items = await SupplierOrderItem.findAll({
-    where: { productId: pid, unitPrice: { [Op.gte]: 0 } },
+    where: { productId: pid, unitPrice: { [Op.gt]: 0 } },
     attributes: ["unitPrice", "orderId", "quantity"],
     transaction,
   });
@@ -53,18 +53,27 @@ export async function getLastPurchaseUnitPrice(productId, { transaction } = {}) 
       .map((row) => {
         const order = byId.get(Number(row.orderId));
         if (!order) return null;
+        const status = String(order.status || "").toLowerCase();
         const received =
-          Boolean(order.receivedAt) || String(order.status || "") === "recibido";
+          Boolean(order.receivedAt) ||
+          status === "recibido" ||
+          status === "received" ||
+          status === "parcial" ||
+          status === "partial";
+        // unitPrice del ítem = costo de 1 empaque (ej. quintal $39)
         return {
           unitPrice: toNum(row.unitPrice),
           at: orderTime(order),
           received,
+          orderId: Number(order.id),
         };
       })
-      .filter((x) => x && x.unitPrice >= 0)
+      .filter((x) => x && x.unitPrice > 0)
       .sort((a, b) => {
+        // Más reciente primero; a igualdad, preferir recibido
+        if (a.at !== b.at) return b.at - a.at;
         if (a.received !== b.received) return a.received ? -1 : 1;
-        return b.at - a.at;
+        return b.orderId - a.orderId;
       });
 
     if (ranked[0]) {
@@ -236,12 +245,14 @@ export async function syncGenericsAfterPackPurchase({
 }
 
 /**
- * Recalcula genérico desde la última compra de cualquier empaque enlazado (el más reciente).
+ * Recalcula genérico desde empaque enlazado.
+ * Sin presentationId: el de última compra (más reciente).
+ * Con presentationId: fuerza ese empaque (aunque no sea el más reciente).
  * Solo propone; no escribe en BD.
  */
 export async function proposeGenericCostFromLinkedPurchases(
   genericProductId,
-  { transaction } = {},
+  { transaction, presentationId } = {},
 ) {
   const gid = Number(genericProductId);
   if (!(gid > 0)) return null;
@@ -249,34 +260,73 @@ export async function proposeGenericCostFromLinkedPurchases(
   const generic = await InventoryProduct.findByPk(gid, { transaction });
   if (!generic) return null;
 
-  const links = await findPresentationsLinkedToGeneric(gid, { transaction });
+  let links = await findPresentationsLinkedToGeneric(gid, { transaction });
   if (!links.length) return null;
+
+  const forcedPid = Number(presentationId);
+  if (forcedPid > 0) {
+    links = links.filter((l) => Number(l.presentation.id) === forcedPid);
+    if (!links.length) return null;
+  }
 
   let best = null;
   for (const { presentation, qtyIntoGeneric, lines } of links) {
     const purchase = await getLastPurchaseUnitPrice(presentation.id, {
       transaction,
     });
-    if (!purchase) continue;
-    const totalQty = lines.reduce((s, l) => s + toNum(l.qty), 0);
-    if (!(totalQty > 0)) continue;
-    const costPerUnit = purchase.unitPrice / totalQty;
-    if (
-      !best ||
-      purchase.at > best.at ||
-      (purchase.at === best.at &&
-        purchase.source === "supplier_order" &&
-        best.source !== "supplier_order")
-    ) {
+    // Fallback: precio proveedor del catálogo del empaque (ej. quintal $39)
+    const packUnitPrice =
+      purchase && purchase.unitPrice > 0
+        ? purchase.unitPrice
+        : toNum(presentation.supplierPrice) > 0
+          ? toNum(presentation.supplierPrice)
+          : toNum(presentation.price) > 0
+            ? toNum(presentation.price)
+            : 0;
+    if (!(packUnitPrice > 0)) continue;
+
+    // Costo por unidad base del genérico = precio del empaque ÷ lo que rinde HACIA este genérico
+    // (no ÷ suma de toda la paca surtida).
+    const yieldQty = toNum(qtyIntoGeneric) > 0
+      ? toNum(qtyIntoGeneric)
+      : lines.reduce((s, l) => s + toNum(l.qty), 0);
+    if (!(yieldQty > 0)) continue;
+    const costPerUnit = packUnitPrice / yieldQty;
+    const at = purchase?.at || 0;
+    const source = purchase?.source || "catalog_supplierPrice";
+    // Si forzaron un empaque, tomar el primero válido; si no, el de compra más reciente
+    if (forcedPid > 0) {
       best = {
-        at: purchase.at,
-        source: purchase.source,
+        at,
+        source,
         costPerUnit,
         presentationId: presentation.id,
         presentationName: presentation.name,
-        packUnitPrice: purchase.unitPrice,
-        qtyIntoGeneric,
-        totalQty,
+        packUnitPrice,
+        qtyIntoGeneric: yieldQty,
+        totalQty: yieldQty,
+        forced: true,
+      };
+      break;
+    }
+    if (
+      !best ||
+      at > best.at ||
+      (at === best.at &&
+        source === "supplier_order" &&
+        best.source !== "supplier_order") ||
+      (at === 0 && best.at === 0 && costPerUnit > 0 && !best.costPerUnit)
+    ) {
+      best = {
+        at,
+        source,
+        costPerUnit,
+        presentationId: presentation.id,
+        presentationName: presentation.name,
+        packUnitPrice,
+        qtyIntoGeneric: yieldQty,
+        totalQty: yieldQty,
+        forced: false,
       };
     }
   }
@@ -312,18 +362,58 @@ export async function proposeGenericCostFromLinkedPurchases(
     linkedCount: links.length,
     purchaseSource: best.source,
     purchaseAt: best.at ? new Date(best.at).toISOString() : null,
+    selectedManually: Boolean(best.forced),
   };
 }
 
 /**
- * Aplica la propuesta (escribe supplierPrice del genérico).
+ * Elige el empaque a mostrar en el árbol:
+ * 1) el cuyo $/base coincide con supplierPrice del genérico (empaque aplicado),
+ * 2) si no, el de última compra.
  */
-export async function refreshGenericCostFromLinkedPurchases(
+export async function resolvePackProposalForCosting(
   genericProductId,
   { transaction } = {},
 ) {
+  const gid = Number(genericProductId);
+  if (!(gid > 0)) return null;
+
+  const generic = await InventoryProduct.findByPk(gid, {
+    attributes: ["id", "supplierPrice"],
+    transaction,
+  });
+  const current = round6(toNum(generic?.supplierPrice));
+  const latest = await proposeGenericCostFromLinkedPurchases(gid, {
+    transaction,
+  });
+
+  if (!(current > 0)) return latest;
+
+  const links = await findPresentationsLinkedToGeneric(gid, { transaction });
+  for (const { presentation } of links) {
+    const row = await proposeGenericCostFromLinkedPurchases(gid, {
+      transaction,
+      presentationId: presentation.id,
+    });
+    if (!row || !(row.proposedCost > 0)) continue;
+    if (Math.abs(round6(row.proposedCost) - current) < 1e-5) {
+      return { ...row, matchedCatalog: true };
+    }
+  }
+  return latest ? { ...latest, matchedCatalog: false } : null;
+}
+
+/**
+ * Aplica la propuesta (escribe supplierPrice del genérico).
+ * presentationId opcional: fuerza un empaque enlazado concreto.
+ */
+export async function refreshGenericCostFromLinkedPurchases(
+  genericProductId,
+  { transaction, presentationId } = {},
+) {
   const proposal = await proposeGenericCostFromLinkedPurchases(genericProductId, {
     transaction,
+    presentationId,
   });
   if (!proposal || !(proposal.proposedCost > 0)) return null;
 
@@ -333,13 +423,26 @@ export async function refreshGenericCostFromLinkedPurchases(
   if (!generic) return null;
 
   const next = proposal.proposedCost;
+  // Solo costo proveedor del genérico: no pisar precio de venta
   await generic.update(
     {
       supplierPrice: next,
-      price: next,
     },
     { transaction },
   );
+
+  // Alinear el empaque de esa compra con el precio unitario real (ej. quintal $39)
+  if (proposal.presentationId && proposal.packUnitPrice > 0) {
+    const pack = await InventoryProduct.findByPk(proposal.presentationId, {
+      transaction,
+    });
+    if (pack) {
+      await pack.update(
+        { supplierPrice: round6(proposal.packUnitPrice) },
+        { transaction },
+      );
+    }
+  }
 
   return {
     ...proposal,
@@ -350,29 +453,52 @@ export async function refreshGenericCostFromLinkedPurchases(
 
 /**
  * Costo unitario a usar en receta: catálogo actual (sin pisar precios).
- * La actualización desde empaque es opt-in (modal / botón en UI).
+ * costMode: "supplier" (default) = precio proveedor / última compra;
+ *           "sale" = precio de venta.
  */
-export async function resolveIngredientUnitCost(product, { transaction } = {}) {
+export async function resolveIngredientUnitCost(
+  product,
+  { transaction, costMode = "supplier" } = {},
+) {
   if (!product) return { unitCost: 0, unitLabel: "/u", source: "none" };
 
+  const mode = costMode === "sale" ? "sale" : "supplier";
   const supplier = toNum(product.supplierPrice);
-  if (supplier > 0) {
-    return {
-      unitCost: supplier,
-      unitLabel: Number(product.unitId) === 1 ? "/u" : "/g",
-      source: "supplierPrice",
-    };
-  }
-
   const price = toNum(product.price);
   const net = toNum(product.netWeight);
-  if (Number(product.unitId) === 1) {
-    return { unitCost: price, unitLabel: "/u", source: "price" };
+  const unitLabel = Number(product.unitId) === 1 ? "/u" : "/g";
+
+  const fromField = (value, source) => {
+    if (!(value > 0)) return null;
+    if (Number(product.unitId) === 1) {
+      return { unitCost: value, unitLabel: "/u", source };
+    }
+    // En g/ml: si netWeight > 1 el catálogo suele ser precio de empaque
+    if (net > 1) {
+      return { unitCost: value / net, unitLabel: "/g", source: `${source}/netWeight` };
+    }
+    return { unitCost: value, unitLabel: "/g", source };
+  };
+
+  if (mode === "sale") {
+    return (
+      fromField(price, "price") ||
+      fromField(supplier, "supplierPrice") || {
+        unitCost: 0,
+        unitLabel,
+        source: "none",
+      }
+    );
   }
-  if (net > 0 && price > 0) {
-    return { unitCost: price / net, unitLabel: "/g", source: "price/netWeight" };
-  }
-  return { unitCost: price, unitLabel: "/g", source: price > 0 ? "price" : "none" };
+
+  return (
+    fromField(supplier, "supplierPrice") ||
+    fromField(price, "price") || {
+      unitCost: 0,
+      unitLabel,
+      source: "none",
+    }
+  );
 }
 
 /** Recorre receta (y sub-recetas) y compara precio catálogo vs última compra de empaque. */
@@ -504,12 +630,16 @@ export async function collectRecipeIngredientPriceAlerts(
 /** Aplica actualización a uno o varios genéricos. */
 export async function applyIngredientPriceAlerts(
   genericIds,
-  { transaction } = {},
+  { transaction, presentationId } = {},
 ) {
   const ids = [...new Set((genericIds || []).map(Number).filter((n) => n > 0))];
   const applied = [];
+  const forcedPid = Number(presentationId);
   for (const id of ids) {
-    const row = await refreshGenericCostFromLinkedPurchases(id, { transaction });
+    const row = await refreshGenericCostFromLinkedPurchases(id, {
+      transaction,
+      presentationId: forcedPid > 0 ? forcedPid : undefined,
+    });
     if (row) applied.push(row);
   }
   return applied;

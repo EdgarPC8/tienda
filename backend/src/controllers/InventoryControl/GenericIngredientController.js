@@ -297,6 +297,8 @@ async function unlinkStandaloneInsumos(summary) {
       genericProductId: null,
       purchasePresentation: null,
       categoryId: row.categoryId || family?.id,
+      isRaw: true,
+      isSellable: /huevo/i.test(name),
     });
     if (wasLinked) summary.unlinkedWrong += 1;
     summary.genericsMarked += 1;
@@ -332,6 +334,8 @@ async function markExistingGenerics(summary) {
       isGenericIngredient: true,
       genericProductId: null,
       purchasePresentation: null,
+      isRaw: true,
+      isSellable: /huevo/i.test(name),
     };
     if (!row.categoryId && family?.id) patch.categoryId = family.id;
     await row.update(patch);
@@ -354,6 +358,8 @@ async function markExistingGenerics(summary) {
         genericProductId: null,
         purchasePresentation: null,
         categoryId: impFamily?.id || row.categoryId,
+        isRaw: true,
+        isSellable: false,
       });
       summary.unlinkedWrong += 1;
       summary.genericsMarked += 1;
@@ -380,6 +386,9 @@ async function ensureFrequentPresentations(summary) {
           price: 0,
           isGenericIngredient: true,
           genericProductId: null,
+          isRaw: true,
+          isRecipe: false,
+          isSellable: /huevo/i.test(seed.createGenericIfMissing.name),
         });
         summary.genericsCreated = (summary.genericsCreated || 0) + 1;
       }
@@ -393,8 +402,15 @@ async function ensureFrequentPresentations(summary) {
         continue;
       }
 
-      if (!generic.isGenericIngredient) {
-        await generic.update({ isGenericIngredient: true, genericProductId: null });
+      if (!generic.isGenericIngredient || !generic.isRaw) {
+        await generic.update({
+          isGenericIngredient: true,
+          genericProductId: null,
+          isRaw: true,
+          isSellable: /huevo/i.test(String(generic.name || ""))
+            ? true
+            : false,
+        });
         summary.genericsMarked += 1;
       }
 
@@ -528,12 +544,38 @@ export const getGenericIngredientsWorkbench = async (req, res) => {
     await ensurePresentationLinkSchema();
     // Reparar materias primas creadas sin el flag (bug histórico del formulario).
     await InventoryProduct.update(
-      { isGenericIngredient: true, genericProductId: null },
+      {
+        isGenericIngredient: true,
+        genericProductId: null,
+        isRaw: true,
+      },
       {
         where: {
           type: "raw",
           isGenericIngredient: false,
           genericProductId: null,
+        },
+      },
+    );
+    // Insumos genéricos: solo Insumo (salvo Huevo = Final + Insumo)
+    await InventoryProduct.update(
+      { isSellable: false, isRaw: true },
+      {
+        where: {
+          isGenericIngredient: true,
+          genericProductId: null,
+          type: "raw",
+          name: { [Op.notLike]: "%huevo%" },
+        },
+      },
+    );
+    await InventoryProduct.update(
+      { isSellable: true, isRaw: true },
+      {
+        where: {
+          isGenericIngredient: true,
+          genericProductId: null,
+          name: { [Op.like]: "%huevo%" },
         },
       },
     );
@@ -702,6 +744,9 @@ export const createGenericIngredient = async (req, res) => {
       price: 0,
       isGenericIngredient: true,
       genericProductId: null,
+      isRaw: true,
+      isRecipe: false,
+      isSellable: /huevo/i.test(name.trim()),
     });
 
     const full = await InventoryProduct.findByPk(row.id, { include: productInclude });

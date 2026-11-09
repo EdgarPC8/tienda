@@ -633,6 +633,105 @@ export const patchProductStock = async (req, res) => {
   }
 };
 
+/**
+ * Empleado / operación: solo precio de venta y stock (ajuste absoluto).
+ * PATCH /inventory/products/:id/price-stock  body: { price?, stock? }
+ */
+export const patchProductPriceStock = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { price, stock } = req.body ?? {};
+    const hasPrice = price !== undefined && price !== null && price !== "";
+    const hasStock = stock !== undefined && stock !== null && stock !== "";
+    if (!hasPrice && !hasStock) {
+      return res.status(400).json({ message: "Indicá precio y/o stock" });
+    }
+
+    const row = await InventoryProduct.findByPk(id);
+    if (!row) {
+      return res.status(404).json({ message: "Producto no encontrado" });
+    }
+
+    const prevPrice = Number(row.price ?? 0);
+    const prevStock = Number(row.stock ?? 0);
+    let nextPrice = prevPrice;
+    let nextStock = prevStock;
+
+    if (hasPrice) {
+      const n = Number(price);
+      if (!Number.isFinite(n) || n < 0) {
+        return res.status(400).json({ message: "Precio inválido" });
+      }
+      nextPrice = toStorageMoney(n);
+      await row.update({ price: nextPrice });
+    }
+
+    if (hasStock) {
+      const n = Number(stock);
+      if (!Number.isFinite(n) || n < 0) {
+        return res.status(400).json({ message: "Stock inválido" });
+      }
+      const storeId = await getDefaultStockStoreId();
+      const result = await setStoreStockAbsolute(storeId, row.id, n, {
+        allowNegative: false,
+      });
+      nextStock = result.productStock;
+      await row.reload();
+
+      const reason =
+        nextStock > prevStock
+          ? "AJUSTE_ENTRADA"
+          : nextStock < prevStock
+            ? "AJUSTE_SALIDA"
+            : "AJUSTE_ENTRADA";
+      if (Math.abs(nextStock - prevStock) > 1e-9) {
+        await InventoryMovement.create({
+          productId: row.id,
+          type: "ajuste",
+          reason,
+          quantity: nextStock,
+          description: `[EMPLEADO] Stock ${prevStock} → ${nextStock}`,
+          price: null,
+          referenceType: "employee_price_stock",
+          referenceId: null,
+          createdBy: req.user?.accountId || null,
+          date: new Date(),
+        });
+      }
+    } else {
+      await row.reload();
+      nextStock = Number(row.stock ?? nextStock);
+    }
+
+    notifyOk("product.price_stock_updated", `Precio/stock producto #${id}`, {
+      productId: row.id,
+      price: nextPrice,
+      stock: nextStock,
+    });
+
+    return res.json({
+      message: "Actualizado",
+      product: {
+        id: row.id,
+        name: row.name,
+        price: Number(row.price ?? nextPrice),
+        stock: Number(row.stock ?? nextStock),
+      },
+    });
+  } catch (error) {
+    console.error("patchProductPriceStock:", error);
+    notifyFail("product.price_stock_failed", "Error al actualizar precio/stock", {
+      error,
+      req,
+      httpStatus: 500,
+    });
+    return res.status(500).json({
+      message: "Error al actualizar precio/stock",
+      error: error.message,
+    });
+  }
+};
+
 /** GET /inventory/products/:id/store-stocks — desglose por local */
 export const getProductStoreStocks = async (req, res) => {
   try {

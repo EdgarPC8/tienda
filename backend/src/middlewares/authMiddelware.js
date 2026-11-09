@@ -2,7 +2,7 @@
  * Middlewares de autenticación y autorización.
  *
  * El payload JWT (AuthController) incluye:
- *   userId, accountId, rolId, loginRol
+ *   userId, accountId, rolId, loginRol, app
  * NO incluye `id` — usar accountId o userId según el caso.
  */
 import { getHeaderToken, verifyJWT } from "../libs/jwt.js";
@@ -19,8 +19,12 @@ const isAuthenticated = async (req, res, next) => {
     req.user = verify;
     next();
   } catch (error) {
+    const isAppMismatch = error?.code === "JWT_APP_MISMATCH";
     return res.status(401).json({
-      message: "Token inválido o expirado",
+      message: isAppMismatch
+        ? error.message || "Token de otra aplicación"
+        : "Token inválido o expirado",
+      code: isAppMismatch ? "JWT_APP_MISMATCH" : undefined,
       error: error.message,
     });
   }

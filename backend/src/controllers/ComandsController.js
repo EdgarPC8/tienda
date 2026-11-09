@@ -20,15 +20,45 @@ import {
   pruneStoredBackupsAndSaveFresh,
   resolveStoredBackupPath,
   backupFilePath,
+  BackupAppMismatchError,
+  getBackupAppKey,
+  getBackupAppLabel,
 } from "../database/insertData.js";
 import { notifyOk, notifyFail } from "../services/notifyRaptorSolutions.js";
 
+function wantsForceForeignApp(req) {
+  const q = req.query || {};
+  const b = req.body || {};
+  const raw = q.forceForeignApp ?? q.force ?? b.forceForeignApp ?? b.force;
+  return raw === "1" || raw === "true" || raw === true || raw === 1;
+}
+
+function backupMismatchResponse(res, err) {
+  return res.status(err.statusCode || 409).json({
+    ok: false,
+    code: err.code || "BACKUP_APP_MISMATCH",
+    message: err.message,
+    details: err.details || {},
+    expectedApp: err.details?.expectedApp || getBackupAppKey(),
+    expectedLabel: err.details?.expectedLabel || getBackupAppLabel(),
+    canForce: true,
+  });
+}
+
+function isBackupMetaGuardError(err) {
+  return (
+    err instanceof BackupAppMismatchError ||
+    err?.code === "BACKUP_APP_MISMATCH" ||
+    err?.code === "BACKUP_MISSING_META"
+  );
+}
+
 export const saveBackupController = async (req, res) => {
   try {
-    const { backupPath, counts, warnings = [] } = await saveBackup();
+    const { backupPath, counts, warnings = [], meta } = await saveBackup();
     const users = counts?.Users ?? 0;
     const products = counts?.InventoryProduct ?? 0;
-    let message = "Copia de seguridad guardada correctamente.";
+    let message = `Copia de seguridad guardada correctamente (${getBackupAppLabel()}).`;
     if (warnings.length) {
       message += ` Aviso: ${warnings.length} tabla(s) no existían y se exportaron vacías.`;
     }
@@ -36,12 +66,13 @@ export const saveBackupController = async (req, res) => {
       message +=
         " Advertencia: la BD está vacía; el JSON guardado no tendrá usuarios ni productos. Restaura backup.json desde tu PC antes.";
     }
-    notifyOk("backup.saved", "Backup guardado", { path: backupPath, tables: counts });
+    notifyOk("backup.saved", "Backup guardado", { path: backupPath, tables: counts, meta });
     res.json({
       ok: true,
       message,
       path: backupPath,
       tables: counts,
+      meta,
       warnings,
     });
   } catch (error) {
@@ -71,37 +102,66 @@ export const uploadBackupController = async (req, res) => {
     }
 
     const content = req.file.buffer.toString("utf8");
+    const allowForeignApp = wantsForceForeignApp(req);
 
     let normalized;
     try {
-      normalized = parseBackupJsonContent(content);
+      normalized = parseBackupJsonContent(content, {
+        allowForeignApp,
+        // Sin firma: solo con force (evita subir Store→Tienda con JSON viejo).
+        allowMissingMeta: allowForeignApp,
+      });
     } catch (err) {
-      notifyFail("backup.upload_failed", err.message || "El archivo no es un backup EdDeli válido", {
+      if (
+        err instanceof BackupAppMismatchError ||
+        err?.code === "BACKUP_APP_MISMATCH" ||
+        err?.code === "BACKUP_MISSING_META"
+      ) {
+        notifyFail("backup.upload_failed", err.message, {
+          error: err,
+          req,
+          httpStatus: 409,
+        });
+        return backupMismatchResponse(res, err);
+      }
+      notifyFail("backup.upload_failed", err.message || "El archivo no es un backup válido", {
         error: err,
         req,
         httpStatus: 400,
       });
       return res.status(400).json({
         ok: false,
-        message: err.message || "El archivo no es un backup EdDeli válido",
+        message: err.message || "El archivo no es un backup válido",
         error: err.message,
       });
     }
 
-    const { path: savedPath, tables } = await writeBackupToDisk(normalized);
+    const metaWarning = normalized._metaCheck?.warning || null;
+    const { path: savedPath, tables, meta } = await writeBackupToDisk(normalized, {
+      stampExport: false,
+    });
 
-    console.log("✅ backup.json EdDeli reemplazado en:", savedPath, tables);
+    console.log("✅ backup.json reemplazado en:", savedPath, tables, meta);
 
-    notifyOk("backup.uploaded", "Backup subido", { path: savedPath, tables });
+    notifyOk("backup.uploaded", "Backup subido", { path: savedPath, tables, meta });
     return res.json({
       ok: true,
       message:
-        "Backup validado y guardado. Usa «Recargar BD» para aplicarlo a la base de datos.",
+        "Backup validado y guardado. Usa «Recargar BD» para aplicarlo a la base de datos." +
+        (metaWarning ? ` Aviso: ${metaWarning}` : "") +
+        (allowForeignApp
+          ? " (se forzó un backup de otra app; revisá bien antes de recargar)."
+          : ""),
       path: savedPath,
       tables,
+      meta,
+      warning: metaWarning,
     });
   } catch (error) {
     console.error("❌ Error al subir y reemplazar backup:", error);
+    if (isBackupMetaGuardError(error)) {
+      return backupMismatchResponse(res, error);
+    }
     notifyFail("backup.upload_failed", "Error al reemplazar el backup", {
       error,
       req,
@@ -130,11 +190,19 @@ export const reloadBdController = async (req, res) => {
 
     // Copia de seguridad del estado ACTUAL en src/backups/ — NO tocar backup.json
     // (el usuario pudo haber subido un JSON distinto que debe usarse en la recarga).
+    // Si la BD ya está vacía (recarga a medias previa), no guardamos esa copia “basura”.
     let safetyBackupPath = null;
     try {
-      const safety = await saveBackup({ updateMainBackup: false });
-      safetyBackupPath = safety.backupPath;
-      console.log("💾 Copia de seguridad previa (sin pisar backup.json):", safetyBackupPath);
+      const liveProducts = await InventoryProduct.count();
+      if (liveProducts > 0) {
+        const safety = await saveBackup({ updateMainBackup: false });
+        safetyBackupPath = safety.backupPath;
+        console.log("💾 Copia de seguridad previa (sin pisar backup.json):", safetyBackupPath);
+      } else {
+        console.warn(
+          "⚠️ BD actual sin productos — se omite copia de seguridad previa (evitar JSON vacío engañoso).",
+        );
+      }
     } catch (backupErr) {
       console.warn("⚠️ No se pudo guardar copia previa; se continúa con backup.json:", backupErr.message);
     }
@@ -151,14 +219,20 @@ export const reloadBdController = async (req, res) => {
     notifyOk("database.reloaded", "Base de datos recargada", {
       resetMode: insertResult.resetMode,
       tables: insertResult.tables,
+      recoveredAfterInsertError: Boolean(insertResult.recoveredAfterInsertError),
     });
     return res.json({
       ok: true,
-      message: `Base de datos restaurada desde backup.json (${modeLabel})`,
+      message:
+        `Base de datos restaurada desde backup.json (${modeLabel})` +
+        (insertResult.recoveredAfterInsertError
+          ? " · se recuperó tras un fallo intermedio del import"
+          : ""),
       resetMode: insertResult.resetMode,
       tablesRecreated: insertResult.tablesRecreated,
       tablesTruncated: insertResult.tablesTruncated,
       safetyBackup: safetyBackupPath,
+      recoveredAfterInsertError: Boolean(insertResult.recoveredAfterInsertError),
       tables: insertResult.tables,
     });
   } catch (error) {
@@ -292,16 +366,29 @@ export const listBackupsController = async (req, res) => {
 export const setMainBackupController = async (req, res) => {
   try {
     const { filename } = req.params;
-    const { path: savedPath, tables } = await setMainBackupFromStored(filename);
+    const force = wantsForceForeignApp(req);
+    const { path: savedPath, tables, meta } = await setMainBackupFromStored(filename, {
+      allowForeignApp: force,
+      allowMissingMeta: force,
+    });
     notifyOk("backup.set_main", "Backup principal establecido", { path: savedPath, filename });
     res.json({
       ok: true,
       message: "backup.json actualizado desde la copia seleccionada. Usa «Recargar BD» en Comandos para aplicarlo.",
       path: savedPath,
       tables,
+      meta,
     });
   } catch (error) {
     console.error("setMainBackupController:", error);
+    if (isBackupMetaGuardError(error)) {
+      notifyFail("backup.set_main_failed", error.message, {
+        error,
+        req,
+        httpStatus: 409,
+      });
+      return backupMismatchResponse(res, error);
+    }
     notifyFail("backup.set_main_failed", error.message || "No se pudo establecer como backup fijo", {
       error,
       req,
@@ -391,7 +478,9 @@ export const downloadMainBackupController = async (req, res) => {
     } catch {
       return res.status(404).json({ message: "No existe backup.json en el servidor" });
     }
-    res.download(backupFilePath, "backup.json", (err) => {
+    const appKey = getBackupAppKey();
+    const downloadName = `backup-${appKey}.json`;
+    res.download(backupFilePath, downloadName, (err) => {
       if (err) {
         console.error("downloadMainBackup:", err);
         if (!res.headersSent) res.status(500).send("Error al descargar");

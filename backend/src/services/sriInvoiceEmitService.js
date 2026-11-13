@@ -148,8 +148,42 @@ function mapOrderPaymentToSriFormaPago(paymentMethod) {
 }
 
 /**
- * Facturas viejas o rechazadas a veces no tienen payloadJson.items.
- * Se reconstruyen desde el pedido POS vinculado (precios con IVA).
+ * Actualiza taxRate de ítems ya guardados con el IVA actual del catálogo
+ * (code = productId). Así "Volver a emitir" respeta correcciones del producto.
+ */
+async function refreshItemTaxRatesFromCatalog(items) {
+  if (!Array.isArray(items) || !items.length) return items;
+  const { InventoryProduct } = await import("../models/Inventory.js");
+  const ids = [
+    ...new Set(
+      items
+        .map((it) => Number(it?.code ?? it?.productId))
+        .filter((id) => Number.isFinite(id) && id > 0),
+    ),
+  ];
+  if (!ids.length) return items;
+  const products = await InventoryProduct.findAll({
+    where: { id: ids },
+    attributes: ["id", "taxRate", "name"],
+  });
+  const byId = new Map(products.map((p) => [Number(p.id), p]));
+  return items.map((it) => {
+    const pid = Number(it?.code ?? it?.productId);
+    const product = Number.isFinite(pid) ? byId.get(pid) : null;
+    if (!product) return it;
+    const taxRateRaw = Number(product.taxRate);
+    return {
+      ...it,
+      taxRate: Number.isFinite(taxRateRaw) ? taxRateRaw : it.taxRate,
+      description:
+        String(it.description || product.name || "Producto").trim() || "Producto",
+    };
+  });
+}
+
+/**
+ * Reconstruye ítems/buyer desde el pedido POS (precios con IVA) y siempre
+ * toma el taxRate vigente del producto (no el congelado en payloadJson).
  */
 async function hydratePayloadFromLinkedOrder(invoice, savedPayload = {}) {
   const out = { ...savedPayload };
@@ -159,10 +193,16 @@ async function hydratePayloadFromLinkedOrder(invoice, savedPayload = {}) {
     (out.buyer.ident || out.buyer.name) &&
     out.buyer.identType;
 
-  if (hasItems && hasBuyer) return out;
-
   const orderId = invoice.orderId != null ? Number(invoice.orderId) : null;
-  if (!Number.isFinite(orderId) || orderId < 1) return out;
+  const canLoadOrder = Number.isFinite(orderId) && orderId > 0;
+
+  if (!canLoadOrder) {
+    if (hasItems) {
+      out.items = await refreshItemTaxRatesFromCatalog(out.items);
+      out.taxRatesRefreshedFromCatalog = true;
+    }
+    return out;
+  }
 
   const { Order, OrderItem, Customer } = await import("../models/Orders.js");
   const { InventoryProduct } = await import("../models/Inventory.js");
@@ -177,35 +217,44 @@ async function hydratePayloadFromLinkedOrder(invoice, savedPayload = {}) {
       { model: Customer, as: "ERP_customer", required: false },
     ],
   });
-  if (!order) return out;
-
-  if (!hasItems) {
-    const items = (order.ERP_order_items || [])
-      .map((it) => {
-        const qtySold = Number(it.soldQty);
-        const qty = qtySold > 0 ? qtySold : Number(it.quantity || 0);
-        if (!(qty > 0)) return null;
-        const unitPrice = Number(it.price);
-        if (!Number.isFinite(unitPrice) || unitPrice < 0) return null;
-        const product = it.ERP_inventory_product;
-        const taxRateRaw = Number(product?.taxRate);
-        const taxRate = Number.isFinite(taxRateRaw) ? taxRateRaw : 15;
-        const description =
-          String(product?.name || it.remoteName || "Producto").trim() || "Producto";
-        return {
-          description,
-          qty,
-          unitPrice,
-          taxRate,
-          code: String(it.productId || product?.id || "").slice(0, 25),
-        };
-      })
-      .filter(Boolean);
-    if (items.length) {
-      out.items = items;
-      out.pricesIncludeTax = true;
-      out.hydratedFromOrderId = orderId;
+  if (!order) {
+    if (hasItems) {
+      out.items = await refreshItemTaxRatesFromCatalog(out.items);
+      out.taxRatesRefreshedFromCatalog = true;
     }
+    return out;
+  }
+
+  // Siempre armar ítems desde el pedido + IVA actual del catálogo.
+  const items = (order.ERP_order_items || [])
+    .map((it) => {
+      const qtySold = Number(it.soldQty);
+      const qty = qtySold > 0 ? qtySold : Number(it.quantity || 0);
+      if (!(qty > 0)) return null;
+      const unitPrice = Number(it.price);
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) return null;
+      const product = it.ERP_inventory_product;
+      const taxRateRaw = Number(product?.taxRate);
+      const taxRate = Number.isFinite(taxRateRaw) ? taxRateRaw : 15;
+      const description =
+        String(product?.name || it.remoteName || "Producto").trim() || "Producto";
+      return {
+        description,
+        qty,
+        unitPrice,
+        taxRate,
+        code: String(it.productId || product?.id || "").slice(0, 25),
+      };
+    })
+    .filter(Boolean);
+  if (items.length) {
+    out.items = items;
+    out.pricesIncludeTax = true;
+    out.hydratedFromOrderId = orderId;
+    out.taxRatesRefreshedFromCatalog = true;
+  } else if (hasItems) {
+    out.items = await refreshItemTaxRatesFromCatalog(out.items);
+    out.taxRatesRefreshedFromCatalog = true;
   }
 
   if (!hasBuyer) {

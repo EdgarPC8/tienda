@@ -299,7 +299,7 @@ export function buildRetencionXml({
   const iva = ivaCodigo(rate);
   const totalSin = Number(sustento.subtotal);
   const sub = Number.isFinite(totalSin) && totalSin > 0 ? totalSin : base;
-  const ivaValor = (sub * rate) / 100;
+  const ivaValor = (sub * iva.tarifaNum) / 100;
   const importeTotal = sub + ivaValor;
   const contrib = String(settings.specialTaxpayerResolution || "").trim();
   const fechaDoc = sustento.issueDate
@@ -342,7 +342,7 @@ ${infoParts.join("\n")}
           <codImpuesto>2</codImpuesto>
           <codigoPorcentaje>${iva.codigoPorcentaje}</codigoPorcentaje>
           <baseImponible>${money(sub)}</baseImponible>
-          <tarifa>${money(rate)}</tarifa>
+          <tarifa>${iva.tarifa}</tarifa>
           <valorImpuesto>${money(ivaValor)}</valorImpuesto>
         </impuesto>
       </impuestos>

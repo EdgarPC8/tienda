@@ -28,60 +28,114 @@ export function round2(n) {
   return Number(x.toFixed(2));
 }
 
-/** Mapea tasa IVA → código porcentaje SRI. */
+/**
+ * Tarifas IVA parametrizadas SRI (codigoPorcentaje → %).
+ * La <tarifa> del XML debe salir SIEMPRE de aquí, nunca de un cálculo libre.
+ */
+export const SRI_IVA_TARIFA_BY_CODIGO = Object.freeze({
+  0: 0,
+  2: 12,
+  3: 14,
+  4: 15,
+  5: 5,
+  6: 0,
+  7: 0,
+  8: 8,
+  10: 13,
+});
+
+export const SRI_IVA_VALID_RATES = Object.freeze([0, 5, 8, 12, 13, 14, 15]);
+
+/** Si guardaron 0.15 en vez de 15, normaliza a porcentaje. */
+export function normalizeTaxRatePercent(raw) {
+  let r = Number(raw);
+  if (!Number.isFinite(r) || r < 0) return 0;
+  if (r > 0 && r < 1) r = round2(r * 100);
+  return r;
+}
+
+export function isValidSriIvaRate(raw) {
+  const r = normalizeTaxRatePercent(raw);
+  return SRI_IVA_VALID_RATES.some((v) => Math.abs(r - v) < 0.001);
+}
+
+export function tarifaFromCodigoPorcentaje(codigoPorcentaje) {
+  const key = String(Number(codigoPorcentaje));
+  if (Object.prototype.hasOwnProperty.call(SRI_IVA_TARIFA_BY_CODIGO, key)) {
+    return SRI_IVA_TARIFA_BY_CODIGO[key];
+  }
+  return SRI_IVA_TARIFA_BY_CODIGO[4];
+}
+
+/**
+ * Mapea tasa IVA (%) → códigos SRI.
+ * <tarifa> siempre desde el mapa fijo por codigoPorcentaje.
+ */
 export function ivaCodigo(rate) {
-  const r = Number(rate);
-  if (!Number.isFinite(r) || r <= 0) return { codigo: "2", codigoPorcentaje: "0", tarifa: "0" };
-  if (Math.abs(r - 12) < 0.01) return { codigo: "2", codigoPorcentaje: "2", tarifa: "12.00" };
-  if (Math.abs(r - 15) < 0.01) return { codigo: "2", codigoPorcentaje: "4", tarifa: "15.00" };
-  if (Math.abs(r - 5) < 0.01) return { codigo: "2", codigoPorcentaje: "5", tarifa: "5.00" };
-  if (Math.abs(r - 8) < 0.01) return { codigo: "2", codigoPorcentaje: "8", tarifa: "8.00" };
-  // Fallback: tratar como 15% (tarifa actual)
-  return { codigo: "2", codigoPorcentaje: "4", tarifa: money(r) };
+  const r = normalizeTaxRatePercent(rate);
+  let codigoPorcentaje = "4";
+  if (!Number.isFinite(r) || r <= 0) codigoPorcentaje = "0";
+  else if (Math.abs(r - 12) < 0.01) codigoPorcentaje = "2";
+  else if (Math.abs(r - 14) < 0.01) codigoPorcentaje = "3";
+  else if (Math.abs(r - 15) < 0.01) codigoPorcentaje = "4";
+  else if (Math.abs(r - 5) < 0.01) codigoPorcentaje = "5";
+  else if (Math.abs(r - 8) < 0.01) codigoPorcentaje = "8";
+  else if (Math.abs(r - 13) < 0.01) codigoPorcentaje = "10";
+  else codigoPorcentaje = "4"; // tasa desconocida → 15% parametrizada
+
+  const tarifaNum = tarifaFromCodigoPorcentaje(codigoPorcentaje);
+  return {
+    codigo: "2",
+    codigoPorcentaje,
+    tarifa: money(tarifaNum),
+    tarifaNum,
+  };
 }
 
 /**
  * unitPrice se interpreta SIN IVA (base imponible unitaria),
- * salvo que el ítem traiga lineBase/lineTax ya calculados (p. ej. precios con IVA).
- * Cada línea se redondea a 2 decimales; base + IVA = total de línea.
+ * salvo que el ítem traiga lineBase ya calculado (p. ej. precios con IVA).
+ * <valor> IVA = round(baseImponible * tarifaMapa / 100, 2).
  */
 export function computeInvoiceTotals(items) {
   const lines = [];
   const taxBuckets = new Map();
   let subtotal = 0;
   let taxTotal = 0;
+  let discountTotal = 0;
 
   items.forEach((raw, idx) => {
     const qty = Number(raw.qty);
     const unitPrice = Number(raw.unitPrice);
-    const taxRate = Number(raw.taxRate);
     if (!Number.isFinite(qty) || qty <= 0) {
       throw Object.assign(new Error(`Ítem ${idx + 1}: cantidad inválida`), { status: 400 });
     }
     if (!Number.isFinite(unitPrice) || unitPrice < 0) {
       throw Object.assign(new Error(`Ítem ${idx + 1}: precio inválido`), { status: 400 });
     }
-    const rate = Number.isFinite(taxRate) ? taxRate : 15;
+    const rate = normalizeTaxRatePercent(
+      Number.isFinite(Number(raw.taxRate)) ? Number(raw.taxRate) : 15,
+    );
     const desc = String(raw.description || "").trim();
     if (!desc) {
       throw Object.assign(new Error(`Ítem ${idx + 1}: falta descripción`), { status: 400 });
     }
 
+    const discount = round2(Math.max(0, Number(raw.discount) || 0));
+    discountTotal = round2(discountTotal + discount);
+
     let lineBase;
-    let lineTax;
-    if (raw.lineBase != null && raw.lineTax != null) {
+    if (raw.lineBase != null) {
       lineBase = round2(raw.lineBase);
-      lineTax = round2(raw.lineTax);
-    } else if (rate > 0) {
-      lineBase = round2(qty * unitPrice);
-      const lineTotal = round2(lineBase * (1 + rate / 100));
-      lineTax = round2(lineTotal - lineBase);
     } else {
-      lineBase = round2(qty * unitPrice);
-      lineTax = 0;
+      lineBase = round2(Math.max(0, qty * unitPrice - discount));
     }
 
     const iva = ivaCodigo(rate);
+    // Valor SIEMPRE desde tarifa parametrizada (evita 0.75 con codigo 4).
+    const lineTax =
+      iva.tarifaNum > 0 ? round2((lineBase * iva.tarifaNum) / 100) : 0;
+
     subtotal = round2(subtotal + lineBase);
     taxTotal = round2(taxTotal + lineTax);
 
@@ -92,9 +146,12 @@ export function computeInvoiceTotals(items) {
       baseImponible: 0,
       valor: 0,
       tarifa: iva.tarifa,
+      tarifaNum: iva.tarifaNum,
     };
     prev.baseImponible = round2(prev.baseImponible + lineBase);
     prev.valor = round2(prev.valor + lineTax);
+    prev.tarifa = iva.tarifa;
+    prev.tarifaNum = iva.tarifaNum;
     taxBuckets.set(bucketKey, prev);
 
     const unitForXml =
@@ -108,20 +165,35 @@ export function computeInvoiceTotals(items) {
       description: desc,
       qty,
       unitPrice: unitForXml,
-      taxRate: rate,
+      taxRate: iva.tarifaNum,
       lineBase,
       lineTax,
+      discount,
       iva,
       codigoPrincipal: String(raw.code || `ITEM${idx + 1}`).slice(0, 25),
     });
   });
 
+  // Recalcular valor de bucket desde tarifa del mapa (coherencia totalConImpuestos).
+  for (const b of taxBuckets.values()) {
+    const tarifaNum = tarifaFromCodigoPorcentaje(b.codigoPorcentaje);
+    b.tarifaNum = tarifaNum;
+    b.tarifa = money(tarifaNum);
+    b.valor = tarifaNum > 0 ? round2((b.baseImponible * tarifaNum) / 100) : 0;
+  }
+
+  const buckets = [...taxBuckets.values()];
+  const taxFromBuckets = round2(buckets.reduce((acc, b) => acc + Number(b.valor || 0), 0));
+  taxTotal = taxFromBuckets;
+  const total = round2(subtotal + taxTotal - discountTotal);
+
   return {
     lines,
-    taxBuckets: [...taxBuckets.values()],
+    taxBuckets: buckets,
     subtotal,
     taxTotal,
-    total: round2(subtotal + taxTotal),
+    discountTotal,
+    total,
   };
 }
 
@@ -155,6 +227,7 @@ export function buildFacturaXml({
   const dirMatriz = esc(settings.matrixAddress || settings.establishmentAddress || "S/N");
   const contribuyenteEspecial = String(settings.specialTaxpayerResolution || "").trim();
   const obligado = settings.accountingRequired ? "SI" : "NO";
+  const discountTotal = round2(totals.discountTotal || 0);
 
   const totalConImpuestos = totals.taxBuckets
     .map(
@@ -174,7 +247,7 @@ export function buildFacturaXml({
       <descripcion>${esc(line.description)}</descripcion>
       <cantidad>${money4(line.qty)}</cantidad>
       <precioUnitario>${money4(line.unitPrice)}</precioUnitario>
-      <descuento>0.00</descuento>
+      <descuento>${money(line.discount || 0)}</descuento>
       <precioTotalSinImpuesto>${money(line.lineBase)}</precioTotalSinImpuesto>
       <impuestos>
         <impuesto>
@@ -239,7 +312,7 @@ export function buildFacturaXml({
     `    <identificacionComprador>${ident}</identificacionComprador>`,
     `    <direccionComprador>${direccion}</direccionComprador>`,
     `    <totalSinImpuestos>${money(totals.subtotal)}</totalSinImpuestos>`,
-    `    <totalDescuento>0.00</totalDescuento>`,
+    `    <totalDescuento>${money(discountTotal)}</totalDescuento>`,
     `    <totalConImpuestos>`,
     totalConImpuestos,
     `    </totalConImpuestos>`,

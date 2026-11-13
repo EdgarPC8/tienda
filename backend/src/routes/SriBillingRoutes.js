@@ -14,6 +14,7 @@ import {
   getSriInvoices,
   getSriInvoiceById,
   postRefreshSriInvoice,
+  postReemitSriInvoice,
   postTestSriInvoiceEmail,
   postSendSriInvoiceEmail,
   postLookupPurchaseInvoice,
@@ -48,6 +49,7 @@ router.post(
 router.get("/invoices", isAuthenticated, requireStaff, getSriInvoices);
 router.post("/invoices/emit", isAuthenticated, requireAdminOrProgrammer, postEmitSriInvoice);
 router.post("/invoices/:id/refresh", isAuthenticated, requireAdminOrProgrammer, postRefreshSriInvoice);
+router.post("/invoices/:id/reemit", isAuthenticated, requireAdminOrProgrammer, postReemitSriInvoice);
 router.post(
   "/invoices/:id/send-email",
   isAuthenticated,

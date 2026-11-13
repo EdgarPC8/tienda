@@ -109,6 +109,10 @@ function normalizeProductNumericFields(payload, { fillMissing = false } = {}) {
       payload[key] = 0;
       continue;
     }
+    if (key === "taxRate") {
+      payload[key] = normalizeTaxRatePercent(n);
+      continue;
+    }
     payload[key] = PRODUCT_MONEY_FIELDS.includes(key) ? toStorageMoney(n) : n;
   }
 }
@@ -183,6 +187,15 @@ const normalize = (p = "") =>
     .replace(/\/+$/, "")
     .replace(/\/{2,}/g, "/");
 
+const SRI_IVA_VALID_RATES = [0, 5, 8, 12, 13, 14, 15];
+
+function normalizeTaxRatePercent(raw) {
+  let r = Number(raw);
+  if (!Number.isFinite(r) || r < 0) return 0;
+  if (r > 0 && r < 1) r = Number((r * 100).toFixed(2));
+  return r;
+}
+
 function productInputError(body) {
   if (body?.name != null && String(body.name).trim().length > 150) {
     return "El nombre del producto es demasiado largo";
@@ -191,6 +204,13 @@ function productInputError(body) {
     if (!(key in (body || {})) || body[key] === "" || body[key] == null) continue;
     const n = Number(body[key]);
     if (!Number.isFinite(n) || n < 0 || n > 99999999.99) return "Precio inválido";
+  }
+  if ("taxRate" in (body || {}) && body.taxRate !== "" && body.taxRate != null) {
+    const rate = normalizeTaxRatePercent(body.taxRate);
+    const ok = SRI_IVA_VALID_RATES.some((v) => Math.abs(rate - v) < 0.001);
+    if (!ok) {
+      return "IVA % inválido. Usá 0, 5, 8, 12, 13, 14 o 15 (no decimales libres como 0.75).";
+    }
   }
   return null;
 }

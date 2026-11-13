@@ -19,7 +19,12 @@ import {
   ensureSriPrivateDir,
 } from "./sriBillingService.js";
 import { buildAccessKey } from "./sriAccessKey.js";
-import { buildFacturaXml, computeInvoiceTotals } from "./sriInvoiceXml.js";
+import {
+  buildFacturaXml,
+  computeInvoiceTotals,
+  normalizeTaxRatePercent,
+  isValidSriIvaRate,
+} from "./sriInvoiceXml.js";
 import {
   buildNotaCreditoXml,
   buildNotaDebitoXml,
@@ -105,10 +110,43 @@ function validateParty(party = {}, { role = "comprador", allowConsumidorFinal = 
   };
 }
 
+function messageLooksLikeSequentialConflict(text) {
+  const msg = String(text || "")
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return (
+    msg.includes("CLAVE ACCESO REGISTRADA") ||
+    msg.includes("SECUENCIAL REGISTRADO") ||
+    msg.includes("NUMERO DE COMPROBANTE YA REGISTRADO") ||
+    msg.includes("CLAVE DE ACCESO EN PROCESAMIENTO")
+  );
+}
+
+function pushEmitAttempt(payloadJson, attempt) {
+  const base =
+    payloadJson && typeof payloadJson === "object" && !Array.isArray(payloadJson)
+      ? { ...payloadJson }
+      : {};
+  const prev = Array.isArray(base.emitAttempts) ? base.emitAttempts : [];
+  base.emitAttempts = [...prev, attempt].slice(-30);
+  return base;
+}
+
 function normalizeItems(rawItems, pricesIncludeTax) {
-  return rawItems.map((it) => {
-    const taxRate = Number(it.taxRate);
-    const rate = Number.isFinite(taxRate) ? taxRate : 15;
+  return rawItems.map((it, idx) => {
+    const taxRateRaw = Number(it.taxRate);
+    const rate = normalizeTaxRatePercent(
+      Number.isFinite(taxRateRaw) ? taxRateRaw : 15,
+    );
+    if (!isValidSriIvaRate(rate)) {
+      throw Object.assign(
+        new Error(
+          `Ítem ${idx + 1}: IVA % inválido (${rate}). Usá 0, 5, 8, 12, 13, 14 o 15.`,
+        ),
+        { status: 400 },
+      );
+    }
     const qty = Number(it.qty);
     let unitPrice = Number(it.unitPrice);
     const row = {
@@ -117,6 +155,10 @@ function normalizeItems(rawItems, pricesIncludeTax) {
       unitPrice,
       taxRate: rate,
       code: it.code,
+      discount: it.discount,
+      lineBase: it.lineBase,
+      lineTax: it.lineTax,
+      unitPriceXml: it.unitPriceXml,
     };
     // Precio CON IVA (Caja): redondear bruto a 2, base/IVA a 2 (IVA absorbe residual).
     if (pricesIncludeTax && Number.isFinite(unitPrice) && Number.isFinite(qty) && qty > 0) {
@@ -528,6 +570,323 @@ export async function refreshInvoiceAuthorization(id) {
   return {
     invoice: toPublicInvoice(updated),
     authorization: auth,
+  };
+}
+
+/**
+ * Reemite un comprobante rechazado: misma venta/stock, mismo secuencial por defecto,
+ * nueva clave de acceso y XML corregido. Si el SRI indica clave/secuencial ya registrado,
+ * sube el secuencial y reintenta (máx. 3). Guarda historial en payloadJson.emitAttempts.
+ */
+export async function reemitRejectedInvoice(id) {
+  await ensureInvoiceTable();
+  ensureInvoicesDir();
+
+  let invoice = await ElectronicInvoice.findByPk(id);
+  if (!invoice) {
+    throw Object.assign(new Error("Comprobante no encontrado"), { status: 404 });
+  }
+  if (String(invoice.status) !== "rejected") {
+    throw Object.assign(
+      new Error("Solo se puede volver a emitir un comprobante rechazado"),
+      { status: 400 },
+    );
+  }
+
+  const settingsRow = await loadSriBillingSettings();
+  const publicSettings = toPublicSriSettings(settingsRow);
+  if (!publicSettings.readyForInvoicing) {
+    throw Object.assign(
+      new Error("Configuración SRI incompleta. Revisá RUC, certificado y contraseña."),
+      { status: 400 },
+    );
+  }
+
+  const secrets = await getSriCertificateSecrets();
+  if (!secrets?.buffer || secrets.password == null) {
+    throw Object.assign(new Error("No se pudo leer el certificado o la contraseña"), { status: 400 });
+  }
+
+  const savedPayload =
+    invoice.payloadJson && typeof invoice.payloadJson === "object" && !Array.isArray(invoice.payloadJson)
+      ? { ...invoice.payloadJson }
+      : {};
+  const docType = String(invoice.documentType || savedPayload.documentType || "01").padStart(2, "0");
+  if (!SRI_DOC_TYPES[docType]) {
+    throw Object.assign(new Error("Tipo de documento no soportado para reemitir"), { status: 400 });
+  }
+
+  const est = invoice.establishmentCode || settingsRow.establishmentCode;
+  const emi = invoice.emissionPointCode || settingsRow.emissionPointCode;
+  let sequential = Number(invoice.sequential);
+  if (!Number.isFinite(sequential) || sequential < 1) {
+    sequential = await nextSequentialFor(docType, est, emi);
+  }
+
+  const paymentMethod = String(savedPayload.paymentMethod || "01")
+    .replace(/\D/g, "")
+    .padStart(2, "0")
+    .slice(-2);
+
+  let reception = null;
+  let authorization = null;
+  let lastErrorMsg = "";
+  const maxTries = 3;
+
+  for (let tryIdx = 0; tryIdx < maxTries; tryIdx += 1) {
+    const issueDate = new Date();
+    const accessKey = buildAccessKey({
+      issueDate,
+      documentType: docType,
+      ruc: settingsRow.ruc,
+      environment: settingsRow.environment,
+      establishmentCode: est,
+      emissionPointCode: emi,
+      sequential,
+    });
+
+    let buyer = null;
+    let totals = { subtotal: 0, taxTotal: 0, total: 0, lines: [], taxBuckets: [] };
+    let unsignedXml;
+    let partyForDb = {
+      identType: invoice.customerIdentType,
+      ident: invoice.customerIdent,
+      name: invoice.customerName,
+      email: invoice.customerEmail,
+    };
+
+    if (docType === "06") {
+      const transport = {
+        identType: savedPayload.transport?.identType || "04",
+        ident: savedPayload.transport?.ident || settingsRow.ruc,
+        name: savedPayload.transport?.name || settingsRow.legalName,
+        placa: savedPayload.transport?.placa || "AAA0000",
+        dirPartida: savedPayload.transport?.dirPartida || "",
+        startDate: savedPayload.transport?.startDate,
+        endDate: savedPayload.transport?.endDate,
+      };
+      const destinatario = validateParty(savedPayload.destinatario || savedPayload.buyer || partyForDb, {
+        role: "destinatario",
+        allowConsumidorFinal: true,
+      });
+      Object.assign(destinatario, {
+        motivo: savedPayload.destinatario?.motivo || savedPayload.motivo || "TRASLADO DE MERCADERIA",
+        ruta: savedPayload.destinatario?.ruta || "LOCAL",
+        docNumber: savedPayload.destinatario?.docNumber,
+        codDoc: savedPayload.destinatario?.codDoc,
+        authNumber: savedPayload.destinatario?.authNumber,
+        docDate: savedPayload.destinatario?.docDate,
+      });
+      unsignedXml = buildGuiaRemisionXml({
+        settings: settingsRow,
+        accessKey,
+        sequential,
+        issueDate,
+        transport,
+        destinatario,
+        items: Array.isArray(savedPayload.items) ? savedPayload.items : [],
+      });
+      partyForDb = destinatario;
+    } else if (docType === "07") {
+      const subject = validateParty(savedPayload.subject || savedPayload.buyer || partyForDb, {
+        role: "sujeto retenido",
+        allowConsumidorFinal: false,
+      });
+      unsignedXml = buildRetencionXml({
+        settings: settingsRow,
+        accessKey,
+        sequential,
+        issueDate,
+        subject,
+        sustento: savedPayload.sustento || {},
+        retention: savedPayload.retention || {},
+      });
+      partyForDb = subject;
+      const base = Number(savedPayload.retention?.baseImponible) || Number(invoice.subtotal) || 0;
+      const pct = Number(savedPayload.retention?.porcentaje) || 0;
+      totals = {
+        subtotal: base,
+        taxTotal: 0,
+        total: (base * pct) / 100,
+        lines: [],
+        taxBuckets: [],
+      };
+    } else {
+      buyer = validateParty(savedPayload.buyer || savedPayload.supplier || partyForDb, {
+        role: docType === "03" ? "proveedor" : "comprador",
+        allowConsumidorFinal: docType !== "03",
+      });
+      const rawItems = Array.isArray(savedPayload.items) ? savedPayload.items : [];
+      if (!rawItems.length) {
+        throw Object.assign(
+          new Error("No hay ítems guardados para volver a emitir este comprobante"),
+          { status: 400 },
+        );
+      }
+      const normalizedItems = normalizeItems(rawItems, Boolean(savedPayload.pricesIncludeTax));
+      totals = computeInvoiceTotals(normalizedItems);
+      unsignedXml = buildXmlForType(docType, {
+        settings: settingsRow,
+        accessKey,
+        sequential,
+        issueDate,
+        buyer,
+        totals,
+        paymentMethod,
+        modifiedDoc: savedPayload.modifiedDoc || {},
+        motivo: savedPayload.motivo || (docType === "04" ? "DEVOLUCION" : "AJUSTE"),
+        supplier: buyer,
+      });
+      partyForDb = buyer;
+    }
+
+    let signedXml;
+    try {
+      signedXml = signXml(docType, unsignedXml, secrets.buffer, secrets.password);
+    } catch (err) {
+      throw Object.assign(
+        new Error(`Error al firmar el XML: ${err.message || "certificado o XML inválido"}`),
+        { status: 400 },
+      );
+    }
+
+    const fileName = `${accessKey}.xml`;
+    await fsp.writeFile(path.join(INVOICES_DIR, fileName), signedXml, "utf8");
+
+    const attemptMeta = {
+      at: new Date().toISOString(),
+      sequential,
+      accessKey,
+      previousAccessKey: invoice.accessKey || null,
+      try: tryIdx + 1,
+      reason: "reemit_rejected",
+    };
+    const nextPayload = pushEmitAttempt(
+      {
+        ...savedPayload,
+        documentType: docType,
+        reemittedFromStatus: "rejected",
+        lastReemitAt: attemptMeta.at,
+      },
+      attemptMeta,
+    );
+
+    await invoice.update({
+      environment: settingsRow.environment,
+      establishmentCode: est,
+      emissionPointCode: emi,
+      sequential,
+      accessKey,
+      authorizationNumber: null,
+      authorizedAt: null,
+      status: "signed",
+      customerIdentType: partyForDb.identType,
+      customerIdent: partyForDb.ident,
+      customerName: partyForDb.name,
+      customerEmail: partyForDb.email || null,
+      subtotal: totals.subtotal.toFixed(4),
+      taxTotal: totals.taxTotal.toFixed(4),
+      total: totals.total.toFixed(4),
+      xmlRelativePath: `invoices/${fileName}`,
+      sriMessage: "Reemitido, pendiente de envío",
+      payloadJson: nextPayload,
+    });
+    invoice = await invoice.reload();
+
+    if (docType === "01") {
+      const nextSeqSetting = Number(settingsRow.nextInvoiceSequential) || 1;
+      if (sequential + 1 > nextSeqSetting) {
+        await settingsRow.update({ nextInvoiceSequential: sequential + 1 });
+        await settingsRow.reload();
+      }
+    }
+
+    try {
+      reception = await sendReception(settingsRow.environment, signedXml);
+    } catch (err) {
+      lastErrorMsg = err.message || "error de red";
+      await invoice.update({
+        status: "signed",
+        sriMessage: `Reemisión firmada; error de red al enviar: ${lastErrorMsg}`.slice(0, 4000),
+        payloadJson: pushEmitAttempt(invoice.payloadJson, {
+          ...attemptMeta,
+          result: "network_error",
+          message: lastErrorMsg,
+        }),
+      });
+      throw Object.assign(
+        new Error(`No se pudo conectar al SRI (recepción): ${lastErrorMsg}`),
+        { status: 502, invoice: toPublicInvoice(await invoice.reload()) },
+      );
+    }
+
+    const recEstado = String(reception.estado || "").toUpperCase();
+    const recMsg = [recEstado, ...(reception.messages || [])].filter(Boolean).join(" | ").slice(0, 4000);
+    lastErrorMsg = recMsg;
+
+    if (recEstado !== "RECIBIDA") {
+      const conflict = messageLooksLikeSequentialConflict(recMsg);
+      await invoice.update({
+        status: "rejected",
+        sriMessage: recMsg || "Rechazado en recepción",
+        payloadJson: pushEmitAttempt(invoice.payloadJson, {
+          ...attemptMeta,
+          result: conflict ? "sequential_conflict" : "rejected_reception",
+          message: recMsg,
+        }),
+      });
+      invoice = await invoice.reload();
+      if (conflict && tryIdx < maxTries - 1) {
+        sequential += 1;
+        continue;
+      }
+      return {
+        invoice: toPublicInvoice(invoice),
+        reception,
+        authorization: null,
+      };
+    }
+
+    await invoice.update({
+      status: "sent",
+      sriMessage: recMsg,
+      payloadJson: pushEmitAttempt(invoice.payloadJson, {
+        ...attemptMeta,
+        result: "received",
+        message: recMsg,
+      }),
+    });
+
+    try {
+      authorization = await consultAuthorizationWithRetry(settingsRow.environment, accessKey, {
+        attempts: 5,
+        delayMs: 2000,
+      });
+      invoice = await applyAuthorizationResult(await invoice.reload(), authorization);
+      if (String(invoice.status) === "rejected" && messageLooksLikeSequentialConflict(invoice.sriMessage)) {
+        if (tryIdx < maxTries - 1) {
+          sequential += 1;
+          continue;
+        }
+      }
+    } catch (err) {
+      await invoice.update({
+        sriMessage: `${recMsg} | Autorización pendiente: ${err.message}`.slice(0, 4000),
+      });
+      invoice = await invoice.reload();
+    }
+
+    return {
+      invoice: toPublicInvoice(invoice),
+      reception,
+      authorization,
+    };
+  }
+
+  return {
+    invoice: toPublicInvoice(await invoice.reload()),
+    reception,
+    authorization,
   };
 }
 

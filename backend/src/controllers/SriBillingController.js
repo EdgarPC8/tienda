@@ -12,6 +12,7 @@ import {
   listElectronicInvoices,
   getElectronicInvoiceById,
   refreshInvoiceAuthorization,
+  reemitRejectedInvoice,
 } from "../services/sriInvoiceEmitService.js";
 import { sendSriTestEmail, sendCustomerInvoiceEmailById } from "../services/sriInvoiceEmailService.js";
 import { lookupPurchaseInvoiceByAccessKey } from "../services/sriPurchaseInvoiceLookup.js";
@@ -283,6 +284,39 @@ export async function postRefreshSriInvoice(req, res) {
       extra: { invoiceId: req.params.id },
     });
     res.status(status).json({ message: err.message || "No se pudo consultar la autorización" });
+  }
+}
+
+export async function postReemitSriInvoice(req, res) {
+  try {
+    const result = await reemitRejectedInvoice(req.params.id);
+    const status = result.invoice?.status;
+    const message =
+      status === "authorized"
+        ? "Comprobante reemitido y autorizado por el SRI"
+        : status === "rejected"
+          ? "Reemisión enviada; el SRI volvió a rechazar"
+          : status === "sent"
+            ? "Reemitido al SRI; autorización pendiente (usa Consultar)"
+            : "Comprobante reemitido";
+    notifyOk("sri.invoice.reemitted", "Factura SRI reemitida", {
+      invoiceId: result.invoice?.id,
+      status: result.invoice?.status,
+    });
+    res.json({ message, ...result });
+  } catch (err) {
+    const status = err.status || 500;
+    if (status >= 500) console.error("postReemitSriInvoice", err);
+    notifyFail("sri.invoice.reemit_failed", err.message || "No se pudo volver a emitir", {
+      error: err,
+      req,
+      httpStatus: status,
+      extra: { invoiceId: req.params.id },
+    });
+    res.status(status).json({
+      message: err.message || "No se pudo volver a emitir",
+      invoice: err.invoice || null,
+    });
   }
 }
 

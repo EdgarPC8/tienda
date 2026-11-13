@@ -133,6 +133,111 @@ function pushEmitAttempt(payloadJson, attempt) {
   return base;
 }
 
+function mapOrderPaymentToSriFormaPago(paymentMethod) {
+  switch (String(paymentMethod || "").toLowerCase()) {
+    case "tarjeta":
+      return "19";
+    case "transferencia":
+      return "20";
+    case "credito":
+      return "20";
+    case "efectivo":
+    default:
+      return "01";
+  }
+}
+
+/**
+ * Facturas viejas o rechazadas a veces no tienen payloadJson.items.
+ * Se reconstruyen desde el pedido POS vinculado (precios con IVA).
+ */
+async function hydratePayloadFromLinkedOrder(invoice, savedPayload = {}) {
+  const out = { ...savedPayload };
+  const hasItems = Array.isArray(out.items) && out.items.length > 0;
+  const hasBuyer =
+    out.buyer &&
+    (out.buyer.ident || out.buyer.name) &&
+    out.buyer.identType;
+
+  if (hasItems && hasBuyer) return out;
+
+  const orderId = invoice.orderId != null ? Number(invoice.orderId) : null;
+  if (!Number.isFinite(orderId) || orderId < 1) return out;
+
+  const { Order, OrderItem, Customer } = await import("../models/Orders.js");
+  const { InventoryProduct } = await import("../models/Inventory.js");
+
+  const order = await Order.findByPk(orderId, {
+    include: [
+      {
+        model: OrderItem,
+        as: "ERP_order_items",
+        include: [{ model: InventoryProduct, as: "ERP_inventory_product", required: false }],
+      },
+      { model: Customer, as: "ERP_customer", required: false },
+    ],
+  });
+  if (!order) return out;
+
+  if (!hasItems) {
+    const items = (order.ERP_order_items || [])
+      .map((it) => {
+        const qtySold = Number(it.soldQty);
+        const qty = qtySold > 0 ? qtySold : Number(it.quantity || 0);
+        if (!(qty > 0)) return null;
+        const unitPrice = Number(it.price);
+        if (!Number.isFinite(unitPrice) || unitPrice < 0) return null;
+        const product = it.ERP_inventory_product;
+        const taxRateRaw = Number(product?.taxRate);
+        const taxRate = Number.isFinite(taxRateRaw) ? taxRateRaw : 15;
+        const description =
+          String(product?.name || it.remoteName || "Producto").trim() || "Producto";
+        return {
+          description,
+          qty,
+          unitPrice,
+          taxRate,
+          code: String(it.productId || product?.id || "").slice(0, 25),
+        };
+      })
+      .filter(Boolean);
+    if (items.length) {
+      out.items = items;
+      out.pricesIncludeTax = true;
+      out.hydratedFromOrderId = orderId;
+    }
+  }
+
+  if (!hasBuyer) {
+    const customer = order.ERP_customer;
+    const identType =
+      String(invoice.customerIdentType || customer?.identType || "07").padStart(2, "0").slice(-2) ||
+      "07";
+    const ident =
+      String(invoice.customerIdent || customer?.cedula || "")
+        .replace(/\s/g, "")
+        .trim() || (identType === "07" ? "9999999999999" : "");
+    const name =
+      String(invoice.customerName || customer?.name || "CONSUMIDOR FINAL").trim() ||
+      "CONSUMIDOR FINAL";
+    out.buyer = {
+      identType,
+      ident: ident || "9999999999999",
+      name,
+      address: String(customer?.address || "S/N").trim() || "S/N",
+      email: String(invoice.customerEmail || customer?.email || "").trim(),
+    };
+  }
+
+  if (!out.paymentMethod && order.paymentMethod) {
+    out.paymentMethod = mapOrderPaymentToSriFormaPago(order.paymentMethod);
+  }
+  if (out.pricesIncludeTax == null) out.pricesIncludeTax = true;
+  if (out.orderId == null) out.orderId = orderId;
+
+  return out;
+}
+
 function normalizeItems(rawItems, pricesIncludeTax) {
   return rawItems.map((it, idx) => {
     const taxRateRaw = Number(it.taxRate);
@@ -607,10 +712,23 @@ export async function reemitRejectedInvoice(id) {
     throw Object.assign(new Error("No se pudo leer el certificado o la contraseña"), { status: 400 });
   }
 
-  const savedPayload =
+  let savedPayload =
     invoice.payloadJson && typeof invoice.payloadJson === "object" && !Array.isArray(invoice.payloadJson)
       ? { ...invoice.payloadJson }
       : {};
+  // Si payloadJson vino como string JSON (algunos drivers), parsearlo.
+  if (typeof invoice.payloadJson === "string" && invoice.payloadJson.trim()) {
+    try {
+      const parsed = JSON.parse(invoice.payloadJson);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        savedPayload = { ...parsed };
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  savedPayload = await hydratePayloadFromLinkedOrder(invoice, savedPayload);
+
   const docType = String(invoice.documentType || savedPayload.documentType || "01").padStart(2, "0");
   if (!SRI_DOC_TYPES[docType]) {
     throw Object.assign(new Error("Tipo de documento no soportado para reemitir"), { status: 400 });
@@ -719,7 +837,9 @@ export async function reemitRejectedInvoice(id) {
       const rawItems = Array.isArray(savedPayload.items) ? savedPayload.items : [];
       if (!rawItems.length) {
         throw Object.assign(
-          new Error("No hay ítems guardados para volver a emitir este comprobante"),
+          new Error(
+            "No hay ítems para volver a emitir (ni en el comprobante ni en el pedido vinculado).",
+          ),
           { status: 400 },
         );
       }

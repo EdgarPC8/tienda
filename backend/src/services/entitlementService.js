@@ -11,6 +11,7 @@ const GESTOR_SYNC_SECRET = process.env.GESTOR_SYNC_SECRET || "";
 const EMPTY = {
   maintenance: false,
   updating: false,
+  update_force: true,
   subscribed: false,
   features: [],
   subscription: null,
@@ -47,9 +48,11 @@ function normalizePayload(body) {
   const subscribed = Boolean(parsed.subscribed);
   const maintenance = Boolean(parsed.maintenance);
   const updating = Boolean(parsed.updating);
+  const update_force =
+    parsed.update_force === false || parsed.update_force === 0 ? false : true;
   const subscription = parsed.subscription ?? null;
   const features = normalizeFeatures(parsed.features);
-  return { maintenance, updating, subscribed, subscription, features };
+  return { maintenance, updating, update_force, subscribed, subscription, features };
 }
 
 /** Quita módulos/secciones ocultos antes de exponer al frontend. */
@@ -102,6 +105,10 @@ export async function getEntitlementResponse() {
   const out = {
     maintenance: Boolean(payload.maintenance),
     updating: Boolean(payload.updating),
+    update_force:
+      payload.update_force === false || payload.update_force === 0
+        ? false
+        : true,
     subscribed: Boolean(payload.subscribed),
     features: stripHiddenFeatures(normalizeFeatures(payload.features)),
     subscription: stripHiddenFromSubscription(payload.subscription ?? null),

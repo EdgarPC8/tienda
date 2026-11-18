@@ -43,6 +43,11 @@ export const broadcastEntitlementUpdated = (payload = {}) => {
   if (!io) return;
   io.emit("entitlementUpdated", {
     maintenance: Boolean(payload.maintenance),
+    updating: Boolean(payload.updating),
+    update_force:
+      payload.update_force === false || payload.update_force === 0
+        ? false
+        : true,
     subscribed: Boolean(payload.subscribed),
     at: new Date().toISOString(),
   });

@@ -12,7 +12,7 @@ export const AppSettings = sequelize.define(
     },
     name: { type: DataTypes.STRING(255), allowNull: false },
     alias: { type: DataTypes.STRING(80), allowNull: false },
-    version: { type: DataTypes.STRING(32), allowNull: false, defaultValue: "1.0.0" },
+    version: { type: DataTypes.STRING(32), allowNull: false, defaultValue: "1.0.0.10" },
     description: { type: DataTypes.TEXT, allowNull: true },
     author: { type: DataTypes.STRING(120), allowNull: true },
     logoPath: { type: DataTypes.STRING(255), allowNull: true },
@@ -168,6 +168,32 @@ export const AppSettings = sequelize.define(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,
+    },
+    /**
+     * Caja: Empleado puede autocompletar stock (requiere ordersAllowDeliverStockAdjust).
+     * Apagado por defecto.
+     */
+    cajaEmployeeAllowAutoCompleteStock: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    /**
+     * Caja: Empleado puede editar el precio en el carrito.
+     * Apagado por defecto.
+     */
+    cajaEmployeeAllowEditCartPrice: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    /**
+     * Solo luces e icono del filo del menú. No afecta gorrito ni lluvia de inicio/login.
+     */
+    festiveDecorEnabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
     },
     notificationsToastGreeting: {
       type: DataTypes.BOOLEAN,

@@ -424,10 +424,17 @@ export const posCheckout = async (req, res) => {
           throw new Error("Precio inválido en el carrito.");
         }
         if (user?.loginRol === "Empleado") {
-          if (Math.abs(price - catalogPrice) > 0.009) {
-            throw new Error(`El precio de ${productForPrice.name} no coincide con el catálogo`);
+          const employeeMayEditPrice = Boolean(
+            getAppSettingsSync()?.cajaEmployeeAllowEditCartPrice,
+          );
+          if (!employeeMayEditPrice) {
+            if (Math.abs(price - catalogPrice) > 0.009) {
+              throw new Error(
+                `El precio de ${productForPrice.name} no coincide con el catálogo`,
+              );
+            }
+            price = catalogPrice;
           }
-          price = catalogPrice;
         }
         orderTotal += Number((price * qty).toFixed(2));
 

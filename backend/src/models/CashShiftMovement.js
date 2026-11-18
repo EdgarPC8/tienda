@@ -32,12 +32,18 @@ export const CashShiftMovement = sequelize.define(
     quantity: { type: DataTypes.FLOAT, allowNull: true },
     inventoryMovementId: { type: DataTypes.INTEGER, allowNull: true },
     expenseId: { type: DataTypes.INTEGER, allowNull: true },
+    /**
+     * Fecha contable del movimiento (pedido / egreso).
+     * createdAt/updatedAt quedan solo para auditoría (cuándo se creó/editó en el sistema).
+     */
+    occurredAt: { type: DataTypes.DATE, allowNull: true },
   },
   {
     timestamps: true,
     indexes: [
       { fields: ["shiftId"] },
       { fields: ["accountId"] },
+      { fields: ["occurredAt"] },
     ],
   },
 );

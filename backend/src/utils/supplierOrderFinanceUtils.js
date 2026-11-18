@@ -20,7 +20,7 @@ export function resolveSupplierOrderReceiveDate({ receivedAt, order } = {}) {
   return nowApp();
 }
 
-/** Sincroniza pagos y gastos vinculados cuando cambia la fecha de pago del pedido. */
+/** Sincroniza pagos, gastos y movimientos de caja cuando cambia la fecha del pedido. */
 export async function syncSupplierOrderFinanceDates(orderId, payDate, transaction) {
   const normalized = toAppDateTime(payDate);
   if (!normalized) return;
@@ -52,5 +52,20 @@ export async function syncSupplierOrderFinanceDates(orderId, payDate, transactio
       expense.date = normalized;
       await expense.save({ transaction });
     }
+  }
+
+  // Egresos de caja ligados al pedido: fecha contable = fecha del pedido (createdAt intacto).
+  try {
+    const { CashShiftMovement } = await import("../models/CashShiftMovement.js");
+    const { Op } = await import("sequelize");
+    await CashShiftMovement.update(
+      { occurredAt: normalized },
+      {
+        where: { notes: { [Op.like]: `supplier_order:${orderId}` } },
+        transaction,
+      },
+    );
+  } catch (err) {
+    console.warn("[supplierOrder] sync cash movement occurredAt:", err?.message || err);
   }
 }

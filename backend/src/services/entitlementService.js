@@ -12,6 +12,8 @@ const EMPTY = {
   maintenance: false,
   updating: false,
   update_force: true,
+  update_available: false,
+  update_force_logout: false,
   subscribed: false,
   features: [],
   subscription: null,
@@ -47,12 +49,24 @@ function normalizePayload(body) {
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
   const subscribed = Boolean(parsed.subscribed);
   const maintenance = Boolean(parsed.maintenance);
-  const updating = Boolean(parsed.updating);
   const update_force =
     parsed.update_force === false || parsed.update_force === 0 ? false : true;
+  const update_available = Boolean(parsed.update_available);
+  const update_force_logout = Boolean(parsed.update_force_logout);
+  // Solo bloquear si viene forzada
+  const updating = Boolean(parsed.updating) && update_force;
   const subscription = parsed.subscription ?? null;
   const features = normalizeFeatures(parsed.features);
-  return { maintenance, updating, update_force, subscribed, subscription, features };
+  return {
+    maintenance,
+    updating,
+    update_force,
+    update_available: update_available || (Boolean(parsed.updating) && !update_force),
+    update_force_logout,
+    subscribed,
+    subscription,
+    features,
+  };
 }
 
 /** Quita módulos/secciones ocultos antes de exponer al frontend. */
@@ -102,13 +116,16 @@ export async function getEntitlementResponse() {
   if (!row?.payload) return { ...EMPTY };
 
   const payload = coerceJson(row.payload) || EMPTY;
+  const update_force =
+    payload.update_force === false || payload.update_force === 0 ? false : true;
   const out = {
     maintenance: Boolean(payload.maintenance),
-    updating: Boolean(payload.updating),
-    update_force:
-      payload.update_force === false || payload.update_force === 0
-        ? false
-        : true,
+    updating: Boolean(payload.updating) && update_force,
+    update_force,
+    update_available:
+      Boolean(payload.update_available) ||
+      (Boolean(payload.updating) && !update_force),
+    update_force_logout: Boolean(payload.update_force_logout),
     subscribed: Boolean(payload.subscribed),
     features: stripHiddenFeatures(normalizeFeatures(payload.features)),
     subscription: stripHiddenFromSubscription(payload.subscription ?? null),
@@ -168,6 +185,54 @@ export async function enforceEntitlementSideEffectsOnBoot() {
   } catch (err) {
     console.error("[entitlement] enforceEntitlementSideEffectsOnBoot:", err?.message || err);
   }
+}
+
+/**
+ * El usuario terminó la UI de actualización (Continuar).
+ * Limpia flags locales y avisa al gestor para apagar el ícono en la tabla.
+ */
+export async function acknowledgeUpdateComplete(version) {
+  const current = await getEntitlementResponse();
+  const cleared = {
+    ...current,
+    maintenance: Boolean(current.maintenance),
+    updating: false,
+    update_force: true,
+    update_available: false,
+    update_force_logout: false,
+    subscribed: Boolean(current.subscribed),
+    features: current.features || [],
+    subscription: current.subscription ?? null,
+  };
+  // Quitar meta antes de guardar
+  delete cleared.meta;
+
+  const saved = await saveEntitlement(cleared, "update_ack");
+
+  if (GESTOR_SYNC_SECRET) {
+    const url = `${String(gestorConfig.api).replace(/\/$/, "")}/apps/update-ack`;
+    try {
+      await axios.post(
+        url,
+        { version: version ? String(version).trim() : undefined },
+        {
+          headers: {
+            Authorization: `Bearer ${GESTOR_SYNC_SECRET}`,
+            "Content-Type": "application/json",
+          },
+          timeout: 15000,
+        },
+      );
+    } catch (err) {
+      console.error(
+        "[entitlement] update-ack al gestor falló:",
+        err?.response?.status || err?.message || err,
+      );
+      // Local ya quedó limpio; el gestor se puede sincronizar luego
+    }
+  }
+
+  return saved;
 }
 
 /** Trae del gestor y guarda localmente (bootstrap / refresh manual). */

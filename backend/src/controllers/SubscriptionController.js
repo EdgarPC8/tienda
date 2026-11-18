@@ -2,11 +2,12 @@ import {
   getEntitlementResponse,
   saveEntitlement,
   pullEntitlementFromGestor,
+  acknowledgeUpdateComplete,
 } from "../services/entitlementService.js";
 import { notifyOk, notifyFail } from "../services/notifyRaptorSolutions.js";
 import { broadcastEntitlementUpdated } from "../sockets/notificationSocket.js";
 
-/** GET — lo que usa el frontend Tienda (sin llamar al gestor). */
+/** GET — lo que usa el frontend EdDeli (sin llamar al gestor). */
 export async function getSubscription(req, res, next) {
   try {
     const data = await getEntitlementResponse();
@@ -29,6 +30,29 @@ export async function putEntitlementFromGestor(req, res, next) {
     res.json({ ok: true, ...data });
   } catch (err) {
     notifyFail("subscription.entitlement_update_failed", "Error al actualizar entitlement", {
+      error: err,
+      req,
+      httpStatus: err.status || 500,
+    });
+    next(err);
+  }
+}
+
+/**
+ * POST — Frontend: usuario pulsó Continuar tras la barra de progreso.
+ * Body: { version?: "1.0.0.10" }
+ */
+export async function postUpdateComplete(req, res, next) {
+  try {
+    const version = req.body?.version;
+    const data = await acknowledgeUpdateComplete(version);
+    broadcastEntitlementUpdated(data);
+    notifyOk("subscription.update_ack", "Actualización confirmada", {
+      version: version || null,
+    });
+    res.json({ ok: true, ...data });
+  } catch (err) {
+    notifyFail("subscription.update_ack_failed", "Error al confirmar actualización", {
       error: err,
       req,
       httpStatus: err.status || 500,

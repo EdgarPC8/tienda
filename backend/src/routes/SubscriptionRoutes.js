@@ -3,6 +3,7 @@ import {
   getSubscription,
   putEntitlementFromGestor,
   pullSubscription,
+  postUpdateComplete,
 } from "../controllers/SubscriptionController.js";
 import { requireGestorSyncSecret } from "../middlewares/gestorSyncMiddleware.js";
 import {
@@ -14,6 +15,13 @@ const router = Router();
 
 /** Frontend EdDeli: suscripción local. */
 router.get("/subscription", getSubscription);
+
+/** Frontend: terminó la UI de update → limpia flags y avisa al gestor. */
+router.post(
+  "/subscription/update-complete",
+  isAuthenticated,
+  postUpdateComplete,
+);
 
 /** Gestor → habilita / actualiza entitlement en esta app. */
 router.put(

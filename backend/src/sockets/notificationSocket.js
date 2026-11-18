@@ -48,6 +48,8 @@ export const broadcastEntitlementUpdated = (payload = {}) => {
       payload.update_force === false || payload.update_force === 0
         ? false
         : true,
+    update_available: Boolean(payload.update_available),
+    update_force_logout: Boolean(payload.update_force_logout),
     subscribed: Boolean(payload.subscribed),
     at: new Date().toISOString(),
   });

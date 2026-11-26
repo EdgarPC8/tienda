@@ -10,7 +10,11 @@ import { es } from 'date-fns/locale';
 import { OrderItem } from "../../models/Orders.js";
 import { ItemGroup, ItemGroupItem, Payment } from "../../models/Finance.js";
 import { toFinanceDateTime } from "../../utils/financeDateTime.js";
-import { buildFinanceDateColumnWhere, buildFinanceDateWhere } from "../../utils/financeDateUtils.js";
+import {
+  buildFinanceDateColumnWhere,
+  buildFinanceDateWhere,
+  shiftFinanceDayKey,
+} from "../../utils/financeDateUtils.js";
 import { notifyOk, notifyFail } from "../../services/notifyRaptorSolutions.js";
 
 const MONEY_CAP = 99999999.99;
@@ -93,9 +97,16 @@ export const getFinanceSummary = async (req, res) => {
   };
 
   try {
-    const { startDate, endDate } = req.query || {};
+    const { startDate, endDate, includePriorBalance } = req.query || {};
     const hasPeriodFilter = Boolean(startDate || endDate);
     const periodWhere = hasPeriodFilter ? buildFinanceDateWhere(startDate, endDate) : {};
+    const wantPriorBalance =
+      hasPeriodFilter &&
+      Boolean(startDate) &&
+      (includePriorBalance === true ||
+        includePriorBalance === 1 ||
+        includePriorBalance === "1" ||
+        includePriorBalance === "true");
 
     await stripOrderItemIncomesWhenGroupAlreadyPaid();
     const [totalIncome, totalExpense, groupLinks, openGroups, completedPayments] = await Promise.all([
@@ -266,13 +277,34 @@ export const getFinanceSummary = async (req, res) => {
       bestMonth?.monthKey && bestMonth.monthKey === currentMonthKey,
     );
 
-    const balance = income - expense;
+    // Saldo acumulado antes del «Desde» (dinero que ya había del día anterior).
+    let priorBalance = 0;
+    if (wantPriorBalance) {
+      const startKey = String(startDate).slice(0, 10);
+      const dayBefore = shiftFinanceDayKey(startKey, -1);
+      if (dayBefore) {
+        const priorWhere = buildFinanceDateWhere(null, dayBefore);
+        const [priorIncomeRaw, priorExpenseRaw] = await Promise.all([
+          Income.sum("amount", { where: priorWhere }),
+          Expense.sum("amount", { where: priorWhere }),
+        ]);
+        priorBalance = Number(
+          (Number(priorIncomeRaw || 0) - Number(priorExpenseRaw || 0)).toFixed(2),
+        );
+      }
+    }
+
+    const periodBalance = Number((income - expense).toFixed(2));
+    const balance = Number((priorBalance + periodBalance).toFixed(2));
     const projectedBalance = balance + futureIncome;
 
     res.json({
       totalIncome: income,
       totalExpense: expense,
       balance,
+      priorBalance,
+      includePriorBalance: wantPriorBalance,
+      periodBalance,
       futureIncome,        // << nuevos ingresos esperados (órdenes no pagadas)
       projectedBalance,    // << balance proyectado = balance + futuros ingresos
       monthIncome,

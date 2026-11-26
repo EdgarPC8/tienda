@@ -12,7 +12,7 @@ export const AppSettings = sequelize.define(
     },
     name: { type: DataTypes.STRING(255), allowNull: false },
     alias: { type: DataTypes.STRING(80), allowNull: false },
-    version: { type: DataTypes.STRING(32), allowNull: false, defaultValue: "1.0.0.10" },
+    version: { type: DataTypes.STRING(32), allowNull: false, defaultValue: "1.0.0.12" },
     description: { type: DataTypes.TEXT, allowNull: true },
     author: { type: DataTypes.STRING(120), allowNull: true },
     logoPath: { type: DataTypes.STRING(255), allowNull: true },

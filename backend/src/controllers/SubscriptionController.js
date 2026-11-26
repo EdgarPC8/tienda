@@ -3,6 +3,7 @@ import {
   saveEntitlement,
   pullEntitlementFromGestor,
   acknowledgeUpdateComplete,
+  requestUpdateApply,
 } from "../services/entitlementService.js";
 import { notifyOk, notifyFail } from "../services/notifyRaptorSolutions.js";
 import { broadcastEntitlementUpdated } from "../sockets/notificationSocket.js";
@@ -39,7 +40,25 @@ export async function putEntitlementFromGestor(req, res, next) {
 }
 
 /**
- * POST — Frontend: usuario pulsó Continuar tras la barra de progreso.
+ * POST — Frontend: usuario aceptó «Actualizar ahora» → deploy diferido en gestor.
+ */
+export async function postUpdateApply(req, res, next) {
+  try {
+    const data = await requestUpdateApply();
+    notifyOk("subscription.update_apply", "Deploy de actualización solicitado", data);
+    res.json({ ok: true, ...data });
+  } catch (err) {
+    notifyFail("subscription.update_apply_failed", "Error al solicitar deploy", {
+      error: err,
+      req,
+      httpStatus: err.status || 500,
+    });
+    next(err);
+  }
+}
+
+/**
+ * POST — Frontend: barra al 100% / Continuar → limpia flags y avisa al gestor.
  * Body: { version?: "1.0.0.10" }
  */
 export async function postUpdateComplete(req, res, next) {

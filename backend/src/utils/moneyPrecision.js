@@ -33,6 +33,29 @@ export function toStorageMoney(value) {
   return roundMoney(value, MONEY_STORAGE_DECIMALS, "nearest");
 }
 
+/** Centavos enteros (evita drift de float al sumar montos ya en 2 decimales). */
+export function toMoneyCents(value) {
+  return Math.round(toNum(value) * 100);
+}
+
+export function fromMoneyCents(cents) {
+  return (Number(cents) || 0) / 100;
+}
+
+/** Suma dinero en centavos y devuelve 2 decimales exactos. */
+export function addMoney(...values) {
+  return fromMoneyCents(values.reduce((sum, v) => sum + toMoneyCents(v), 0));
+}
+
+export function subMoney(a, b) {
+  return fromMoneyCents(toMoneyCents(a) - toMoneyCents(b));
+}
+
+/** Redondeo contable a 2 decimales (nearest), para totales de Income/Expense. */
+export function round2Money(value) {
+  return fromMoneyCents(toMoneyCents(value));
+}
+
 export function normalizeMoneyDisplayDecimals(raw, fallback = 2) {
   const n = Number(raw);
   if (!Number.isFinite(n)) return fallback;

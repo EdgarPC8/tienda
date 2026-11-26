@@ -14,10 +14,18 @@ const EMPTY = {
   update_force: true,
   update_available: false,
   update_force_logout: false,
+  update_scheduled_at: null,
   subscribed: false,
   features: [],
   subscription: null,
 };
+
+function normalizeScheduledAt(raw) {
+  if (raw == null || raw === "") return null;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
 
 /** MySQL/SQLite a veces devuelve JSON como string. */
 function coerceJson(value) {
@@ -55,6 +63,7 @@ function normalizePayload(body) {
   const update_force_logout = Boolean(parsed.update_force_logout);
   // Solo bloquear si viene forzada
   const updating = Boolean(parsed.updating) && update_force;
+  const update_scheduled_at = normalizeScheduledAt(parsed.update_scheduled_at);
   const subscription = parsed.subscription ?? null;
   const features = normalizeFeatures(parsed.features);
   return {
@@ -63,6 +72,7 @@ function normalizePayload(body) {
     update_force,
     update_available: update_available || (Boolean(parsed.updating) && !update_force),
     update_force_logout,
+    update_scheduled_at,
     subscribed,
     subscription,
     features,
@@ -126,6 +136,7 @@ export async function getEntitlementResponse() {
       Boolean(payload.update_available) ||
       (Boolean(payload.updating) && !update_force),
     update_force_logout: Boolean(payload.update_force_logout),
+    update_scheduled_at: normalizeScheduledAt(payload.update_scheduled_at),
     subscribed: Boolean(payload.subscribed),
     features: stripHiddenFeatures(normalizeFeatures(payload.features)),
     subscription: stripHiddenFromSubscription(payload.subscription ?? null),
@@ -188,7 +199,45 @@ export async function enforceEntitlementSideEffectsOnBoot() {
 }
 
 /**
- * El usuario terminó la UI de actualización (Continuar).
+ * Usuario aceptó «Actualizar ahora» (política con permiso).
+ * Pide al gestor el deploy diferido (git/sync/pm2).
+ */
+export async function requestUpdateApply() {
+  if (!GESTOR_SYNC_SECRET) {
+    return { ok: false, skipped: true, reason: "no_gestor_secret" };
+  }
+  const url = `${String(gestorConfig.api).replace(/\/$/, "")}/apps/update-apply`;
+  try {
+    const { data } = await axios.post(
+      url,
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${GESTOR_SYNC_SECRET}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 300000,
+      },
+    );
+    return data && typeof data === "object" ? data : { ok: true };
+  } catch (err) {
+    console.error(
+      "[entitlement] update-apply al gestor falló:",
+      err?.response?.status || err?.message || err,
+    );
+    throw Object.assign(
+      new Error(
+        err?.response?.data?.error ||
+          err?.message ||
+          "No se pudo iniciar el deploy en el gestor",
+      ),
+      { status: err?.response?.status || 502 },
+    );
+  }
+}
+
+/**
+ * El usuario terminó la UI de actualización (Continuar / auto al 100%).
  * Limpia flags locales y avisa al gestor para apagar el ícono en la tabla.
  */
 export async function acknowledgeUpdateComplete(version) {

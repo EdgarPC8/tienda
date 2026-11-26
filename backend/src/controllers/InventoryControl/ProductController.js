@@ -81,6 +81,95 @@ function productUniqueErrorMessage(error) {
   return null;
 }
 
+/** EAN-8 check digit (7 dígitos de datos). */
+function ean8CheckDigit(sevenDigits) {
+  const d = String(sevenDigits ?? "").replace(/\D/g, "");
+  if (d.length !== 7) return null;
+  let sum = 0;
+  for (let i = 0; i < 7; i += 1) {
+    const n = Number(d[i]);
+    const fromRight = 7 - i;
+    sum += fromRight % 2 === 1 ? n * 3 : n;
+  }
+  return String((10 - (sum % 10)) % 10);
+}
+
+/** Código interno de tienda: 2 + 6 dígitos + check = 8. */
+function buildInternalEan8(body6) {
+  const body = String(body6 ?? "")
+    .replace(/\D/g, "")
+    .padStart(6, "0")
+    .slice(-6);
+  const seven = `2${body}`;
+  const check = ean8CheckDigit(seven);
+  if (check == null) return null;
+  return `${seven}${check}`;
+}
+
+/**
+ * GET /inventory/products/next-internal-barcode
+ * Asigna el siguiente EAN-8 interno libre (empieza en 2).
+ */
+export const allocateInternalBarcode = async (req, res) => {
+  try {
+    const rows = await InventoryProduct.findAll({
+      attributes: ["barcode"],
+      where: { barcode: { [Op.ne]: null } },
+    });
+    const used = new Set();
+    for (const row of rows) {
+      const c = normalizeProductBarcodeField(row.barcode);
+      if (c) used.add(c);
+    }
+    for (let n = 0; n <= 999999; n += 1) {
+      const code = buildInternalEan8(String(n).padStart(6, "0"));
+      if (code && !used.has(code)) {
+        return res.json({ barcode: code });
+      }
+    }
+    return res.status(409).json({
+      message: "No quedan códigos internos de 8 dígitos disponibles",
+    });
+  } catch (error) {
+    console.error("allocateInternalBarcode:", error);
+    return res.status(500).json({ message: "No se pudo generar el código" });
+  }
+};
+
+/**
+ * GET /inventory/products/check-barcode?code=&excludeId=
+ * ¿El código está libre en el sistema?
+ */
+export const checkProductBarcode = async (req, res) => {
+  try {
+    const code = normalizeProductBarcodeField(req.query.code);
+    if (!code) return res.json({ available: true, code: null });
+    const excludeId = req.query.excludeId
+      ? Number(req.query.excludeId)
+      : null;
+    const where = { barcode: code };
+    if (Number.isFinite(excludeId) && excludeId > 0) {
+      where.id = { [Op.ne]: excludeId };
+    }
+    const existing = await InventoryProduct.findOne({
+      where,
+      attributes: ["id", "name", "barcode"],
+    });
+    if (existing) {
+      return res.json({
+        available: false,
+        code,
+        productId: existing.id,
+        productName: existing.name,
+      });
+    }
+    return res.json({ available: true, code });
+  } catch (error) {
+    console.error("checkProductBarcode:", error);
+    return res.status(500).json({ message: "No se pudo verificar el código" });
+  }
+};
+
 const PRODUCT_MONEY_FIELDS = ["price", "supplierPrice", "distributorPrice"];
 const PRODUCT_NUMERIC_FIELDS = [
   "standardWeightGrams",

@@ -12,6 +12,8 @@ import {
   patchProductPriceStock,
   getProductStoreStocks,
   getProductSalesSummary,
+  allocateInternalBarcode,
+  checkProductBarcode,
 } from '../controllers/InventoryControl/ProductController.js';
 
 import {
@@ -278,6 +280,8 @@ router.post('/suppliers/:id/peer-secret', isAuthenticated, generateSupplierPeerS
 // ----------------------------------
 router.post('/products', isAuthenticated, edDeliUploadSingle, createProduct);            // Crear producto
 router.get('/products', isAuthenticated, getAllProducts);           // Obtener todos los productos
+router.get('/products/next-internal-barcode', isAuthenticated, allocateInternalBarcode);
+router.get('/products/check-barcode', isAuthenticated, checkProductBarcode);
 router.get('/products-sales-summary', isAuthenticated, getProductSalesSummary);
 router.patch('/products/:id/stock', isAuthenticated, requireOwner, patchProductStock);
 router.patch('/products/:id/price-stock', isAuthenticated, patchProductPriceStock);
